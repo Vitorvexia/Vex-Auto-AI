@@ -1,30 +1,21 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
-import { formatDateTime } from "@/lib/format";
+import { scoreClass, relativeTime } from "@/lib/format";
 import type { Autor } from "@/types/domain";
+import { MessageBubble } from "@/app/components/MessageBubble";
+
+const LEAD_STATUS_LABELS: Record<string, string> = {
+  NOVO: "Novo", ENGAJADO: "Engajado", INTERESSADO: "Interessado",
+  QUENTE: "Quente", NEGOCIACAO: "Negociação", FECHADO: "Fechado", PERDIDO: "Perdido",
+};
+const CONV_STATUS_LABELS: Record<string, string> = {
+  ATIVA: "Ativa", AGUARDANDO_HUMANO: "Aguardando", PAUSADA: "Pausada", ENCERRADA: "Encerrada",
+};
+const HANDOFF_LABELS: Record<string, string> = { IA: "IA", HUMANO: "Vendedor" };
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
-
-function authorLabel(autor: Autor): string {
-  switch (autor) {
-    case "lead":
-      return "Lead";
-    case "ia":
-      return "IA";
-    case "humano":
-      return "Vendedor";
-    case "sistema":
-      return "Sistema";
-  }
-}
-
-function rowSide(autor: Autor): "left" | "right" | "center" {
-  if (autor === "lead") return "left";
-  if (autor === "sistema") return "center";
-  return "right";
-}
 
 export default async function ConversationPage({
   params,
@@ -41,6 +32,13 @@ export default async function ConversationPage({
     .eq("id", params.id)
     .maybeSingle();
 
+  const { data: sidebarConvs } = await supabaseAdmin
+    .from("conversations")
+    .select(`id, conversation_status, handoff_to, ultima_mensagem_em, leads ( nome )`)
+    .neq("conversation_status", "ENCERRADA")
+    .order("ultima_mensagem_em", { ascending: false })
+    .limit(30);
+
   if (error) {
     return (
       <main className="container">
@@ -51,28 +49,75 @@ export default async function ConversationPage({
 
   if (!conv) notFound();
 
+  const sidebar = [...(sidebarConvs ?? [])].sort((a: any, b: any) =>
+    a.conversation_status === "AGUARDANDO_HUMANO" ? -1
+    : b.conversation_status === "AGUARDANDO_HUMANO" ? 1 : 0
+  );
+
   const lead = Array.isArray(conv.leads) ? conv.leads[0] : (conv.leads as any);
   const messages = (conv.messages ?? []).slice().sort(
     (a: any, b: any) =>
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
   );
 
+  const sc = scoreClass(lead?.score ?? 0);
+
   return (
     <main className="container">
-      <Link href="/leads" className="back-link">
-        ← voltar para leads
+      <Link href="/conversations" className="back-link">
+        ← WhatsApp
       </Link>
 
+      <div className="conv-layout">
+        <aside className="conv-sidebar">
+          <div className="conv-sidebar-head">Conversas Ativas · {sidebar.length}</div>
+          {sidebar.map((s: any) => {
+            const sLead   = Array.isArray(s.leads) ? s.leads[0] : s.leads;
+            const isActive  = s.id === params.id;
+            const isWaiting = !isActive && s.conversation_status === "AGUARDANDO_HUMANO";
+            return (
+              <Link
+                key={s.id}
+                href={`/conversations/${s.id}`}
+                className={`conv-sidebar-item${isActive ? " active" : ""}${isWaiting ? " waiting" : ""}`}
+              >
+                <span className="conv-sidebar-name">{sLead?.nome ?? "Sem nome"}</span>
+                <div className="conv-sidebar-meta">
+                  <span className={`conv-handoff-tag ${s.handoff_to === "HUMANO" ? "humano" : "ia"}`}>
+                    <span className="dot" />
+                    {s.handoff_to === "HUMANO" ? "Vendedor" : "IA"}
+                  </span>
+                  <span className="conv-sidebar-time">
+                    {s.ultima_mensagem_em ? relativeTime(s.ultima_mensagem_em) : "—"}
+                  </span>
+                </div>
+              </Link>
+            );
+          })}
+        </aside>
+
+        <div className="conv-main">
+
       <div className="inbox-header">
-        <div className="inbox-lead-name">{lead?.nome ?? "Sem nome"}</div>
-        <div className="inbox-lead-meta">
-          <span>{lead?.phone_normalized}</span>
-          <span>·</span>
-          <span className="pill">{lead?.lead_status}</span>
-          <span className="pill">score {lead?.score}</span>
-          <span>·</span>
-          <span>
-            conversa {conv.conversation_status} · atendida por {conv.handoff_to}
+        <div className="inbox-lead-info">
+          <div className="inbox-lead-name">{lead?.nome ?? "Sem nome"}</div>
+          <div className="inbox-lead-meta">
+            <span className="inbox-lead-phone">{lead?.phone_normalized}</span>
+            <span className="pill" data-status={lead?.lead_status}>
+              {LEAD_STATUS_LABELS[lead?.lead_status] ?? lead?.lead_status}
+            </span>
+            <span className={`score-badge ${sc}`}>
+              score {lead?.score}
+            </span>
+          </div>
+        </div>
+
+        <div className="inbox-status-row">
+          <span className="pill" data-conv-status={conv.conversation_status}>
+            {CONV_STATUS_LABELS[conv.conversation_status] ?? conv.conversation_status}
+          </span>
+          <span className="pill" data-handoff={conv.handoff_to}>
+            {HANDOFF_LABELS[conv.handoff_to] ?? conv.handoff_to}
           </span>
         </div>
       </div>
@@ -81,19 +126,18 @@ export default async function ConversationPage({
         {messages.length === 0 && (
           <div className="empty">Nenhuma mensagem ainda</div>
         )}
-
-        {messages.map((m: any) => {
-          const autor = m.autor as Autor;
-          const side = rowSide(autor);
-          return (
-            <div key={m.id} className={`msg-row ${side}`}>
-              <div className="msg-author">{authorLabel(autor)}</div>
-              <div className={`msg-bubble ${autor}`}>{m.mensagem}</div>
-              <div className="msg-time">{formatDateTime(m.created_at)}</div>
-            </div>
-          );
-        })}
+        {messages.map((m: any) => (
+          <MessageBubble
+            key={m.id}
+            id={m.id}
+            autor={m.autor as Autor}
+            mensagem={m.mensagem}
+            created_at={m.created_at}
+          />
+        ))}
       </div>
+        </div>{/* conv-main */}
+      </div>{/* conv-layout */}
     </main>
   );
 }

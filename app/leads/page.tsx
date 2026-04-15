@@ -1,12 +1,8 @@
-import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
-import { relativeTime, scoreClass } from "@/lib/format";
-import {
-  OPEN_CONVERSATION_STATUSES,
-  type LeadStatus,
-} from "@/types/domain";
+import { OPEN_CONVERSATION_STATUSES, type LeadStatus } from "@/types/domain";
+import { KanbanColumn } from "@/app/components/KanbanColumn";
+import { LeadCard } from "@/app/components/LeadCard";
 
-// Sempre buscar dados frescos do banco
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -16,6 +12,8 @@ const COLUMNS: LeadStatus[] = [
   "INTERESSADO",
   "QUENTE",
   "NEGOCIACAO",
+  "FECHADO",
+  "PERDIDO",
 ];
 
 type Enriched = {
@@ -45,7 +43,6 @@ export default async function LeadsPage() {
     );
   }
 
-  // Achata conversation aberta + define ultima atividade
   const enriched: Enriched[] = (leads ?? []).map((l: any) => {
     const openConv = (l.conversations ?? []).find((c: any) =>
       OPEN_CONVERSATION_STATUSES.includes(c.conversation_status)
@@ -61,7 +58,6 @@ export default async function LeadsPage() {
     };
   });
 
-  // Ordem por ultima interacao (mais recente primeiro)
   enriched.sort(
     (a, b) =>
       new Date(b.ultima_atividade).getTime() -
@@ -79,49 +75,61 @@ export default async function LeadsPage() {
   };
   enriched.forEach((l) => byStatus[l.lead_status].push(l));
 
+  const now = Date.now();
+  const staleLeads  = enriched.filter((l) => now - new Date(l.ultima_atividade).getTime() > 2 * 60 * 60 * 1000).length;
+  const todayStart  = new Date(); todayStart.setHours(0, 0, 0, 0);
+  const activeToday = enriched.filter((l) => new Date(l.ultima_atividade) >= todayStart).length;
+
   return (
     <main className="container">
       <div className="page-header">
         <div>
-          <h1>Leads</h1>
+          <h1>Pipeline de Leads</h1>
           <div className="subtitle">
             {enriched.length} {enriched.length === 1 ? "lead" : "leads"} em atendimento
           </div>
         </div>
       </div>
 
+      <div className="leads-kpi-bar">
+        <div className="leads-kpi-chip">
+          <div className="leads-kpi-chip-value">{enriched.length}</div>
+          <div className="leads-kpi-chip-label">No pipeline</div>
+        </div>
+        <div className="leads-kpi-chip hot">
+          <div className="leads-kpi-chip-value">{byStatus.QUENTE.length}</div>
+          <div className="leads-kpi-chip-label">Quentes</div>
+        </div>
+        <div className="leads-kpi-chip nego">
+          <div className="leads-kpi-chip-value">{byStatus.NEGOCIACAO.length}</div>
+          <div className="leads-kpi-chip-label">Em negociação</div>
+        </div>
+        <div className="leads-kpi-chip">
+          <div className="leads-kpi-chip-value">{activeToday}</div>
+          <div className="leads-kpi-chip-label">Ativos hoje</div>
+        </div>
+        {staleLeads > 0 && (
+          <div className="leads-kpi-chip alert">
+            <span style={{ fontSize: "15px", lineHeight: 1, flexShrink: 0 }}>⚠</span>
+            <div>
+              <div className="leads-kpi-chip-value">{staleLeads}</div>
+              <div className="leads-kpi-chip-label">Sem resposta &gt;2h</div>
+            </div>
+          </div>
+        )}
+      </div>
+
       <div className="kanban">
         {COLUMNS.map((status) => {
           const items = byStatus[status];
           return (
-            <div key={status} className="column" data-status={status}>
-              <div className="column-header">
-                <div className="column-title">{status}</div>
-                <div className="column-count">{items.length}</div>
-              </div>
-
-              {items.length === 0 && <div className="empty">Nenhum lead</div>}
-
-              {items.map((l) => {
-                const href = l.conversation_id
-                  ? `/conversations/${l.conversation_id}`
-                  : "#";
-                return (
-                  <Link key={l.id} href={href} className="card">
-                    <div className="card-top">
-                      <div className="card-name">{l.nome ?? "Sem nome"}</div>
-                      <div className={`score-badge ${scoreClass(l.score)}`}>
-                        {l.score}
-                      </div>
-                    </div>
-                    <div className="card-phone">{l.phone_normalized}</div>
-                    <div className="card-time">
-                      {relativeTime(l.ultima_atividade)}
-                    </div>
-                  </Link>
-                );
-              })}
-            </div>
+            <KanbanColumn key={status} status={status} count={items.length}>
+              {items.length === 0 ? (
+                <div className="empty">Nenhum lead</div>
+              ) : (
+                items.map((l) => <LeadCard key={l.id} {...l} />)
+              )}
+            </KanbanColumn>
           );
         })}
       </div>
