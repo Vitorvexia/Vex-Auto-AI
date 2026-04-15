@@ -2,36 +2,63 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState, useRef, useEffect } from "react";
 
-function LogoMark() {
+function IconUser() {
   return (
-    <svg width="30" height="30" viewBox="0 0 30 30" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" style={{ flexShrink: 0 }}>
-      <defs>
-        <linearGradient id="lm-grad" x1="0" y1="30" x2="30" y2="0" gradientUnits="userSpaceOnUse">
-          <stop offset="0%" stopColor="#0284C7" />
-          <stop offset="100%" stopColor="#38BDF8" />
-        </linearGradient>
-      </defs>
-      <rect width="30" height="30" rx="7" fill="url(#lm-grad)" />
-      <path d="M6 22 L11 13 L16 17 L22 7" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M19 7 L22 7 L22 11" stroke="white" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" />
-      <rect x="24" y="4.5" width="2.2" height="2.2" fill="rgba(186,230,253,0.85)" rx="0.5" />
-      <rect x="24" y="7.8" width="2.2" height="2.2" fill="rgba(186,230,253,0.5)" rx="0.5" />
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="8" r="4" />
+      <path d="M4 20c0-3.9 3.6-7 8-7s8 3.1 8 7" />
+    </svg>
+  );
+}
+function IconSettings() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" />
+    </svg>
+  );
+}
+function IconMail() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="2" y="4" width="20" height="16" rx="2" />
+      <path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7" />
+    </svg>
+  );
+}
+function IconLogout() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+      <polyline points="16 17 21 12 16 7" />
+      <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   );
 }
 
 export function Header() {
   const pathname = usePathname();
+  const [dropOpen, setDropOpen] = useState(false);
+  const dropRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!dropOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (dropRef.current && !dropRef.current.contains(e.target as Node)) {
+        setDropOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, [dropOpen]);
 
   return (
     <header className="header">
       <div className="header-inner">
-        <Link href="/leads" className="header-logo">
-          <LogoMark />
-          <span className="header-logo-text">
-            Vex<span className="logo-auto">Auto</span>
-          </span>
+        <Link href="/leads" className="header-logo" aria-label="VexAuto — início">
+          <img src="/favicon.png" alt="VexAuto" width={34} height={34} style={{ display: "block", flexShrink: 0 }} />
         </Link>
 
         <nav className="header-nav">
@@ -72,6 +99,31 @@ export function Header() {
             Analytics
           </Link>
         </nav>
+
+        <div className="header-user-wrap" ref={dropRef}>
+          <button
+            className={`header-user-btn${dropOpen ? " open" : ""}`}
+            onClick={() => setDropOpen((v) => !v)}
+            aria-label="Menu do usuário"
+            aria-expanded={dropOpen}
+          >
+            <IconUser />
+          </button>
+          {dropOpen && (
+            <div className="header-dropdown" role="menu">
+              <Link href="/configuracoes" className="header-dropdown-item" onClick={() => setDropOpen(false)}>
+                <IconSettings /> Configurações
+              </Link>
+              <a href="mailto:suporte@vexauto.com.br" className="header-dropdown-item" onClick={() => setDropOpen(false)}>
+                <IconMail /> Contato
+              </a>
+              <div className="header-dropdown-sep" />
+              <button className="header-dropdown-item danger" onClick={() => setDropOpen(false)}>
+                <IconLogout /> Sair
+              </button>
+            </div>
+          )}
+        </div>
       </div>
     </header>
   );
