@@ -21,6 +21,10 @@ const barlow = Barlow({
 export const metadata = {
   title: "Vex Auto",
   description: "Infraestrutura operacional AI-First para o mercado automotivo",
+  icons: {
+    icon: "/favicon.png",
+    apple: "/favicon.png",
+  },
 };
 
 export default function RootLayout({
