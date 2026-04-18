@@ -54,6 +54,20 @@ describe("runGuardrails", () => {
     expect(r.mode).toBe("reopen");
   });
 
+  it("prioridade 1: ENCERRADA prevalece sobre human_handoff", () => {
+    const ctx = makeCtx({
+      conversation: {
+        id: "conv-1",
+        conversation_status: "ENCERRADA",
+        handoff_to: "HUMANO",
+        summary: null,
+        ultima_mensagem_em: new Date().toISOString(),
+      },
+    });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.mode).toBe("reopen");
+  });
+
   it("prioridade 2: handoff_to HUMANO => human_handoff", () => {
     const ctx = makeCtx({
       conversation: {
