@@ -43,7 +43,7 @@ export interface AgentContext {
 
 /**
  * Monta AgentContext com 5 queries paralelas ao Supabase.
- * last_messages: últimas 10 em ordem cronológica (received_at ASC).
+ * last_messages: últimas 10 mensagens em ordem cronológica (busca DESC, revertida em JS).
  * vehicles: até 6 disponíveis na store.
  */
 export async function buildAgentContext(params: {
@@ -70,7 +70,7 @@ export async function buildAgentContext(params: {
       .from("messages")
       .select("direcao, autor, mensagem")
       .eq("conversation_id", conversationId)
-      .order("received_at", { ascending: true })
+      .order("received_at", { ascending: false })
       .limit(10),
     supabaseAdmin
       .from("vehicles")
@@ -91,7 +91,7 @@ export async function buildAgentContext(params: {
     store_name: storeRes.data.nome,
     lead: leadRes.data as AgentContext["lead"],
     conversation: convRes.data as AgentContext["conversation"],
-    last_messages: (msgsRes.data ?? []) as AgentContext["last_messages"],
+    last_messages: ((msgsRes.data ?? []).reverse()) as AgentContext["last_messages"],
     vehicles: (vehiclesRes.data ?? []) as AgentContext["vehicles"],
     incoming_text: incomingText,
   };
