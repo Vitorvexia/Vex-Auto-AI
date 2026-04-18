@@ -73,6 +73,7 @@ interface AgentContext {
     mensagem: string
   }[]
   vehicles: {             // catálogo resumido, máx 6, apenas disponíveis
+    id: string            // incluso para rastreamento futuro de interesse
     marca: string
     modelo: string
     ano: number
@@ -137,6 +138,12 @@ export function buildPrompt(ctx: AgentContext, guardrail: GuardrailResult): Prom
 Você é o atendente virtual da {store.nome}.
 Atende leads via WhatsApp com foco em venda de veículos.
 
+[TOM DE VOZ]
+- Seja direto, natural e profissional
+- Evite respostas longas demais — máximo 3 a 4 frases por mensagem
+- Foque em avançar a conversa para a venda
+- Não seja robótico nem use linguagem corporativa
+
 [CONTEXTO DO LEAD]
 Nome: {lead.nome ?? "não informado"}
 Origem: {lead.origem}
@@ -168,6 +175,7 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto fora do JSON:
 - Nunca prometa condições fora do catálogo
 - Se não souber, diga que vai verificar
 - Responda sempre em português
+- Respostas curtas e objetivas — máximo 3 a 4 frases
 ```
 
 **Instruções por mode:**
@@ -250,7 +258,7 @@ export async function runAgent(
 **`ai_logs` — campos obrigatórios:**
 - `model` — sempre
 - `latency_ms` — sempre
-- `status` — `"ok"` | `"timeout"` | `"parse_error"` | `"output_error"` | `"skipped_handoff"`
+- `status` — `"ok"` | `"timeout"` | `"parse_error"` | `"output_error"` | `"skipped_handoff"` *(sempre gravado, inclusive no caso de human_handoff)*
 - `error_code` — quando houver erro
 - `tokens_input` / `tokens_output` — opcionais (quando disponíveis na resposta)
 
