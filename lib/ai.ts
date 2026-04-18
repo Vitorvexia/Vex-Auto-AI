@@ -59,8 +59,11 @@ async function callAnthropic(
       },
       { timeout: timeoutMs }
     );
-  } catch (e: any) {
-    if (e?.name === "APITimeoutError" || e?.status === 408) {
+  } catch (e: unknown) {
+    if (
+      e instanceof Error &&
+      (e.name === "APITimeoutError" || (e as any).status === 408)
+    ) {
       throw new AgentTimeoutError();
     }
     throw e;
@@ -96,6 +99,9 @@ function parseOutput(raw: string): unknown {
 // ============================================================================
 
 export function validateOutput(raw: unknown, leadScore: number): AgentResult {
+  if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
+    throw new AgentOutputError("resposta não é um objeto JSON válido");
+  }
   const obj = raw as Record<string, unknown>;
 
   const reply_text =
@@ -111,7 +117,7 @@ export function validateOutput(raw: unknown, leadScore: number): AgentResult {
   const score = rawScore >= 0 && rawScore <= 100 ? rawScore : leadScore;
 
   const intent_tags = Array.isArray(obj?.intent_tags)
-    ? (obj.intent_tags as string[])
+    ? (obj.intent_tags as unknown[]).filter((t): t is string => typeof t === "string")
     : [];
 
   const summary = typeof obj?.summary === "string" ? obj.summary : "";
@@ -131,9 +137,8 @@ export async function runAgent(
   const model = process.env.ANTHROPIC_MODEL;
   if (!model) throw new Error("ANTHROPIC_MODEL não configurado");
 
-  const timeoutMs =
-    options?.timeoutMs ??
-    parseInt(process.env.AGENT_TIMEOUT_MS ?? "8000", 10);
+  const parsedTimeout = parseInt(process.env.AGENT_TIMEOUT_MS ?? "8000", 10);
+  const timeoutMs = options?.timeoutMs ?? (Number.isFinite(parsedTimeout) ? parsedTimeout : 8000);
 
   const response = await callAnthropic(payload, model, timeoutMs);
   const raw = extractText(response);

@@ -59,4 +59,8 @@ describe("validateOutput", () => {
     const result = validateOutput(rest, 0);
     expect(result.summary).toBe("");
   });
+
+  it("raw nulo lança AgentOutputError", () => {
+    expect(() => validateOutput(null, 0)).toThrow(AgentOutputError);
+  });
 });
