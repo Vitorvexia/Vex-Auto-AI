@@ -103,6 +103,7 @@ describe("buildPrompt", () => {
     expect(system).toContain("should_handoff");
     expect(system).toContain("intent_tags");
     expect(system).toContain("summary");
+    expect(system).toContain("score");
   });
 
   it("messages[] mapeia histórico corretamente (entrada→user, saida→assistant)", () => {
@@ -123,5 +124,11 @@ describe("buildPrompt", () => {
     const { messages } = buildPrompt(ctx, guardrailNormal);
     expect(messages).toHaveLength(1);
     expect(messages[0]).toEqual({ role: "user", content: "Quero ver SUVs disponíveis" });
+  });
+
+  it("catálogo vazio mostra mensagem alternativa", () => {
+    const ctx = makeCtx({ vehicles: [] });
+    const { system } = buildPrompt(ctx, guardrailNormal);
+    expect(system).toContain("Nenhum veículo disponível");
   });
 });
