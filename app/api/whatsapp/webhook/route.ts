@@ -80,8 +80,9 @@ async function logAi(params: {
       error_code: params.error ?? null,
       llm_output: params.output ?? null,
     });
-  } catch {
+  } catch (e) {
     // ai_logs failure must never break the webhook response
+    console.error("[ai_logs] falha ao gravar log:", e);
   }
 }
 
@@ -101,9 +102,11 @@ async function runAiPipeline(params: {
   try {
     const ctx = await buildAgentContext(params);
 
+    const parsedStart = parseInt(process.env.BUSINESS_HOURS_START ?? "8", 10);
+    const parsedEnd = parseInt(process.env.BUSINESS_HOURS_END ?? "18", 10);
     const guardrail = runGuardrails(ctx, {
-      businessHoursStart: parseInt(process.env.BUSINESS_HOURS_START ?? "8", 10),
-      businessHoursEnd: parseInt(process.env.BUSINESS_HOURS_END ?? "18", 10),
+      businessHoursStart: Number.isFinite(parsedStart) ? parsedStart : 8,
+      businessHoursEnd: Number.isFinite(parsedEnd) ? parsedEnd : 18,
     });
 
     // Handoff ativo: logar skipped_handoff e retornar sem resposta de IA
@@ -146,12 +149,16 @@ async function runAiPipeline(params: {
       }
     }
 
-    // Atualizar score se mudou
+    // Atualizar score se mudou (falha não é fatal — reply já foi salvo)
     if (result.score !== ctx.lead.score) {
-      await supabaseAdmin
-        .from("leads")
-        .update({ score: result.score })
-        .eq("id", params.leadId);
+      try {
+        await supabaseAdmin
+          .from("leads")
+          .update({ score: result.score })
+          .eq("id", params.leadId);
+      } catch {
+        // Score update não impede a resposta ao lead
+      }
     }
 
     await logAi({
