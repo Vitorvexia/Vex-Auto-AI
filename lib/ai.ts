@@ -87,8 +87,10 @@ function extractText(response: Anthropic.Message): string {
 // ============================================================================
 
 function parseOutput(raw: string): unknown {
+  // Remove markdown code fences (```json ... ``` or ``` ... ```)
+  const stripped = raw.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "").trim();
   try {
-    return JSON.parse(raw);
+    return JSON.parse(stripped);
   } catch {
     throw new AgentParseError(raw);
   }
