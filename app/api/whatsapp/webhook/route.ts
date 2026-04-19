@@ -3,13 +3,24 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { normalizePhone } from "@/lib/phone";
 import { verifyMetaSignature } from "@/lib/whatsapp-signature";
 import { ingestMessage } from "@/lib/ingest";
+import { buildAgentContext } from "@/lib/agent-context";
+import { runGuardrails } from "@/lib/guardrails";
+import { buildPrompt } from "@/lib/prompts";
+import {
+  runAgent,
+  AgentTimeoutError,
+  AgentParseError,
+  AgentOutputError,
+} from "@/lib/ai";
+import { transitionConversationStatus } from "@/lib/status";
 
 // Precisamos de Node runtime para node:crypto (HMAC)
 export const runtime = "nodejs";
 
-/**
- * GET: verificacao do webhook pela Meta.
- */
+// ============================================================================
+// GET: verificação do webhook pela Meta
+// ============================================================================
+
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const mode = searchParams.get("hub.mode");
@@ -22,31 +33,175 @@ export async function GET(req: NextRequest) {
   return new Response("forbidden", { status: 403 });
 }
 
+// ============================================================================
+// Tipos
+// ============================================================================
+
+type AgentStatus =
+  | "ok"
+  | "skipped_handoff"
+  | "skipped_duplicate"
+  | "timeout"
+  | "parse_error"
+  | "output_error"
+  | "error";
+
 type Result = {
   message_external_id: string;
   status: "ok" | "duplicate" | "skipped" | "error";
   lead_id?: string;
   conversation_id?: string;
+  agent_status?: AgentStatus;
   error?: string;
 };
 
-/**
- * POST: recebe mensagens do WhatsApp.
- *
- * Fluxo endurecido:
- *   1) Le corpo bruto
- *   2) Valida HMAC (X-Hub-Signature-256) antes de qualquer parse
- *   3) Itera entry[] / changes[] / messages[] (batch completo)
- *   4) Cada mensagem vai por RPC webhook_ingest_message (transacao + race-safe)
- *   5) received_at = timestamp da Meta (fallback now())
- *   6) Erros sistemicos -> 500 (Meta reenvia; idempotencia cobre)
- */
+// ============================================================================
+// ai_logs helper
+// ============================================================================
+
+async function logAi(params: {
+  storeId: string;
+  conversationId: string;
+  leadId: string;
+  status: AgentStatus;
+  latencyMs: number;
+  model: string | null;
+  output?: unknown;
+  error?: string;
+}) {
+  try {
+    await supabaseAdmin.from("ai_logs").insert({
+      store_id: params.storeId,
+      conversation_id: params.conversationId,
+      lead_id: params.leadId,
+      model: params.model,
+      latency_ms: params.latencyMs,
+      status: params.status,
+      error_code: params.error ?? null,
+      llm_output: params.output ?? null,
+    });
+  } catch (e) {
+    // ai_logs failure must never break the webhook response
+    console.error("[ai_logs] falha ao gravar log:", e);
+  }
+}
+
+// ============================================================================
+// Pipeline de IA
+// ============================================================================
+
+async function runAiPipeline(params: {
+  storeId: string;
+  leadId: string;
+  conversationId: string;
+  incomingText: string;
+}): Promise<{ agent_status: AgentStatus; error?: string }> {
+  const start = Date.now();
+  const model = process.env.ANTHROPIC_MODEL ?? null;
+
+  try {
+    const ctx = await buildAgentContext(params);
+
+    const parsedStart = parseInt(process.env.BUSINESS_HOURS_START ?? "8", 10);
+    const parsedEnd = parseInt(process.env.BUSINESS_HOURS_END ?? "18", 10);
+    const guardrail = runGuardrails(ctx, {
+      businessHoursStart: Number.isFinite(parsedStart) ? parsedStart : 8,
+      businessHoursEnd: Number.isFinite(parsedEnd) ? parsedEnd : 18,
+    });
+
+    // Handoff ativo: logar skipped_handoff e retornar sem resposta de IA
+    if (guardrail.mode === "human_handoff") {
+      await logAi({
+        storeId: params.storeId,
+        conversationId: params.conversationId,
+        leadId: params.leadId,
+        status: "skipped_handoff",
+        latencyMs: Date.now() - start,
+        model,
+      });
+      return { agent_status: "skipped_handoff" };
+    }
+
+    const payload = buildPrompt(ctx, guardrail);
+    const result = await runAgent(payload, ctx);
+
+    // Gravar reply (saida/ia)
+    await supabaseAdmin.from("messages").insert({
+      store_id: params.storeId,
+      conversation_id: params.conversationId,
+      lead_id: params.leadId,
+      direcao: "saida",
+      autor: "ia",
+      mensagem: result.reply_text,
+      received_at: new Date().toISOString(),
+    });
+
+    // should_handoff=true → reply já gravado → transicionar sem nova resposta
+    if (result.should_handoff) {
+      try {
+        await transitionConversationStatus(
+          params.conversationId,
+          "AGUARDANDO_HUMANO",
+          { handoff_to: "HUMANO" }
+        );
+      } catch {
+        // Reply já salvo; falha na transição não é fatal para o webhook
+      }
+    }
+
+    // Atualizar score se mudou (falha não é fatal — reply já foi salvo)
+    if (result.score !== ctx.lead.score) {
+      try {
+        await supabaseAdmin
+          .from("leads")
+          .update({ score: result.score })
+          .eq("id", params.leadId);
+      } catch {
+        // Score update não impede a resposta ao lead
+      }
+    }
+
+    await logAi({
+      storeId: params.storeId,
+      conversationId: params.conversationId,
+      leadId: params.leadId,
+      status: "ok",
+      latencyMs: Date.now() - start,
+      model,
+      output: result,
+    });
+
+    return { agent_status: "ok" };
+  } catch (e: unknown) {
+    let agentStatus: AgentStatus = "error";
+    if (e instanceof AgentTimeoutError) agentStatus = "timeout";
+    else if (e instanceof AgentParseError) agentStatus = "parse_error";
+    else if (e instanceof AgentOutputError) agentStatus = "output_error";
+
+    const errorMsg = e instanceof Error ? e.message : String(e);
+
+    await logAi({
+      storeId: params.storeId,
+      conversationId: params.conversationId,
+      leadId: params.leadId,
+      status: agentStatus,
+      latencyMs: Date.now() - start,
+      model,
+      error: errorMsg,
+    });
+
+    return { agent_status: agentStatus, error: errorMsg };
+  }
+}
+
+// ============================================================================
+// POST: recebe mensagens do WhatsApp
+// ============================================================================
+
 export async function POST(req: NextRequest) {
-  // 1) corpo bruto para HMAC
   const rawBody = await req.text();
   const signature = req.headers.get("x-hub-signature-256");
 
-  // 2) HMAC
   if (!verifyMetaSignature(rawBody, signature)) {
     return NextResponse.json(
       { ok: false, error: "invalid signature" },
@@ -54,8 +209,7 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // 3) parse
-  let body: any;
+  let body: unknown;
   try {
     body = JSON.parse(rawBody);
   } catch {
@@ -65,18 +219,34 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  const payload = body as {
+    entry?: Array<{
+      changes?: Array<{
+        value?: {
+          metadata?: { display_phone_number?: string };
+          contacts?: Array<{ wa_id?: string; profile?: { name?: string } }>;
+          messages?: Array<{
+            id?: string;
+            from?: string;
+            type?: string;
+            text?: { body?: string };
+            timestamp?: string;
+          }>;
+        };
+      }>;
+    }>;
+  };
+
   const results: Result[] = [];
   let systemicError = false;
 
-  // 4) iterar todas as entries / changes / messages (batch completo)
-  for (const entry of body?.entry ?? []) {
+  for (const entry of payload?.entry ?? []) {
     for (const change of entry?.changes ?? []) {
       const value = change?.value;
       const metadata = value?.metadata;
-      const contacts: any[] = value?.contacts ?? [];
-      const messages: any[] = value?.messages ?? [];
+      const contacts = value?.contacts ?? [];
+      const messages = value?.messages ?? [];
 
-      // Status updates (delivered/read) nao tem messages[] -> ignora o change
       if (messages.length === 0) continue;
 
       const destNormalized = normalizePhone(metadata?.display_phone_number);
@@ -91,7 +261,6 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      // Resolve store uma vez por change (mesmo numero destino p/ todas)
       const { data: store, error: storeErr } = await supabaseAdmin
         .from("stores")
         .select("id")
@@ -120,10 +289,9 @@ export async function POST(req: NextRequest) {
         continue;
       }
 
-      // 5) processar cada mensagem
       for (const msg of messages) {
-        const externalId: string | undefined = msg?.id;
-        const fromRaw: string | undefined = msg?.from;
+        const externalId = msg?.id;
+        const fromRaw = msg?.from;
 
         if (!externalId || !fromRaw) {
           results.push({
@@ -143,7 +311,7 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        const text: string | undefined = msg.text?.body;
+        const text = msg.text?.body;
         const fromNormalized = normalizePhone(fromRaw);
         if (!fromNormalized || !text) {
           results.push({
@@ -154,12 +322,10 @@ export async function POST(req: NextRequest) {
           continue;
         }
 
-        // nome: procura contact cujo wa_id bata com o `from`
         const contact = contacts.find((c) => c?.wa_id === fromRaw);
-        const contactName: string | null = contact?.profile?.name ?? null;
+        const contactName = contact?.profile?.name ?? null;
 
-        // timestamp Meta em segundos (epoch string) -> ISO
-        const tsRaw: string | undefined = msg.timestamp;
+        const tsRaw = msg.timestamp;
         const receivedAt =
           tsRaw && /^\d+$/.test(tsRaw)
             ? new Date(parseInt(tsRaw, 10) * 1000).toISOString()
@@ -174,25 +340,40 @@ export async function POST(req: NextRequest) {
             mensagem: text,
             receivedAt,
           });
-          results.push({
+
+          const result: Result = {
             message_external_id: externalId,
             status: r.duplicate ? "duplicate" : "ok",
             lead_id: r.lead_id,
             conversation_id: r.conversation_id,
-          });
-        } catch (e: any) {
+          };
+
+          if (!r.duplicate) {
+            const { agent_status, error: agentError } = await runAiPipeline({
+              storeId: store.id,
+              leadId: r.lead_id,
+              conversationId: r.conversation_id,
+              incomingText: text,
+            });
+            result.agent_status = agent_status;
+            if (agentError) result.error = agentError;
+          } else {
+            result.agent_status = "skipped_duplicate";
+          }
+
+          results.push(result);
+        } catch (e: unknown) {
           systemicError = true;
           results.push({
             message_external_id: externalId,
             status: "error",
-            error: e?.message ?? "rpc failed",
+            error: e instanceof Error ? e.message : "rpc failed",
           });
         }
       }
     }
   }
 
-  // 6) erro sistemico -> 500 para Meta reenviar (idempotencia cobre)
   if (systemicError) {
     return NextResponse.json({ ok: false, results }, { status: 500 });
   }
