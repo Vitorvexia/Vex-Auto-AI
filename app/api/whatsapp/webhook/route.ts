@@ -13,6 +13,7 @@ import {
   AgentOutputError,
 } from "@/lib/ai";
 import { transitionConversationStatus } from "@/lib/status";
+import { sendWhatsAppMessage, WhatsAppSendError } from "@/lib/whatsapp-send";
 
 // Precisamos de Node runtime para node:crypto (HMAC)
 export const runtime = "nodejs";
@@ -135,6 +136,19 @@ async function runAiPipeline(params: {
       mensagem: result.reply_text,
       received_at: new Date().toISOString(),
     });
+
+    // Enviar reply via WhatsApp Cloud API (não-fatal: reply já salvo no banco)
+    try {
+      await sendWhatsAppMessage(ctx.lead.phone_normalized, result.reply_text);
+      console.log(`[whatsapp-send] mensagem enviada para ${ctx.lead.phone_normalized}`);
+    } catch (sendErr) {
+      if (sendErr instanceof WhatsAppSendError) {
+        console.error(`[whatsapp-send] falha ao enviar para ${ctx.lead.phone_normalized}: ${sendErr.message}`);
+      } else {
+        console.error("[whatsapp-send] erro inesperado:", sendErr);
+      }
+      // Não propaga: reply já está no banco, pipeline continua
+    }
 
     // should_handoff=true → reply já gravado → transicionar sem nova resposta
     if (result.should_handoff) {
