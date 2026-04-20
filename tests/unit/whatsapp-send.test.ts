@@ -67,6 +67,7 @@ describe("sendWhatsAppMessage", () => {
     expect(body.type).toBe("text");
     expect(body.text.body).toBe("Olá, tudo bem?");
     expect(body.messaging_product).toBe("whatsapp");
+    expect(body.recipient_type).toBe("individual");
 
     const headers = init.headers as Record<string, string>;
     expect(headers["Authorization"]).toBe("Bearer test-token");
