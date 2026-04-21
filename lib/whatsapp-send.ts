@@ -18,8 +18,12 @@ export class WhatsAppSendError extends Error {
   }
 }
 
-const WA_API_VERSION = "v21.0";
 const WA_API_BASE = "https://graph.facebook.com";
+
+/** Versão da Graph API. Override via WHATSAPP_API_VERSION env var quando Meta deprecar. */
+function getApiVersion(): string {
+  return process.env.WHATSAPP_API_VERSION ?? "v21.0";
+}
 
 /**
  * Envia mensagem de texto via WhatsApp Cloud API.
@@ -29,7 +33,7 @@ const WA_API_BASE = "https://graph.facebook.com";
  *   WHATSAPP_PHONE_NUMBER_ID — ID do número de telefone do negócio
  *
  * @param to   Número do destinatário em E.164 (com ou sem +)
- * @param text Texto da mensagem
+ * @param text Texto da mensagem (truncado em 4096 chars — limite da WA Cloud API)
  * @throws WhatsAppSendError em falha HTTP ou env vars ausentes
  */
 export async function sendWhatsAppMessage(
@@ -48,14 +52,19 @@ export async function sendWhatsAppMessage(
   // WA Cloud API espera E.164 sem o prefixo '+'
   const recipient = to.replace(/^\+/, "");
 
-  const url = `${WA_API_BASE}/${WA_API_VERSION}/${phoneNumberId}/messages`;
+  // WA Cloud API rejeita mensagens com mais de 4096 caracteres
+  const WA_TEXT_LIMIT = 4096;
+  const safeText =
+    text.length > WA_TEXT_LIMIT ? text.slice(0, WA_TEXT_LIMIT - 3) + "..." : text;
+
+  const url = `${WA_API_BASE}/${getApiVersion()}/${phoneNumberId}/messages`;
 
   const body = JSON.stringify({
     messaging_product: "whatsapp",
     recipient_type: "individual",
     to: recipient,
     type: "text",
-    text: { body: text },
+    text: { body: safeText },
   });
 
   const res = await fetch(url, {

@@ -138,4 +138,41 @@ describe("sendWhatsAppMessage", () => {
       name: "WhatsAppSendError",
     });
   });
+
+  it("trunca texto em 4096 chars com reticências", async () => {
+    const spy = mockFetchOk();
+    const longText = "a".repeat(5000);
+    await sendWhatsAppMessage("+5511999990000", longText);
+    const body = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.text.body).toHaveLength(4096);
+    expect(body.text.body.endsWith("...")).toBe(true);
+    expect(body.text.body.startsWith("a")).toBe(true);
+  });
+
+  it("texto com exatamente 4096 chars não é truncado", async () => {
+    const spy = mockFetchOk();
+    const exactText = "b".repeat(4096);
+    await sendWhatsAppMessage("+5511999990000", exactText);
+    const body = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.text.body).toHaveLength(4096);
+    expect(body.text.body.endsWith("...")).toBe(false);
+  });
+
+  it("usa WHATSAPP_API_VERSION env var quando definida", async () => {
+    process.env.WHATSAPP_API_VERSION = "v22.0";
+    const spy = mockFetchOk();
+    await sendWhatsAppMessage("+5511999990000", "oi");
+    const [url] = spy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("v22.0");
+    expect(url).not.toContain("v21.0");
+    delete process.env.WHATSAPP_API_VERSION;
+  });
+
+  it("usa v21.0 como padrão quando WHATSAPP_API_VERSION não definida", async () => {
+    delete process.env.WHATSAPP_API_VERSION;
+    const spy = mockFetchOk();
+    await sendWhatsAppMessage("+5511999990000", "oi");
+    const [url] = spy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("v21.0");
+  });
 });
