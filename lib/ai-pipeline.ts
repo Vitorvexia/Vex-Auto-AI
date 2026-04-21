@@ -23,6 +23,7 @@ import { sendWhatsAppMessage, WhatsAppSendError } from "@/lib/whatsapp-send";
 
 export type AgentStatus =
   | "ok"
+  | "ok_send_failed"
   | "skipped_handoff"
   | "skipped_duplicate"
   | "timeout"
@@ -112,10 +113,12 @@ export async function runAiPipeline(params: {
     });
 
     // Enviar reply via WhatsApp Cloud API (não-fatal: reply já salvo no banco)
+    let sendFailed = false;
     try {
       await sendWhatsAppMessage(ctx.lead.phone_normalized, result.reply_text);
       console.log(`[whatsapp-send] mensagem enviada para ${ctx.lead.phone_normalized}`);
     } catch (sendErr) {
+      sendFailed = true;
       if (sendErr instanceof WhatsAppSendError) {
         console.error(`[whatsapp-send] falha ao enviar para ${ctx.lead.phone_normalized}: ${sendErr.message}`);
       } else {
@@ -149,17 +152,19 @@ export async function runAiPipeline(params: {
       }
     }
 
+    const finalStatus: AgentStatus = sendFailed ? "ok_send_failed" : "ok";
+
     await logAi({
       storeId: params.storeId,
       conversationId: params.conversationId,
       leadId: params.leadId,
-      status: "ok",
+      status: finalStatus,
       latencyMs: Date.now() - start,
       model,
       output: result,
     });
 
-    return { agent_status: "ok" };
+    return { agent_status: finalStatus };
   } catch (e: unknown) {
     let agentStatus: AgentStatus = "error";
     if (e instanceof AgentTimeoutError) agentStatus = "timeout";

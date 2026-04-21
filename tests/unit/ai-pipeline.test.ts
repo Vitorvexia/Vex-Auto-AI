@@ -153,26 +153,26 @@ describe("runAiPipeline — integração sendWhatsAppMessage", () => {
     );
   });
 
-  it("retorna agent_status ok mesmo quando sendWhatsAppMessage lança WhatsAppSendError", async () => {
+  it("retorna ok_send_failed quando sendWhatsAppMessage lança WhatsAppSendError", async () => {
     vi.mocked(sendWhatsAppMessage).mockRejectedValueOnce(
       new WhatsAppSendError("WhatsApp API retornou 401: token inválido", 401)
     );
 
     const result = await runAiPipeline(BASE_PARAMS);
 
-    // Falha no envio é não-fatal: reply já está no banco
-    expect(result.agent_status).toBe("ok");
+    // IA funcionou, reply no banco — mas entrega falhou: status distinto de "ok"
+    expect(result.agent_status).toBe("ok_send_failed");
     expect(result.error).toBeUndefined();
   });
 
-  it("retorna agent_status ok mesmo quando sendWhatsAppMessage lança TypeError (rede)", async () => {
+  it("retorna ok_send_failed quando sendWhatsAppMessage lança TypeError (rede)", async () => {
     vi.mocked(sendWhatsAppMessage).mockRejectedValueOnce(
       new TypeError("fetch failed")
     );
 
     const result = await runAiPipeline(BASE_PARAMS);
 
-    expect(result.agent_status).toBe("ok");
+    expect(result.agent_status).toBe("ok_send_failed");
     expect(result.error).toBeUndefined();
   });
 
