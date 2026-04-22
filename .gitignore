@@ -6,3 +6,12 @@ out
 .env*.local
 next-env.d.ts
 .DS_Store
+
+# Claude local settings (machine-specific, not for version control)
+.claude/settings.local.json
+
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Dev tooling
+gstack/

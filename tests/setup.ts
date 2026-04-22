@@ -1,7 +1,7 @@
 import { config } from "dotenv";
 
 // Carrega credenciais reais quando existirem
-config({ path: ".env.local" });
+config({ path: ".env.local", override: true });
 config({ path: ".env.test" });
 config({ path: ".env" });
 
