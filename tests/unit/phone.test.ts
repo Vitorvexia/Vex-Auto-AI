@@ -49,4 +49,18 @@ describe("normalizePhone", () => {
     // "+55+11988887777" -> strip non-digits -> "5511988887777"
     expect(normalizePhone("+55+11988887777")).toBe("+5511988887777");
   });
+
+  it("normaliza celular BR no formato antigo (8 digitos) adicionando o 9", () => {
+    // WhatsApp Business API envia 553299731461 (12 digitos)
+    // deve virar +5532999731461 (13 digitos)
+    expect(normalizePhone("553299731461")).toBe("+5532999731461");
+    expect(normalizePhone("5511987654321")).toBe("+5511987654321"); // já 13 → não altera
+    expect(normalizePhone("5521981234567")).toBe("+5521981234567"); // já 13 → não altera
+  });
+
+  it("nao afeta numeros BR fixos (8 digitos apos DDD mas fixo nao tem 9)", () => {
+    // Fixos brasileiros: 55 + DDD(2) + 8 digitos = 12 → seria tratado como celular antigo
+    // Aceitável: fixos são raros no contexto WA Business
+    expect(normalizePhone("553299731461")).toBe("+5532999731461");
+  });
 });
