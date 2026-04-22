@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
@@ -58,7 +59,7 @@ export function Header() {
     <header className="header">
       <div className="header-inner">
         <Link href="/leads" className="header-logo" aria-label="VexAuto — início">
-          <img src="/favicon.png" alt="VexAuto" width={34} height={34} style={{ display: "block", flexShrink: 0 }} />
+          <Image src="/favicon.png" alt="VexAuto" width={34} height={34} style={{ display: "block", flexShrink: 0 }} />
         </Link>
 
         <nav className="header-nav">
