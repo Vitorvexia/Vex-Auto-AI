@@ -101,26 +101,37 @@ export async function runAiPipeline(params: {
     const payload = buildPrompt(ctx, guardrail);
     const result = await runAgent(payload, ctx);
 
-    // Gravar reply (saida/ia)
+    // Truncar reply ao limite da WA Cloud API antes de qualquer persistência
+    const WA_TEXT_LIMIT = 4096;
+    const replyText =
+      result.reply_text.length > WA_TEXT_LIMIT
+        ? result.reply_text.slice(0, WA_TEXT_LIMIT - 3) + "..."
+        : result.reply_text;
+
+    // Gravar reply (saida/ia) — texto já truncado, igual ao que será enviado
     await supabaseAdmin.from("messages").insert({
       store_id: params.storeId,
       conversation_id: params.conversationId,
       lead_id: params.leadId,
       direcao: "saida",
       autor: "ia",
-      mensagem: result.reply_text,
+      mensagem: replyText,
       received_at: new Date().toISOString(),
     });
 
     // Enviar reply via WhatsApp Cloud API (não-fatal: reply já salvo no banco)
+    const phone = ctx.lead.phone_normalized ?? "";
+    const phoneMasked = phone
+      ? phone.slice(-4).padStart(phone.length, "*")
+      : "****";
     let sendFailed = false;
     try {
-      await sendWhatsAppMessage(ctx.lead.phone_normalized, result.reply_text);
-      console.log(`[whatsapp-send] mensagem enviada para ${ctx.lead.phone_normalized}`);
+      await sendWhatsAppMessage(ctx.lead.phone_normalized, replyText);
+      console.log(`[whatsapp-send] mensagem enviada para ${phoneMasked}`);
     } catch (sendErr) {
       sendFailed = true;
       if (sendErr instanceof WhatsAppSendError) {
-        console.error(`[whatsapp-send] falha ao enviar para ${ctx.lead.phone_normalized}: ${sendErr.message}`);
+        console.error(`[whatsapp-send] falha ao enviar para ${phoneMasked}: ${sendErr.message}`);
       } else {
         console.error("[whatsapp-send] erro inesperado:", sendErr);
       }

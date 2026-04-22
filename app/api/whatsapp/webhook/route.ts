@@ -217,8 +217,5 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (systemicError) {
-    return NextResponse.json({ ok: false, results }, { status: 500 });
-  }
-  return NextResponse.json({ ok: true, results });
+  return NextResponse.json({ ok: !systemicError, results });
 }

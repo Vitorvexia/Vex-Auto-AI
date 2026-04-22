@@ -70,7 +70,9 @@ import { runAiPipeline } from "@/lib/ai-pipeline";
 import { buildAgentContext } from "@/lib/agent-context";
 import { runGuardrails } from "@/lib/guardrails";
 import { buildPrompt } from "@/lib/prompts";
-import { runAgent } from "@/lib/ai";
+import { runAgent, AgentTimeoutError, AgentParseError, AgentOutputError } from "@/lib/ai";
+import { transitionConversationStatus } from "@/lib/status";
+import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage, WhatsAppSendError } from "@/lib/whatsapp-send";
 
 // ---------------------------------------------------------------------------
@@ -153,6 +155,19 @@ describe("runAiPipeline — integração sendWhatsAppMessage", () => {
     );
   });
 
+  it("trunca reply_text acima de 4096 chars antes de enviar e salvar no banco", async () => {
+    const longText = "x".repeat(5000);
+    vi.mocked(runAgent).mockResolvedValueOnce({ ...BASE_RESULT, reply_text: longText } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    const expectedText = "x".repeat(4093) + "...";
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith(
+      BASE_CTX.lead.phone_normalized,
+      expectedText
+    );
+  });
+
   it("retorna ok_send_failed quando sendWhatsAppMessage lança WhatsAppSendError", async () => {
     vi.mocked(sendWhatsAppMessage).mockRejectedValueOnce(
       new WhatsAppSendError("WhatsApp API retornou 401: token inválido", 401)
@@ -197,5 +212,120 @@ describe("runAiPipeline — integração sendWhatsAppMessage", () => {
     expect(result.error).toContain("LLM unavailable");
     // sendWhatsApp não deve ser chamado (falhou antes do insert)
     expect(sendWhatsAppMessage).not.toHaveBeenCalled();
+  });
+
+  it("retorna timeout quando runAgent lança AgentTimeoutError", async () => {
+    vi.mocked(runAgent).mockRejectedValueOnce(new AgentTimeoutError());
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("timeout");
+    expect(result.error).toContain("timeout");
+    expect(sendWhatsAppMessage).not.toHaveBeenCalled();
+  });
+
+  it("retorna parse_error quando runAgent lança AgentParseError", async () => {
+    vi.mocked(runAgent).mockRejectedValueOnce(new AgentParseError("{invalid json}"));
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("parse_error");
+    expect(sendWhatsAppMessage).not.toHaveBeenCalled();
+  });
+
+  it("retorna output_error quando runAgent lança AgentOutputError", async () => {
+    vi.mocked(runAgent).mockRejectedValueOnce(new AgentOutputError("missing reply_text"));
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("output_error");
+    expect(sendWhatsAppMessage).not.toHaveBeenCalled();
+  });
+
+  it("chama transitionConversationStatus quando should_handoff=true", async () => {
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      should_handoff: true,
+    } as any);
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("ok");
+    expect(transitionConversationStatus).toHaveBeenCalledOnce();
+    expect(transitionConversationStatus).toHaveBeenCalledWith(
+      BASE_PARAMS.conversationId,
+      "AGUARDANDO_HUMANO",
+      { handoff_to: "HUMANO" }
+    );
+  });
+
+  it("nao propaga erro de transitionConversationStatus (falha nao-fatal)", async () => {
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      should_handoff: true,
+    } as any);
+    vi.mocked(transitionConversationStatus).mockRejectedValueOnce(
+      new Error("DB offline")
+    );
+
+    // Pipeline deve continuar e retornar ok mesmo com falha na transição
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("ok");
+    expect(result.error).toBeUndefined();
+  });
+
+  it("atualiza score no banco quando score mudou", async () => {
+    // BASE_RESULT.score (15) !== BASE_CTX.lead.score (10) → update deve ser chamado
+    const fromMock = vi.mocked(supabaseAdmin.from);
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+    const insertMock = vi.fn().mockResolvedValue({ error: null });
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === "leads") {
+        return { update: updateMock } as any;
+      }
+      return { insert: insertMock, update: updateMock } as any;
+    });
+
+    await runAiPipeline(BASE_PARAMS);
+
+    // leads.update deve ter sido chamado com o novo score
+    expect(updateMock).toHaveBeenCalledWith({ score: BASE_RESULT.score });
+  });
+
+  it("nao atualiza score quando score nao mudou", async () => {
+    // score retornado igual ao do lead (10)
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      score: BASE_CTX.lead.score, // score identico — sem update
+    } as any);
+
+    const fromMock = vi.mocked(supabaseAdmin.from);
+    const updateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ error: null }),
+    });
+
+    fromMock.mockImplementation((table: string) => {
+      if (table === "leads") {
+        return { update: updateMock } as any;
+      }
+      return { insert: vi.fn().mockResolvedValue({ error: null }) } as any;
+    });
+
+    await runAiPipeline(BASE_PARAMS);
+
+    expect(updateMock).not.toHaveBeenCalled();
+  });
+
+  it("usa model=null quando ANTHROPIC_MODEL nao esta definido", async () => {
+    delete process.env.ANTHROPIC_MODEL;
+
+    // Deve completar sem erros — model null é passado ao logAi
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("ok");
   });
 });
