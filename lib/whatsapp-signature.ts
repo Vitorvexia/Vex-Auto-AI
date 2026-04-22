@@ -15,6 +15,12 @@ export function verifyMetaSignature(
   const appSecret = process.env.WHATSAPP_APP_SECRET;
 
   if (!appSecret) {
+    if (process.env.NODE_ENV === "production") {
+      // Falha ruidosa em produção — nunca aceitar sem app secret
+      throw new Error(
+        "WHATSAPP_APP_SECRET obrigatório em produção. Configure a variável de ambiente."
+      );
+    }
     return process.env.WHATSAPP_ALLOW_UNSIGNED === "true";
   }
 

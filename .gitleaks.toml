@@ -1,0 +1,27 @@
+[allowlist]
+  paths = [
+    ".env.example",
+    "supabase/migrations/002_seed.sql",
+  ]
+
+[[rules]]
+  id = "anthropic-key"
+  regex = '''sk-ant-[a-zA-Z0-9\-_]{20,}'''
+  description = "Anthropic API Key"
+
+[[rules]]
+  id = "supabase-service-role"
+  regex = '''eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9\.[A-Za-z0-9_\-]+\.[A-Za-z0-9_\-]+'''
+  description = "Supabase JWT (service_role ou anon key)"
+
+[[rules]]
+  id = "whatsapp-token"
+  regex = '''EAAG[a-zA-Z0-9]{20,}'''
+  description = "Meta WhatsApp Access Token"
+
+[[rules]]
+  id = "generic-secret-assignment"
+  regex = '''(?i)(api_key|app_secret|access_token|service_role_key)\s*=\s*["'][A-Za-z0-9\-_]{16,}["']'''
+  description = "Generic secret assignment"
+  [rules.allowlist]
+    regexes = ['''(?i)(seu-|your-|example|changeme|placeholder|<|>)''']
