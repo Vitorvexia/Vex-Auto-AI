@@ -9,3 +9,9 @@ next-env.d.ts
 
 # Claude local settings (machine-specific, not for version control)
 .claude/settings.local.json
+
+# Build artifacts
+tsconfig.tsbuildinfo
+
+# Dev tooling
+gstack/
