@@ -105,14 +105,25 @@ export async function transitionLeadStatus(
     throw new InvalidTransitionError("lead_status", from, to);
   }
 
-  const { count, error: updErr } = await supabaseAdmin
+  const { error: updErr } = await supabaseAdmin
     .from("leads")
-    .update({ lead_status: to }, { count: "exact" })
+    .update({ lead_status: to })
     .eq("id", leadId)
     .eq("lead_status", from);
 
   if (updErr) throw updErr;
-  if ((count ?? 0) === 0) throw new ConcurrentTransitionError("lead_status", leadId);
+
+  // PostgREST count/returning unreliable under concurrent writes — verify via fresh SELECT
+  const { data: verify, error: verErr } = await supabaseAdmin
+    .from("leads")
+    .select("lead_status")
+    .eq("id", leadId)
+    .single();
+
+  if (verErr) throw verErr;
+  if (!verify || verify.lead_status !== to) {
+    throw new ConcurrentTransitionError("lead_status", leadId);
+  }
 
   return { from, to, changed: true };
 }
@@ -157,15 +168,26 @@ export async function transitionConversationStatus(
     return { from, to, changed: false };
   }
 
-  const { count, error: updErr } = await supabaseAdmin
+  const { error: updErr } = await supabaseAdmin
     .from("conversations")
-    .update(update, { count: "exact" })
+    .update(update)
     .eq("id", conversationId)
     .eq("conversation_status", from);
 
   if (updErr) throw updErr;
-  if ((count ?? 0) === 0) {
-    throw new ConcurrentTransitionError("conversation_status", conversationId);
+
+  if (wantsStatusChange) {
+    // PostgREST count/returning unreliable under concurrent writes — verify via fresh SELECT
+    const { data: verify, error: verErr } = await supabaseAdmin
+      .from("conversations")
+      .select("conversation_status")
+      .eq("id", conversationId)
+      .single();
+
+    if (verErr) throw verErr;
+    if (!verify || verify.conversation_status !== to) {
+      throw new ConcurrentTransitionError("conversation_status", conversationId);
+    }
   }
 
   return { from, to, changed: wantsStatusChange };
