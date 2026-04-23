@@ -20,7 +20,7 @@ jobs:
           fetch-depth: 0   # necessário para escanear histórico completo
 
       - name: Run gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2.3.9
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         # gitleaks-action usa .gitleaks.toml automaticamente quando presente
@@ -59,7 +59,6 @@ jobs:
           ANTHROPIC_MODEL: claude-haiku-4-5
           ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           WHATSAPP_ACCESS_TOKEN: test-token
           WHATSAPP_PHONE_NUMBER_ID: "123456"
           WHATSAPP_APP_SECRET: test-secret
