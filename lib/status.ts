@@ -105,16 +105,14 @@ export async function transitionLeadStatus(
     throw new InvalidTransitionError("lead_status", from, to);
   }
 
-  const { data: updated, error: updErr } = await supabaseAdmin
+  const { count, error: updErr } = await supabaseAdmin
     .from("leads")
-    .update({ lead_status: to })
+    .update({ lead_status: to }, { count: "exact" })
     .eq("id", leadId)
-    .eq("lead_status", from)
-    .select("id")
-    .maybeSingle();
+    .eq("lead_status", from);
 
   if (updErr) throw updErr;
-  if (!updated) throw new ConcurrentTransitionError("lead_status", leadId);
+  if ((count ?? 0) === 0) throw new ConcurrentTransitionError("lead_status", leadId);
 
   return { from, to, changed: true };
 }
@@ -159,16 +157,14 @@ export async function transitionConversationStatus(
     return { from, to, changed: false };
   }
 
-  const { data: updated, error: updErr } = await supabaseAdmin
+  const { count, error: updErr } = await supabaseAdmin
     .from("conversations")
-    .update(update)
+    .update(update, { count: "exact" })
     .eq("id", conversationId)
-    .eq("conversation_status", from)
-    .select("id")
-    .maybeSingle();
+    .eq("conversation_status", from);
 
   if (updErr) throw updErr;
-  if (!updated) {
+  if ((count ?? 0) === 0) {
     throw new ConcurrentTransitionError("conversation_status", conversationId);
   }
 
