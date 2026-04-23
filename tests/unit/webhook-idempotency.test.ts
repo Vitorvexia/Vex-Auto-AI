@@ -191,10 +191,50 @@ describe("Webhook idempotência — duplicate via ingestMessage", () => {
   });
 });
 
-// describe("Webhook idempotência — unique_violation (23505)") removido:
-// o webhook route ainda não trata 23505 como duplicate — será adicionado
-// no PR que integrar replay guard e rate limiter ao webhook handler.
+describe("Webhook idempotência — unique_violation (23505)", () => {
+  it("23505 tratado como duplicate — IA não é chamada", async () => {
+    const err = { code: "23505", message: "duplicate key value violates unique constraint" };
+    mockIngestMessage.mockRejectedValue(err);
 
-// describe("Webhook idempotência — replay guard in-memory") removido:
-// o webhook route ainda não chama isReplayedMessage — será adicionado
-// no mesmo PR acima.
+    const res = await POST(makeReq(makeWebhookPayload("wamid-23505-001")));
+    const body = await res.json();
+
+    expect(mockRunAiPipeline).not.toHaveBeenCalled();
+    expect(body.results[0].status).toBe("duplicate");
+    expect(body.results[0].agent_status).toBe("skipped_duplicate");
+  });
+
+  it("23505 não seta systemicError — ok=true na resposta", async () => {
+    const err = { code: "23505", message: "duplicate key value violates unique constraint" };
+    mockIngestMessage.mockRejectedValue(err);
+
+    const res = await POST(makeReq(makeWebhookPayload("wamid-23505-002")));
+    const body = await res.json();
+
+    expect(body.ok).toBe(true);
+  });
+});
+
+describe("Webhook idempotência — replay guard in-memory", () => {
+  it("isReplayedMessage=true → ingestMessage não é chamado", async () => {
+    mockIsReplayedMessage.mockReturnValue(true);
+
+    const res = await POST(makeReq(makeWebhookPayload("wamid-replay-001")));
+    const body = await res.json();
+
+    expect(mockIngestMessage).not.toHaveBeenCalled();
+    expect(mockRunAiPipeline).not.toHaveBeenCalled();
+    expect(body.results[0].status).toBe("duplicate");
+    expect(body.results[0].agent_status).toBe("skipped_duplicate");
+  });
+
+  it("isReplayedMessage=true → ok=true, sem systemic error", async () => {
+    mockIsReplayedMessage.mockReturnValue(true);
+
+    const res = await POST(makeReq(makeWebhookPayload("wamid-replay-002")));
+    const body = await res.json();
+
+    expect(body.ok).toBe(true);
+    expect(body.results[0].status).toBe("duplicate");
+  });
+});
