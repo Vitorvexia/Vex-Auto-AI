@@ -105,25 +105,15 @@ export async function transitionLeadStatus(
     throw new InvalidTransitionError("lead_status", from, to);
   }
 
-  const { error: updErr } = await supabaseAdmin
-    .from("leads")
-    .update({ lead_status: to })
-    .eq("id", leadId)
-    .eq("lead_status", from);
+  // RPC atômico: SELECT FOR UPDATE serializa chamadas concorrentes no PostgreSQL.
+  // A segunda chamada lê o estado pós-primeira e detecta p_from ≠ estado atual → FALSE.
+  const { data: won, error: rpcErr } = await supabaseAdmin.rpc(
+    "try_transition_lead_status",
+    { p_lead_id: leadId, p_from: from, p_to: to }
+  );
 
-  if (updErr) throw updErr;
-
-  // PostgREST count/returning unreliable under concurrent writes — verify via fresh SELECT
-  const { data: verify, error: verErr } = await supabaseAdmin
-    .from("leads")
-    .select("lead_status")
-    .eq("id", leadId)
-    .single();
-
-  if (verErr) throw verErr;
-  if (!verify || verify.lead_status !== to) {
-    throw new ConcurrentTransitionError("lead_status", leadId);
-  }
+  if (rpcErr) throw rpcErr;
+  if (!won) throw new ConcurrentTransitionError("lead_status", leadId);
 
   return { from, to, changed: true };
 }
