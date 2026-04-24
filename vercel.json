@@ -1,0 +1,8 @@
+{
+  "crons": [
+    {
+      "path": "/api/internal/follow-up/run",
+      "schedule": "0 * * * *"
+    }
+  ]
+}
