@@ -1,0 +1,67 @@
+name: CI
+
+on:
+  push:
+    branches: [main, "feat/**", "fix/**"]
+  pull_request:
+    branches: [main]
+
+jobs:
+  # ============================================================================
+  # Job 1: Scanner de secrets — bloqueia PRs com credentials expostas
+  # ============================================================================
+  secrets-scan:
+    name: Secrets Scan (gitleaks)
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # necessário para escanear histórico completo
+
+      - name: Run gitleaks
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7  # v2.3.9
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        # gitleaks-action usa .gitleaks.toml automaticamente quando presente
+
+  # ============================================================================
+  # Job 2: Lint, Typecheck e Testes
+  # ============================================================================
+  check:
+    name: Lint + Typecheck + Unit Tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+        # Falha o job se houver erros de lint (warnings são tolerados)
+        # Requer: eslint + eslint-config-next instalados (ver ACTIONS_PENDING.md)
+
+      - name: TypeScript check
+        run: npx tsc --noEmit --project tsconfig.json
+
+      - name: Unit tests
+        run: npm run test:unit
+        env:
+          # Variáveis mínimas para testes unitários (mocks internos — sem secrets reais)
+          ANTHROPIC_MODEL: claude-haiku-4-5
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          WHATSAPP_ACCESS_TOKEN: test-token
+          WHATSAPP_PHONE_NUMBER_ID: "123456"
+          WHATSAPP_APP_SECRET: test-secret
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          NEXT_PUBLIC_SUPABASE_ANON_KEY: ${{ secrets.SUPABASE_ANON_KEY }}
+          INTERNAL_API_KEY: test-internal-key

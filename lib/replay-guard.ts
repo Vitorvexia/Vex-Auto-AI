@@ -1,4 +1,14 @@
-const TTL_MS = 10 * 60_000;
+// Cache in-memory de WAMIDs (message_external_id) recentemente processados.
+// Defence-in-depth além do unique constraint do banco.
+//
+// Cenário mitigado: dois workers simultâneos (ou Meta retry) entregam o mesmo
+// WAMID antes que o primeiro insert seja commitado — o DB unique constraint
+// resolve, mas este cache evita a chamada ao banco + pipeline desnecessários.
+//
+// TTL de 10 minutos é suficiente para cobrir retries legítimos da Meta.
+// Para escala horizontal, substituir por Redis SET com NX + EXPIRE.
+
+const TTL_MS = 10 * 60_000; // 10 minutos
 
 interface Entry {
   seenAt: number;
@@ -16,6 +26,7 @@ export function isReplayedMessage(messageExternalId: string): boolean {
   return false;
 }
 
+// Limpeza periódica para evitar crescimento irrestrito em instâncias longas
 if (typeof setInterval !== "undefined") {
   setInterval(() => {
     const cutoff = Date.now() - TTL_MS;

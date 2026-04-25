@@ -209,7 +209,7 @@ describe("E2E — Pipeline de IA (cenários reais)", () => {
           id: "e2e-lead",
           nome: "Carlos",
           phone_normalized: "+5511999990000",
-          lead_status: "QUALIFICADO",
+          lead_status: "QUENTE",
           score: 75,
           origem: "whatsapp",
         },
