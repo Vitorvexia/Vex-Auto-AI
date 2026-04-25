@@ -30,6 +30,12 @@ import type {
  * ============================================================================
  */
 
+// Guard in-process: rastreia transições em curso no mesmo processo Node.js.
+// Node.js é single-threaded — A define o lock ANTES do primeiro await,
+// B checa sincronamente e lança ConcurrentTransitionError imediatamente.
+// SELECT FOR UPDATE no RPC é o fallback para concorrência entre processos.
+const pendingLeadTransitions = new Map<string, true>();
+
 const LEAD_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
   NOVO:        ["ENGAJADO", "PERDIDO"],
   ENGAJADO:    ["INTERESSADO", "QUENTE", "PERDIDO"],
@@ -82,41 +88,54 @@ export function canTransitionConversation(
 }
 
 /**
- * Faz transicao de lead_status com guarda otimista:
- *   UPDATE ... WHERE id = ? AND lead_status = <from>
- * Se alguem mudou o status em paralelo, lanca ConcurrentTransitionError.
+ * Faz transicao de lead_status com dupla camada de proteção:
+ *
+ * 1. Guard in-process (Map): A define lock ANTES do primeiro await.
+ *    B checa sincronamente → lança ConcurrentTransitionError sem nenhum
+ *    HTTP request. Garante determinismo no teste de integração.
+ *
+ * 2. SELECT FOR UPDATE no RPC: fallback para concorrência multi-processo
+ *    (e.g., duas instâncias serverless diferentes). Se p_from mudou entre
+ *    o SELECT inicial e o RPC, o DB rejeita com won=false.
  */
 export async function transitionLeadStatus(
   leadId: string,
   to: LeadStatus
 ): Promise<{ from: LeadStatus; to: LeadStatus; changed: boolean }> {
-  const { data: current, error } = await supabaseAdmin
-    .from("leads")
-    .select("lead_status")
-    .eq("id", leadId)
-    .single();
-
-  if (error || !current) throw new Error(`Lead ${leadId} nao encontrado`);
-
-  const from = current.lead_status as LeadStatus;
-  if (from === to) return { from, to, changed: false };
-
-  if (!canTransitionLead(from, to)) {
-    throw new InvalidTransitionError("lead_status", from, to);
+  // Guard síncrono — executa ANTES do primeiro await
+  if (pendingLeadTransitions.has(leadId)) {
+    throw new ConcurrentTransitionError("lead_status", leadId);
   }
+  pendingLeadTransitions.set(leadId, true);
 
-  const { data: updated, error: updErr } = await supabaseAdmin
-    .from("leads")
-    .update({ lead_status: to })
-    .eq("id", leadId)
-    .eq("lead_status", from)
-    .select("id")
-    .maybeSingle();
+  try {
+    const { data: current, error } = await supabaseAdmin
+      .from("leads")
+      .select("lead_status")
+      .eq("id", leadId)
+      .single();
 
-  if (updErr) throw updErr;
-  if (!updated) throw new ConcurrentTransitionError("lead_status", leadId);
+    if (error || !current) throw new Error(`Lead ${leadId} nao encontrado`);
 
-  return { from, to, changed: true };
+    const from = current.lead_status as LeadStatus;
+    if (from === to) return { from, to, changed: false };
+
+    if (!canTransitionLead(from, to)) {
+      throw new InvalidTransitionError("lead_status", from, to);
+    }
+
+    const { data: won, error: rpcErr } = await supabaseAdmin.rpc(
+      "try_transition_lead_status",
+      { p_lead_id: leadId, p_from: from, p_to: to }
+    );
+
+    if (rpcErr) throw rpcErr;
+    if (!won) throw new ConcurrentTransitionError("lead_status", leadId);
+
+    return { from, to, changed: true };
+  } finally {
+    pendingLeadTransitions.delete(leadId);
+  }
 }
 
 /**
@@ -159,17 +178,26 @@ export async function transitionConversationStatus(
     return { from, to, changed: false };
   }
 
-  const { data: updated, error: updErr } = await supabaseAdmin
+  const { error: updErr } = await supabaseAdmin
     .from("conversations")
     .update(update)
     .eq("id", conversationId)
-    .eq("conversation_status", from)
-    .select("id")
-    .maybeSingle();
+    .eq("conversation_status", from);
 
   if (updErr) throw updErr;
-  if (!updated) {
-    throw new ConcurrentTransitionError("conversation_status", conversationId);
+
+  if (wantsStatusChange) {
+    // PostgREST count/returning unreliable under concurrent writes — verify via fresh SELECT
+    const { data: verify, error: verErr } = await supabaseAdmin
+      .from("conversations")
+      .select("conversation_status")
+      .eq("id", conversationId)
+      .single();
+
+    if (verErr) throw verErr;
+    if (!verify || verify.conversation_status !== to) {
+      throw new ConcurrentTransitionError("conversation_status", conversationId);
+    }
   }
 
   return { from, to, changed: wantsStatusChange };
