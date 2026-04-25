@@ -4,6 +4,7 @@ import { normalizePhone } from "@/lib/phone";
 import { verifyMetaSignature } from "@/lib/whatsapp-signature";
 import { ingestMessage } from "@/lib/ingest";
 import { runAiPipeline } from "@/lib/ai-pipeline";
+import { isReplayedMessage } from "@/lib/replay-guard";
 
 // Precisamos de Node runtime para node:crypto (HMAC)
 export const runtime = "nodejs";
@@ -174,6 +175,19 @@ export async function POST(req: NextRequest) {
             ? new Date(parseInt(tsRaw, 10) * 1000).toISOString()
             : new Date().toISOString();
 
+        // Replay guard: bloqueia WAMID já visto em memória (TTL 10min)
+        if (isReplayedMessage(externalId)) {
+          console.log(
+            JSON.stringify({ event: "webhook_replay_guard_hit", wamid: externalId })
+          );
+          results.push({
+            message_external_id: externalId,
+            status: "duplicate",
+            agent_status: "skipped_duplicate",
+          });
+          continue;
+        }
+
         try {
           const r = await ingestMessage({
             storeId: store.id,
@@ -206,12 +220,29 @@ export async function POST(req: NextRequest) {
 
           results.push(result);
         } catch (e: unknown) {
-          systemicError = true;
-          results.push({
-            message_external_id: externalId,
-            status: "error",
-            error: e instanceof Error ? e.message : "rpc failed",
-          });
+          // unique_violation (23505): WAMID já existe no banco via outro caminho — duplicate, não erro
+          if (
+            e !== null &&
+            typeof e === "object" &&
+            "code" in e &&
+            (e as { code: string }).code === "23505"
+          ) {
+            console.log(
+              JSON.stringify({ event: "webhook_unique_violation", wamid: externalId })
+            );
+            results.push({
+              message_external_id: externalId,
+              status: "duplicate",
+              agent_status: "skipped_duplicate",
+            });
+          } else {
+            systemicError = true;
+            results.push({
+              message_external_id: externalId,
+              status: "error",
+              error: e instanceof Error ? e.message : "rpc failed",
+            });
+          }
         }
       }
     }

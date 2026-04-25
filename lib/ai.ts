@@ -100,29 +100,49 @@ function parseOutput(raw: string): unknown {
 // Step 4: validate fields and apply fallbacks — exported for unit testing
 // ============================================================================
 
+const CONTROL_CHARS = /[\x00-\x08\x0E-\x1F]/g;
+
+function strip(s: string): string {
+  return s.replace(CONTROL_CHARS, "");
+}
+
+function truncate(s: string, max: number): string {
+  return s.length <= max ? s : s.slice(0, max - 3) + "...";
+}
+
 export function validateOutput(raw: unknown, leadScore: number): AgentResult {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     throw new AgentOutputError("resposta não é um objeto JSON válido");
   }
   const obj = raw as Record<string, unknown>;
 
-  const reply_text =
+  let reply_text =
     typeof obj?.reply_text === "string" ? obj.reply_text.trim() : "";
   if (!reply_text) {
     throw new AgentOutputError("reply_text ausente ou vazio");
   }
+  reply_text = truncate(strip(reply_text), 4096);
 
   const should_handoff =
     typeof obj?.should_handoff === "boolean" ? obj.should_handoff : false;
 
   const rawScore = typeof obj?.score === "number" ? obj.score : -1;
-  const score = rawScore >= 0 && rawScore <= 100 ? rawScore : leadScore;
+  const score =
+    Number.isFinite(rawScore) && rawScore >= 0 && rawScore <= 100
+      ? rawScore
+      : leadScore;
 
-  const intent_tags = Array.isArray(obj?.intent_tags)
-    ? (obj.intent_tags as unknown[]).filter((t): t is string => typeof t === "string")
-    : [];
+  const intent_tags = (
+    Array.isArray(obj?.intent_tags)
+      ? (obj.intent_tags as unknown[]).filter((t): t is string => typeof t === "string")
+      : []
+  )
+    .slice(0, 10)
+    .map((t) => t.slice(0, 50));
 
-  const summary = typeof obj?.summary === "string" ? obj.summary : "";
+  const summary = typeof obj?.summary === "string"
+    ? truncate(strip(obj.summary), 1000)
+    : "";
 
   return { reply_text, should_handoff, score, intent_tags, summary };
 }
