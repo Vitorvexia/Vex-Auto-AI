@@ -16,6 +16,7 @@ import {
 } from "@/lib/ai";
 import { transitionConversationStatus } from "@/lib/status";
 import { sendWhatsAppMessage, WhatsAppSendError } from "@/lib/whatsapp-send";
+import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
 
 // ============================================================================
 // Tipos
@@ -76,7 +77,31 @@ export async function runAiPipeline(params: {
   const model = process.env.ANTHROPIC_MODEL ?? null;
 
   try {
-    const ctx = await buildAgentContext(params);
+    // Scoring queries run in parallel with buildAgentContext — all depend only on
+    // params (leadId, conversationId), not on each other's results.
+    const [ctx, followUpRes, reactivationRes, scoreCountRes] = await Promise.all([
+      buildAgentContext(params),
+      supabaseAdmin
+        .from("follow_up_logs")
+        .select("logged_at")
+        .eq("conversation_id", params.conversationId)
+        .eq("status", "sent")
+        .order("logged_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("reactivation_logs")
+        .select("logged_at")
+        .eq("lead_id", params.leadId)
+        .eq("status", "sent")
+        .order("logged_at", { ascending: false })
+        .limit(1)
+        .maybeSingle(),
+      supabaseAdmin
+        .from("lead_score_events")
+        .select("id", { count: "exact", head: true })
+        .eq("lead_id", params.leadId),
+    ]);
 
     const parsedStart = parseInt(process.env.BUSINESS_HOURS_START ?? "8", 10);
     const parsedEnd = parseInt(process.env.BUSINESS_HOURS_END ?? "18", 10);
@@ -151,15 +176,51 @@ export async function runAiPipeline(params: {
       }
     }
 
-    // Atualizar score se mudou (falha não é fatal — reply já foi salvo)
-    if (result.score !== ctx.lead.score) {
+    // Score determinístico — result.score do LLM não é persistido em leads.score
+    const lastInbound = ctx.last_messages.findLast((m) => m.direcao === "entrada");
+    const lastInboundAt = lastInbound?.received_at ?? null;
+
+    let scoreSource: ScoreSource = "message";
+    const followUpSentAt = followUpRes.data?.logged_at ?? null;
+    const reactivationSentAt = reactivationRes.data?.logged_at ?? null;
+    if (followUpSentAt && lastInboundAt && new Date(followUpSentAt) > new Date(lastInboundAt)) {
+      scoreSource = "follow_up";
+    } else if (reactivationSentAt && lastInboundAt && new Date(reactivationSentAt) > new Date(lastInboundAt)) {
+      scoreSource = "reactivation";
+    }
+
+    const isFirstScore = scoreCountRes.error ? false : (scoreCountRes.count ?? 0) === 0;
+
+    const scoreResult = calculateLeadScore({
+      currentScore: ctx.lead.score,
+      leadStatus: ctx.lead.lead_status,
+      messageText: params.incomingText,
+      source: scoreSource,
+      isFirstScore,
+    });
+
+    if (scoreResult.delta !== 0) {
       try {
         await supabaseAdmin
           .from("leads")
-          .update({ score: result.score })
+          .update({ score: scoreResult.newScore })
           .eq("id", params.leadId);
       } catch {
-        // Score update não impede a resposta ao lead
+        // non-fatal: reply já salvo, score update não bloqueia resposta
+      }
+      try {
+        await supabaseAdmin.from("lead_score_events").insert({
+          store_id: params.storeId,
+          lead_id: params.leadId,
+          conversation_id: params.conversationId,
+          old_score: ctx.lead.score,
+          new_score: scoreResult.newScore,
+          delta: scoreResult.delta,
+          reasons: scoreResult.reasons,
+          source: scoreSource,
+        });
+      } catch {
+        // non-fatal: score é autoritativo, auditoria pode ter gaps no MVP
       }
     }
 

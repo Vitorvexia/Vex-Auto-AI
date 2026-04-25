@@ -4,6 +4,8 @@
  * Foca no comportamento não-fatal do envio WhatsApp:
  * falha no sendWhatsAppMessage não deve alterar o agent_status
  * nem propagar exceção — reply já está salvo no banco.
+ *
+ * Test 15: regressão — result.score do LLM não persiste em leads.score.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -12,16 +14,27 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // Mocks de módulos (deve vir antes do import do módulo testado)
 // ---------------------------------------------------------------------------
 
-vi.mock("@/lib/supabase", () => ({
-  supabaseAdmin: {
-    from: vi.fn().mockReturnValue({
-      insert: vi.fn().mockResolvedValue({ error: null }),
-      update: vi.fn().mockReturnValue({
-        eq: vi.fn().mockResolvedValue({ error: null }),
-      }),
-    }),
-  },
-}));
+vi.mock("@/lib/supabase", () => {
+  const mkChain = () => {
+    const c: any = {};
+    c.insert = vi.fn().mockResolvedValue({ data: null, error: null });
+    c.update = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+    c.select = vi.fn().mockReturnValue(c);
+    c.eq = vi.fn().mockReturnValue(c);
+    c.order = vi.fn().mockReturnValue(c);
+    c.limit = vi.fn().mockReturnValue(c);
+    c.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+    // Make chain awaitable for count queries that terminate with .eq()
+    c.then = (resolve: any, reject?: any) =>
+      Promise.resolve({ data: null, error: null, count: 0 }).then(resolve, reject);
+    return c;
+  };
+  return {
+    supabaseAdmin: { from: vi.fn().mockImplementation(mkChain) },
+  };
+});
 
 vi.mock("@/lib/agent-context", () => ({
   buildAgentContext: vi.fn(),
@@ -62,6 +75,10 @@ vi.mock("@/lib/whatsapp-send", () => ({
   },
 }));
 
+vi.mock("@/lib/lead-scoring", () => ({
+  calculateLeadScore: vi.fn(),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports após mocks
 // ---------------------------------------------------------------------------
@@ -74,6 +91,7 @@ import { runAgent, AgentTimeoutError, AgentParseError, AgentOutputError } from "
 import { transitionConversationStatus } from "@/lib/status";
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage, WhatsAppSendError } from "@/lib/whatsapp-send";
+import { calculateLeadScore } from "@/lib/lead-scoring";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -117,6 +135,8 @@ const BASE_RESULT = {
   summary: "Lead novo.",
 };
 
+const DEFAULT_SCORE_RESULT = { newScore: 15, delta: 5, reasons: ["mensagem"] };
+
 // ---------------------------------------------------------------------------
 // Setup / teardown
 // ---------------------------------------------------------------------------
@@ -127,6 +147,7 @@ beforeEach(() => {
   vi.mocked(buildPrompt).mockReturnValue({ system: "sys", messages: [] } as any);
   vi.mocked(runAgent).mockResolvedValue(BASE_RESULT as any);
   vi.mocked(sendWhatsAppMessage).mockResolvedValue(undefined);
+  vi.mocked(calculateLeadScore).mockReturnValue(DEFAULT_SCORE_RESULT as any);
   process.env.ANTHROPIC_MODEL = "claude-haiku-4-5";
 });
 
@@ -275,49 +296,36 @@ describe("runAiPipeline — integração sendWhatsAppMessage", () => {
     expect(result.error).toBeUndefined();
   });
 
-  it("atualiza score no banco quando score mudou", async () => {
-    // BASE_RESULT.score (15) !== BASE_CTX.lead.score (10) → update deve ser chamado
-    const fromMock = vi.mocked(supabaseAdmin.from);
-    const updateMock = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    });
-    const insertMock = vi.fn().mockResolvedValue({ error: null });
-
-    fromMock.mockImplementation((table: string) => {
-      if (table === "leads") {
-        return { update: updateMock } as any;
-      }
-      return { insert: insertMock, update: updateMock } as any;
-    });
-
-    await runAiPipeline(BASE_PARAMS);
-
-    // leads.update deve ter sido chamado com o novo score
-    expect(updateMock).toHaveBeenCalledWith({ score: BASE_RESULT.score });
-  });
-
-  it("nao atualiza score quando score nao mudou", async () => {
-    // score retornado igual ao do lead (10)
-    vi.mocked(runAgent).mockResolvedValueOnce({
-      ...BASE_RESULT,
-      score: BASE_CTX.lead.score, // score identico — sem update
+  it("scorer determinístico atualiza leads quando delta != 0", async () => {
+    vi.mocked(calculateLeadScore).mockReturnValueOnce({
+      newScore: 20,
+      delta: 10,
+      reasons: ["mensagem", "preco"],
     } as any);
 
-    const fromMock = vi.mocked(supabaseAdmin.from);
-    const updateMock = vi.fn().mockReturnValue({
-      eq: vi.fn().mockResolvedValue({ error: null }),
-    });
-
-    fromMock.mockImplementation((table: string) => {
-      if (table === "leads") {
-        return { update: updateMock } as any;
-      }
-      return { insert: vi.fn().mockResolvedValue({ error: null }) } as any;
-    });
+    const fromSpy = vi.mocked(supabaseAdmin.from);
 
     await runAiPipeline(BASE_PARAMS);
 
-    expect(updateMock).not.toHaveBeenCalled();
+    // leads.update foi chamado (via from("leads"))
+    const leadsCalls = fromSpy.mock.calls.filter(([t]) => t === "leads");
+    expect(leadsCalls.length).toBeGreaterThan(0);
+  });
+
+  it("nao chama leads.update quando delta == 0", async () => {
+    vi.mocked(calculateLeadScore).mockReturnValueOnce({
+      newScore: 10,
+      delta: 0,
+      reasons: [],
+    } as any);
+
+    const fromSpy = vi.mocked(supabaseAdmin.from);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    // leads table should not be accessed (no update needed)
+    const leadsCalls = fromSpy.mock.calls.filter(([t]) => t === "leads");
+    expect(leadsCalls.length).toBe(0);
   });
 
   it("usa model=null quando ANTHROPIC_MODEL nao esta definido", async () => {
@@ -327,5 +335,78 @@ describe("runAiPipeline — integração sendWhatsAppMessage", () => {
     const result = await runAiPipeline(BASE_PARAMS);
 
     expect(result.agent_status).toBe("ok");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 15 — Regressão: result.score do LLM não persiste em leads.score
+// ---------------------------------------------------------------------------
+
+describe("runAiPipeline — regressão: scorer determinístico (test 15)", () => {
+  it("result.score do LLM (99) nunca é escrito em leads.score", async () => {
+    // LLM retorna score=99 (valor arbitrário do LLM)
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      score: 99,
+    } as any);
+
+    // Scorer determinístico retorna newScore=15 (delta=5)
+    vi.mocked(calculateLeadScore).mockReturnValueOnce({
+      newScore: 15,
+      delta: 5,
+      reasons: ["mensagem"],
+    } as any);
+
+    // Capturar chamadas ao update de leads com mock específico
+    const leadsUpdateMock = vi.fn().mockReturnValue({
+      eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+    });
+    const auditInsertMock = vi.fn().mockResolvedValue({ data: null, error: null });
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "leads") {
+        return { update: leadsUpdateMock } as any;
+      }
+      // lead_score_events: supports both the COUNT query (select/eq/then)
+      // in Promise.all AND the audit insert after scoring.
+      if (table === "lead_score_events") {
+        const c: any = {};
+        c.insert = auditInsertMock;
+        c.select = vi.fn().mockReturnValue(c);
+        c.eq = vi.fn().mockReturnValue(c);
+        c.then = (resolve: any, reject?: any) =>
+          Promise.resolve({ data: null, error: null, count: 0 }).then(resolve, reject);
+        return c;
+      }
+      // Default chain for messages, ai_logs, follow_up_logs, reactivation_logs, etc.
+      const c: any = {};
+      c.insert = vi.fn().mockResolvedValue({ data: null, error: null });
+      c.select = vi.fn().mockReturnValue(c);
+      c.eq = vi.fn().mockReturnValue(c);
+      c.order = vi.fn().mockReturnValue(c);
+      c.limit = vi.fn().mockReturnValue(c);
+      c.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+      c.then = (resolve: any, reject?: any) =>
+        Promise.resolve({ data: null, error: null, count: 0 }).then(resolve, reject);
+      return c;
+    });
+
+    await runAiPipeline(BASE_PARAMS);
+
+    // Assert 1: leads.update NUNCA chamado com { score: 99 } (valor do LLM)
+    const updateArgs = leadsUpdateMock.mock.calls.map((c) => c[0]);
+    expect(updateArgs.some((a) => a?.score === 99)).toBe(false);
+
+    // Assert 2: leads.update chamado com { score: 15 } (valor do scorer)
+    expect(updateArgs.some((a) => a?.score === 15)).toBe(true);
+
+    // Assert 3: lead_score_events.insert chamado (trilha auditável existe)
+    expect(auditInsertMock).toHaveBeenCalledOnce();
+    const auditPayload = auditInsertMock.mock.calls[0][0];
+    expect(auditPayload).toMatchObject({
+      lead_id: BASE_PARAMS.leadId,
+      new_score: 15,
+      delta: 5,
+    });
   });
 });

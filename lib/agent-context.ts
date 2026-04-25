@@ -30,6 +30,7 @@ export interface AgentContext {
     direcao: Direcao;
     autor: Autor;
     mensagem: string;
+    received_at: string;
   }[];
   vehicles: {
     id: string;
@@ -68,7 +69,7 @@ export async function buildAgentContext(params: {
       .single(),
     supabaseAdmin
       .from("messages")
-      .select("direcao, autor, mensagem")
+      .select("direcao, autor, mensagem, received_at")
       .eq("conversation_id", conversationId)
       .order("received_at", { ascending: false })
       .limit(10),
