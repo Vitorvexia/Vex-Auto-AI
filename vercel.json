@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/internal/follow-up/run",
+      "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/internal/reactivation/run",
+      "schedule": "0 6 * * *"
+    }
+  ]
+}

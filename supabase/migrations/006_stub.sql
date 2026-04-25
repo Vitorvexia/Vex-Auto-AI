@@ -1,0 +1,1 @@
+-- stub: applied via Supabase dashboard
