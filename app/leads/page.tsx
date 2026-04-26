@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { OPEN_CONVERSATION_STATUSES, type LeadStatus } from "@/types/domain";
+import { calculateLeadPriority, sortLeads, type PriorityTier } from "@/lib/lead-priority";
 import { KanbanColumn } from "@/app/components/KanbanColumn";
 import { LeadCard } from "@/app/components/LeadCard";
 
@@ -23,7 +24,11 @@ type Enriched = {
   score: number;
   lead_status: LeadStatus;
   conversation_id?: string;
+  conversation_status?: string | null;
   ultima_atividade: string;
+  priority: PriorityTier;
+  priority_label: string;
+  recommended_action: string;
 };
 
 export default async function LeadsPage() {
@@ -47,22 +52,30 @@ export default async function LeadsPage() {
     const openConv = (l.conversations ?? []).find((c: any) =>
       OPEN_CONVERSATION_STATUSES.includes(c.conversation_status)
     );
+    const ultima_atividade =
+      openConv?.ultima_mensagem_em ?? l.updated_at ?? new Date(0).toISOString();
+    const { priority, priority_label, recommended_action } = calculateLeadPriority({
+      score: l.score,
+      conversationStatus: openConv?.conversation_status,
+      leadStatus: l.lead_status as LeadStatus,
+      ultimaAtividade: ultima_atividade,
+    });
     return {
       id: l.id,
       nome: l.nome,
       phone_normalized: l.phone_normalized,
-      score: l.score,
+      score: l.score ?? 0,
       lead_status: l.lead_status as LeadStatus,
       conversation_id: openConv?.id,
-      ultima_atividade: openConv?.ultima_mensagem_em ?? l.updated_at,
+      conversation_status: openConv?.conversation_status,
+      ultima_atividade,
+      priority,
+      priority_label,
+      recommended_action,
     };
   });
 
-  enriched.sort(
-    (a, b) =>
-      new Date(b.ultima_atividade).getTime() -
-      new Date(a.ultima_atividade).getTime()
-  );
+  const sorted = sortLeads(enriched);
 
   const byStatus: Record<LeadStatus, Enriched[]> = {
     NOVO: [],
@@ -73,12 +86,13 @@ export default async function LeadsPage() {
     FECHADO: [],
     PERDIDO: [],
   };
-  enriched.forEach((l) => byStatus[l.lead_status].push(l));
+  sorted.forEach((l) => byStatus[l.lead_status].push(l));
 
   const now = Date.now();
-  const staleLeads  = enriched.filter((l) => now - new Date(l.ultima_atividade).getTime() > 2 * 60 * 60 * 1000).length;
+  const staleLeads  = sorted.filter((l) => now - new Date(l.ultima_atividade).getTime() > 2 * 60 * 60 * 1000).length;
   const todayStart  = new Date(); todayStart.setHours(0, 0, 0, 0);
-  const activeToday = enriched.filter((l) => new Date(l.ultima_atividade) >= todayStart).length;
+  const activeToday = sorted.filter((l) => new Date(l.ultima_atividade) >= todayStart).length;
+  const hotCount    = sorted.filter((l) => l.priority === "hot").length;
 
   return (
     <main className="container">
@@ -86,18 +100,18 @@ export default async function LeadsPage() {
         <div>
           <h1>Pipeline de Leads</h1>
           <div className="subtitle">
-            {enriched.length} {enriched.length === 1 ? "lead" : "leads"} em atendimento
+            {sorted.length} {sorted.length === 1 ? "lead" : "leads"} em atendimento
           </div>
         </div>
       </div>
 
       <div className="leads-kpi-bar">
         <div className="leads-kpi-chip">
-          <div className="leads-kpi-chip-value">{enriched.length}</div>
+          <div className="leads-kpi-chip-value">{sorted.length}</div>
           <div className="leads-kpi-chip-label">No pipeline</div>
         </div>
         <div className="leads-kpi-chip hot">
-          <div className="leads-kpi-chip-value">{byStatus.QUENTE.length}</div>
+          <div className="leads-kpi-chip-value">{hotCount}</div>
           <div className="leads-kpi-chip-label">Quentes</div>
         </div>
         <div className="leads-kpi-chip nego">
