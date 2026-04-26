@@ -36,6 +36,12 @@ describe("calculateLeadPriority — HOT via score", () => {
     expect(r.priority).toBe("hot");
     expect(r.reasons).toContain("score >= 80");
   });
+
+  it("T1b: score = 80 → hot (limiar exato do threshold)", () => {
+    const r = calculateLeadPriority(input({ score: 80 }));
+    expect(r.priority).toBe("hot");
+    expect(r.reasons).toContain("score >= 80");
+  });
 });
 
 describe("calculateLeadPriority — WARM", () => {
@@ -58,6 +64,11 @@ describe("calculateLeadPriority — WARM", () => {
 describe("calculateLeadPriority — COLD", () => {
   it("T3: score < 40 → cold", () => {
     const r = calculateLeadPriority(input({ score: 20 }));
+    expect(r.priority).toBe("cold");
+  });
+
+  it("T3b: score = 0 → cold (extremo inferior não-null)", () => {
+    const r = calculateLeadPriority(input({ score: 0 }));
     expect(r.priority).toBe("cold");
   });
 });
@@ -102,21 +113,19 @@ describe("calculateLeadPriority — short-circuit", () => {
 
 describe("calculateLeadPriority — fallback seguro", () => {
   it("T10: score = undefined → cold, sem exceção", () => {
-    expect(() => {
-      const r = calculateLeadPriority(
-        input({ score: undefined, conversationStatus: null })
-      );
-      expect(r.priority).toBe("cold");
-    }).not.toThrow();
+    expect(() =>
+      calculateLeadPriority(input({ score: undefined, conversationStatus: null }))
+    ).not.toThrow();
+    const r = calculateLeadPriority(input({ score: undefined, conversationStatus: null }));
+    expect(r.priority).toBe("cold");
   });
 
   it("T10b: score = null → cold, sem exceção", () => {
-    expect(() => {
-      const r = calculateLeadPriority(
-        input({ score: null, conversationStatus: null })
-      );
-      expect(r.priority).toBe("cold");
-    }).not.toThrow();
+    expect(() =>
+      calculateLeadPriority(input({ score: null, conversationStatus: null }))
+    ).not.toThrow();
+    const r = calculateLeadPriority(input({ score: null, conversationStatus: null }));
+    expect(r.priority).toBe("cold");
   });
 });
 
@@ -158,6 +167,10 @@ describe("sortLeads", () => {
     expect(sorted[0].score).toBe(75);
     expect(sorted[1].score).toBe(50);
     expect(sorted[2].score).toBe(40);
+  });
+
+  it("T14: array vazio → retorna array vazio sem exceção", () => {
+    expect(sortLeads([])).toEqual([]);
   });
 
   it("T13: mesmo score → ultima_atividade mais recente primeiro; undefined → fim (sem NaN)", () => {

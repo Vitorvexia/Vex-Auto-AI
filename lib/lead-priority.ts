@@ -36,7 +36,7 @@ export function calculateLeadPriority(input: PriorityInput): PriorityResult {
     return {
       priority: "cold",
       priority_label: "Frio",
-      reasons: ["score < 40"],
+      reasons: ["score_ausente"],
       recommended_action: "Manter nutrição automática",
     };
   }
@@ -92,8 +92,8 @@ export function sortLeads<
   }
 >(leads: T[]): T[] {
   return [...leads].sort((a, b) => {
-    const pa = PRIORITY_ORDER[a.priority] ?? 2; // ?? 2 = cold fallback for unknown priority
-    const pb = PRIORITY_ORDER[b.priority] ?? 2;
+    const pa = PRIORITY_ORDER[a.priority] ?? PRIORITY_ORDER.cold;
+    const pb = PRIORITY_ORDER[b.priority] ?? PRIORITY_ORDER.cold;
     if (pa !== pb) return pa - pb;
     if (b.score !== a.score) return b.score - a.score;
     const aTs = a.ultima_atividade ? new Date(a.ultima_atividade).getTime() : 0;
