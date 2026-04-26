@@ -683,3 +683,57 @@ a { color: inherit; text-decoration: none; }
   font-size: 11.5px; color: var(--muted); margin-top: 1px;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
 }
+
+/* ─── Dossiê card ─────────────────────────────── */
+.dossie-card {
+  background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(28,43,58,.06); margin-bottom: 10px; overflow: hidden;
+}
+.dossie-summary {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; cursor: pointer; list-style: none;
+  font-size: 12.5px; font-weight: 700; color: var(--text-strong);
+  background: var(--panel-2); border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+.dossie-summary::-webkit-details-marker { display: none; }
+.dossie-summary::marker { display: none; }
+.dossie-title::before { content: "▼ "; font-size: 10px; opacity: 0.5; }
+details:not([open]) .dossie-title::before { content: "▶ "; }
+.dossie-badges { display: flex; align-items: center; gap: 6px; }
+.dossie-score {
+  font-size: 11px; font-weight: 700; padding: 2px 6px;
+  border-radius: 4px; background: rgba(14,165,233,.1); color: var(--accent);
+}
+.dossie-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
+.dossie-section { display: flex; flex-direction: column; gap: 4px; }
+.dossie-label {
+  font-size: 10.5px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.05em; color: var(--text); opacity: 0.55;
+}
+.dossie-text { font-size: 12.5px; color: var(--text-strong); line-height: 1.45; }
+.dossie-meta { font-size: 11.5px; color: var(--text); opacity: 0.6; }
+.dossie-intent-signals {
+  display: flex; flex-wrap: wrap; gap: 5px;
+  list-style: none; padding: 0; margin: 0;
+}
+.dossie-intent-signals li {
+  font-size: 11px; font-weight: 500; padding: 2px 8px;
+  border-radius: 999px; background: rgba(14,165,233,.09);
+  color: var(--accent); border: 1px solid rgba(14,165,233,.2);
+}
+.dossie-warnings { border-radius: 6px; padding: 8px 10px; }
+.dossie-warnings ul { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-direction: column; gap: 3px; }
+.dossie-warnings li { font-size: 12px; color: inherit; }
+.dossie-warnings.moderate {
+  background: rgba(234,179,8,.08); border: 1px solid rgba(234,179,8,.25); color: #854d0e;
+}
+.dossie-warnings.moderate .dossie-label { color: #854d0e; opacity: 1; }
+.dossie-warnings.critical {
+  background: rgba(239,68,68,.08); border: 1px solid rgba(239,68,68,.25); color: #B91C1C;
+}
+.dossie-warnings.critical .dossie-label { color: #B91C1C; opacity: 1; }
+.dossie-action {
+  font-size: 12.5px; font-weight: 600; color: var(--text-strong);
+  padding-top: 8px; border-top: 1px solid var(--border);
+}
