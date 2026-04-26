@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { relativeTime, scoreClass } from "@/lib/format";
 import type { LeadStatus } from "@/types/domain";
+import type { PriorityTier } from "@/lib/lead-priority";
 
 type Props = {
   id: string;
@@ -10,6 +11,8 @@ type Props = {
   lead_status: LeadStatus;
   conversation_id?: string;
   ultima_atividade: string;
+  priority: PriorityTier;
+  priority_label: string;
 };
 
 type UrgencyLevel = "cooling" | "urgent" | "stale";
@@ -33,6 +36,8 @@ export function LeadCard({
   score,
   conversation_id,
   ultima_atividade,
+  priority,
+  priority_label,
 }: Props) {
   const href    = conversation_id ? `/conversations/${conversation_id}` : "#";
   const sc      = scoreClass(score);
@@ -46,6 +51,8 @@ export function LeadCard({
       </div>
 
       <div className="lead-card-phone">{phone_normalized}</div>
+
+      <div className={`priority-badge ${priority}`}>{priority_label}</div>
 
       {urgency && (
         <div className={`urgency-badge ${urgency}`}>{URGENCY_LABEL[urgency]}</div>

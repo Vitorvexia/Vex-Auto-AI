@@ -222,10 +222,10 @@ describe("E2E — Pipeline de IA (cenários reais)", () => {
           ultima_mensagem_em: new Date().toISOString(),
         },
         last_messages: [
-          { direcao: "entrada", autor: "lead", mensagem: "Quanto custa o Renegade 2023?" },
-          { direcao: "saida",   autor: "ia",   mensagem: "O Jeep Renegade 2023 está R$ 99.900. Temos disponível!" },
-          { direcao: "entrada", autor: "lead", mensagem: "Tem financiamento?" },
-          { direcao: "saida",   autor: "ia",   mensagem: "Sim! Trabalhamos com as principais financeiras. Quer simular?" },
+          { direcao: "entrada", autor: "lead", mensagem: "Quanto custa o Renegade 2023?", received_at: new Date().toISOString() },
+          { direcao: "saida",   autor: "ia",   mensagem: "O Jeep Renegade 2023 está R$ 99.900. Temos disponível!", received_at: new Date().toISOString() },
+          { direcao: "entrada", autor: "lead", mensagem: "Tem financiamento?", received_at: new Date().toISOString() },
+          { direcao: "saida",   autor: "ia",   mensagem: "Sim! Trabalhamos com as principais financeiras. Quer simular?", received_at: new Date().toISOString() },
         ],
         incoming_text:
           "Quero fechar a compra hoje. Posso ir na loja assinar o contrato? Qual o endereço e horário de funcionamento?",

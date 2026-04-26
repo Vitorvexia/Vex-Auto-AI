@@ -23,8 +23,8 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       ultima_mensagem_em: new Date().toISOString(),
     },
     last_messages: [
-      { direcao: "entrada", autor: "lead", mensagem: "Olá" },
-      { direcao: "saida", autor: "ia", mensagem: "Olá! Como posso ajudar?" },
+      { direcao: "entrada", autor: "lead", mensagem: "Olá", received_at: new Date().toISOString() },
+      { direcao: "saida", autor: "ia", mensagem: "Olá! Como posso ajudar?", received_at: new Date().toISOString() },
     ],
     vehicles: [
       { id: "v1", marca: "Hyundai", modelo: "HB20", ano: 2022, preco: 74900 },
