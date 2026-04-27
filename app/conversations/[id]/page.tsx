@@ -6,6 +6,12 @@ import type { Autor, ConversationStatus, LeadStatus } from "@/types/domain";
 import { MessageBubble } from "@/app/components/MessageBubble";
 import { buildLeadDossier } from "@/lib/lead-dossier";
 import { DossieCard } from "@/app/components/DossieCard";
+import {
+  assignConversationToHuman,
+  returnConversationToAI,
+  updateLeadStatus,
+} from "@/lib/actions";
+import { LEAD_TRANSITIONS } from "@/lib/status";
 
 const LEAD_STATUS_LABELS: Record<string, string> = {
   NOVO: "Novo", ENGAJADO: "Engajado", INTERESSADO: "Interessado",
@@ -165,6 +171,27 @@ export default async function ConversationPage({
             {HANDOFF_LABELS[conv.handoff_to] ?? conv.handoff_to}
           </span>
         </div>
+      </div>
+
+      <div className="conv-actions">
+        {conv.handoff_to === "IA" ? (
+          <form action={assignConversationToHuman.bind(null, conv.id)}>
+            <button type="submit" className="btn-assume">Assumir conversa</button>
+          </form>
+        ) : (
+          <form action={returnConversationToAI.bind(null, conv.id)}>
+            <button type="submit" className="btn-return">Voltar para IA</button>
+          </form>
+        )}
+
+        <form action={updateLeadStatus.bind(null, lead?.id ?? "", conv.id)}>
+          <select name="lead_status" defaultValue={lead?.lead_status}>
+            {(LEAD_TRANSITIONS[lead?.lead_status as LeadStatus] ?? []).map((s) => (
+              <option key={s} value={s}>{LEAD_STATUS_LABELS[s] ?? s}</option>
+            ))}
+          </select>
+          <button type="submit">›</button>
+        </form>
       </div>
 
       <DossieCard dossier={dossier} score={lead?.score} />

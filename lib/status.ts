@@ -36,7 +36,7 @@ import type {
 // SELECT FOR UPDATE no RPC é o fallback para concorrência entre processos.
 const pendingLeadTransitions = new Map<string, true>();
 
-const LEAD_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
+export const LEAD_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
   NOVO:        ["ENGAJADO", "PERDIDO"],
   ENGAJADO:    ["INTERESSADO", "QUENTE", "PERDIDO"],
   INTERESSADO: ["QUENTE", "ENGAJADO", "PERDIDO"],
