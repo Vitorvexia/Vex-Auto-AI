@@ -53,6 +53,7 @@ import {
   assignConversationToHuman,
   returnConversationToAI,
   updateLeadStatus,
+  saveFinancingSimulation,
 } from "@/lib/actions";
 
 // ---------------------------------------------------------------------------
@@ -226,5 +227,127 @@ describe("updateLeadStatus", () => {
 
     expect(mockRevalidate).toHaveBeenCalledWith("/conversations/conv-abc");
     expect(mockRevalidate).toHaveBeenCalledWith("/conversations");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// S1–S5 — saveFinancingSimulation
+// ---------------------------------------------------------------------------
+
+describe("saveFinancingSimulation", () => {
+  function makeSimFormData(overrides: Partial<Record<string, string>> = {}): FormData {
+    const fd = new FormData();
+    fd.append("vehicle_price", overrides.vehicle_price ?? "50000");
+    fd.append("entry_value", overrides.entry_value ?? "5000");
+    fd.append("term_months", overrides.term_months ?? "48");
+    if (overrides.monthly_rate_pct !== undefined) {
+      fd.append("monthly_rate_pct", overrides.monthly_rate_pct);
+    }
+    return fd;
+  }
+
+  function setupTwoTableMocks() {
+    const insertSim = vi.fn().mockResolvedValue({ error: null });
+    const insertMsg = vi.fn().mockResolvedValue({ error: null });
+    mockFrom.mockImplementation((table: string) => {
+      if (table === "financing_simulations") return { insert: insertSim };
+      if (table === "messages") return { insert: insertMsg };
+      return { insert: vi.fn().mockResolvedValue({ error: null }) };
+    });
+    return { insertSim, insertMsg };
+  }
+
+  it("S1: vehicle_price <= 0 → não insere nenhuma row", async () => {
+    const { insertSim, insertMsg } = setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData({ vehicle_price: "0" }));
+
+    expect(insertSim).not.toHaveBeenCalled();
+    expect(insertMsg).not.toHaveBeenCalled();
+  });
+
+  it("S1b: term_months fora do range (< 12) → não insere", async () => {
+    const { insertSim } = setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData({ term_months: "6" }));
+
+    expect(insertSim).not.toHaveBeenCalled();
+  });
+
+  it("S1c: term_months fora do range (> 72) → não insere", async () => {
+    const { insertSim } = setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData({ term_months: "84" }));
+
+    expect(insertSim).not.toHaveBeenCalled();
+  });
+
+  it("S2: entrada válida → insere em financing_simulations com store_id e provider='internal'", async () => {
+    const { insertSim } = setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-1", "store-99", makeSimFormData());
+
+    expect(insertSim).toHaveBeenCalledOnce();
+    expect(insertSim).toHaveBeenCalledWith(
+      expect.objectContaining({
+        store_id: "store-99",
+        lead_id: "lead-1",
+        conversation_id: "conv-1",
+        provider: "internal",
+        vehicle_price: 50000,
+        entry_value: 5000,
+        term_months: 48,
+      })
+    );
+  });
+
+  it("S3: mensagem de sistema inserida contendo 'estimada'", async () => {
+    const { insertMsg } = setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData());
+
+    expect(insertMsg).toHaveBeenCalledOnce();
+    const call = insertMsg.mock.calls[0][0] as { mensagem: string };
+    expect(call.mensagem).toContain("estimada");
+  });
+
+  it("S4: mensagem de sistema NÃO contém 'aprovado' nem 'aprovação'", async () => {
+    const { insertMsg } = setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData());
+
+    const call = insertMsg.mock.calls[0][0] as { mensagem: string };
+    expect(call.mensagem.toLowerCase()).not.toContain("aprovado");
+    expect(call.mensagem.toLowerCase()).not.toContain("aprovação");
+  });
+
+  it("S5: revalidatePath chamado para a conversa após insert", async () => {
+    setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-42", "store-1", makeSimFormData());
+
+    expect(mockRevalidate).toHaveBeenCalledWith("/conversations/conv-42");
+  });
+
+  it("S6: taxa customizada (monthly_rate_pct=2.0) é salva como 0.02 no banco", async () => {
+    const { insertSim } = setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-1", "store-1",
+      makeSimFormData({ monthly_rate_pct: "2.0" })
+    );
+
+    expect(insertSim).toHaveBeenCalledWith(
+      expect.objectContaining({ monthly_rate: 0.02 })
+    );
+  });
+
+  it("S7: monthly_rate_pct ausente → usa DEFAULT_MONTHLY_RATE (0.018)", async () => {
+    const { insertSim } = setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData());
+
+    expect(insertSim).toHaveBeenCalledWith(
+      expect.objectContaining({ monthly_rate: 0.018 })
+    );
   });
 });

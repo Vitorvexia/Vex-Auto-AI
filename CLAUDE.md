@@ -91,9 +91,9 @@ Lead → Conversão → Cliente → Reativação → Nova venda → (loop infini
 **IA executa sozinha:**
 - atendimento inicial
 - resposta em tempo real via WhatsApp
-- follow-up (em construção)
-- reativação de leads
-- qualificação
+- follow-up automático (cadência 2h → 24h → 72h)
+- reativação de leads (14d → 30d sem resposta)
+- qualificação e lead scoring determinístico (0–100)
 - comparação de opções
 
 **IA orquestra com validação humana:**
@@ -200,15 +200,79 @@ Converte qualquer entrada para E.164. Regra especial Brasil:
 - 12 dígitos `55 + DDD + 8` com primeiro dígito após DDD **≥ 6** → celular antigo → insere o 9 obrigatório
 - Primeiro dígito após DDD **< 6** → fixo → não altera (evita criar número inválido)
 
+### Follow-up Automático
+
+Cadência: 2h → 24h → 72h. Tabela `follow_up_logs` com idempotência (UNIQUE). Cron via Vercel. Não envia se lead já respondeu ou se duplicado.
+
+### Reativação de Leads
+
+14 dias sem resposta → primeira tentativa. 30 dias → segunda. Exclui `FECHADO` e `PERDIDO`. Tabela `reactivation_logs`. LGPD-safe (sem spam contínuo).
+
+### Lead Scoring Determinístico
+
+Score 0–100 auditado via `lead_score_events`. Sinais detectados: intenção de compra, financiamento, preço, resposta pós-follow-up/reativação. Negation guard ativo ("não quero financiamento"). LLM **não** é fonte de verdade para score.
+
+### Priorização Operacional
+
+Classificação automática: `hot` (≥80 ou handoff), `warm` (40–79), `cold` (<40 ou null). Funções: `calculateLeadPriority`, `sortLeads`. Ordenação: prioridade → score → última atividade. Badge visual no Kanban.
+
+### Dossiê do Lead
+
+Função pura `buildLeadDossier`. Consolida `lead_score_events` + `follow_up_logs` + `reactivation_logs`. Conteúdo: resumo da conversa, sinais de intenção, warnings, ação recomendada. Componente `DossieCard`. Sem PII, fallback seguro.
+
+### Ações do Vendedor
+
+Server Actions: assumir conversa (IA → HUMANO), retornar para IA, atualizar `lead_status`. Status `AGUARDANDO_HUMANO` ao assumir. IA para quando em handoff. Validação server-side obrigatória.
+
+### Kanban Operacional
+
+Colunas baseadas em `lead_status`: NOVO → ENGAJADO → INTERESSADO → QUENTE → NEGOCIAÇÃO → FECHADO/PERDIDO. Mudança via dropdown (Server Action). Usa `transitionLeadStatus`. Validação dupla (UI + servidor). Sem drag-and-drop (MVP).
+
+### Métricas Operacionais (`calculateOperationalMetrics`)
+
+Função pura. Janela padrão: 30 dias. Métricas reais (sem mocks):
+
+| Métrica | Descrição |
+|---------|-----------|
+| `total_leads` | Total de leads no período |
+| `ai_handled_leads` | Leads atendidos pela IA |
+| `human_handoff_count` | Handoffs para humano |
+| `followups_sent` | Follow-ups enviados |
+| `reactivations_sent` | Reativações enviadas |
+| `negotiation_leads` | Leads em negociação |
+| `closed_leads` | Leads fechados |
+| `lost_leads` | Leads perdidos |
+| `avg_first_response_minutes` | Tempo médio de primeira resposta |
+| `followup_response_rate` | Taxa de resposta a follow-ups |
+| `reactivation_response_rate` | Taxa de resposta a reativações |
+
+Proteções: sem NaN, sem divisão por zero, sem PII.
+
+### Padrões Consolidados
+
+- Funções puras para lógica de domínio
+- Server Actions (sem REST)
+- RSC-first (mínimo client)
+- Idempotência em todos os fluxos críticos
+- Validação server-side obrigatória
+- Concorrência tratada corretamente
+
+### Dívidas Técnicas Conhecidas
+
+- Sem isolamento por `store_id` (multi-tenant pendente)
+- Query de mensagens sem limite
+- Autenticação de usuários real ausente
+- `assigned_to` ainda não utilizado
+
 ---
 
 ## Roadmap
 
 | Fase | Status | Descrição |
 |------|--------|-----------|
-| Fase 1 | ✔ ATUAL | IA responde e acompanha |
-| Fase 2 | Próxima | IA prioriza e decide |
-| Fase 3 | Futura | IA orquestra toda a venda |
+| Fase 1 | ✔ CONCLUÍDA | IA responde e acompanha |
+| Fase 2 | ✔ CONCLUÍDA | IA prioriza, dá contexto ao vendedor, ações humanas, Kanban, métricas |
+| Fase 3 | Próxima | IA orquestra toda a venda |
 
 ---
 
