@@ -6,6 +6,7 @@ import {
   transitionConversationStatus,
   transitionLeadStatus,
 } from "@/lib/status";
+import { simulateFinancing } from "@/lib/financing";
 import type { LeadStatus } from "@/types/domain";
 
 const VALID_LEAD_STATUSES = new Set<string>([
@@ -74,4 +75,47 @@ export async function moveLeadStatus(
   }
   await transitionLeadStatus(leadId, newStatus as LeadStatus);
   revalidatePath("/leads");
+}
+
+export async function saveFinancingSimulation(
+  leadId: string,
+  conversationId: string,
+  storeId: string,
+  formData: FormData
+): Promise<void> {
+  const vehicle_price = Number(formData.get("vehicle_price"));
+  const entry_value   = Number(formData.get("entry_value") ?? 0);
+  const term_months   = Number(formData.get("term_months"));
+
+  if (vehicle_price <= 0) return;
+  if (term_months < 12 || term_months > 72) return;
+  if (entry_value < 0 || entry_value >= vehicle_price) return;
+
+  const result = simulateFinancing({ vehicle_price, entry_value, term_months });
+
+  await supabaseAdmin.from("financing_simulations").insert({
+    store_id:        storeId,
+    lead_id:         leadId,
+    conversation_id: conversationId,
+    vehicle_price,
+    entry_value,
+    financed_amount: result.financed_amount,
+    term_months,
+    monthly_rate:    result.monthly_rate,
+    monthly_payment: result.monthly_payment,
+    total_amount:    result.total_amount,
+    provider:        "internal",
+  });
+
+  const fmtBRL = (n: number) =>
+    n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  await supabaseAdmin.from("messages").insert({
+    conversation_id: conversationId,
+    direcao:         "saida",
+    autor:           "sistema",
+    mensagem: `Simulação registrada: veículo R$ ${fmtBRL(vehicle_price)}, entrada R$ ${fmtBRL(entry_value)}, ${term_months}x, parcela estimada R$ ${fmtBRL(result.monthly_payment)}.`,
+  });
+
+  revalidatePath(`/conversations/${conversationId}`);
 }

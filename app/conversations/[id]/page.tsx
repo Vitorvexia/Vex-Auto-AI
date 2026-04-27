@@ -6,6 +6,7 @@ import type { Autor, ConversationStatus, LeadStatus } from "@/types/domain";
 import { MessageBubble } from "@/app/components/MessageBubble";
 import { buildLeadDossier } from "@/lib/lead-dossier";
 import { DossieCard } from "@/app/components/DossieCard";
+import { FinancingSimulator } from "@/app/components/FinancingSimulator";
 import {
   assignConversationToHuman,
   returnConversationToAI,
@@ -33,7 +34,7 @@ export default async function ConversationPage({
   const { data: conv, error } = await supabaseAdmin
     .from("conversations")
     .select(
-      `id, conversation_status, handoff_to, summary, iniciada_em, ultima_mensagem_em,
+      `id, store_id, conversation_status, handoff_to, summary, iniciada_em, ultima_mensagem_em,
        leads ( id, nome, phone_normalized, lead_status, score ),
        messages ( id, direcao, autor, mensagem, created_at )`
     )
@@ -57,6 +58,7 @@ export default async function ConversationPage({
     { data: scoreEventsRaw },
     { data: followUpLogsRaw },
     { data: reactivationLogsRaw },
+    { data: lastSimulationData },
   ] = await Promise.all([
     supabaseAdmin
       .from("conversations")
@@ -82,6 +84,13 @@ export default async function ConversationPage({
       .eq("lead_id", lead?.id ?? "")
       .order("attempt_number", { ascending: false })
       .limit(10),
+    supabaseAdmin
+      .from("financing_simulations")
+      .select("id, vehicle_price, entry_value, financed_amount, term_months, monthly_rate, monthly_payment, total_amount, provider, created_at")
+      .eq("conversation_id", params.id)
+      .order("created_at", { ascending: false })
+      .limit(1)
+      .maybeSingle(),
   ]);
 
   const dossier = buildLeadDossier({
@@ -195,6 +204,13 @@ export default async function ConversationPage({
       </div>
 
       <DossieCard dossier={dossier} score={lead?.score} />
+
+      <FinancingSimulator
+        leadId={lead?.id ?? ""}
+        conversationId={conv.id}
+        storeId={(conv as any).store_id ?? ""}
+        lastSimulation={lastSimulationData ?? null}
+      />
 
       <div className="chat">
         {messages.length === 0 && (
