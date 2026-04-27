@@ -83,15 +83,20 @@ export async function saveFinancingSimulation(
   storeId: string,
   formData: FormData
 ): Promise<void> {
-  const vehicle_price = Number(formData.get("vehicle_price"));
-  const entry_value   = Number(formData.get("entry_value") ?? 0);
-  const term_months   = Number(formData.get("term_months"));
+  const vehicle_price    = Number(formData.get("vehicle_price"));
+  const entry_value      = Number(formData.get("entry_value") ?? 0);
+  const term_months      = Number(formData.get("term_months"));
+  const ratePctRaw       = formData.get("monthly_rate_pct");
+  const monthly_rate     = ratePctRaw !== null && ratePctRaw !== ""
+    ? Number(ratePctRaw) / 100
+    : undefined;
 
   if (vehicle_price <= 0) return;
   if (term_months < 12 || term_months > 72) return;
   if (entry_value < 0 || entry_value >= vehicle_price) return;
+  if (monthly_rate !== undefined && (isNaN(monthly_rate) || monthly_rate < 0)) return;
 
-  const result = simulateFinancing({ vehicle_price, entry_value, term_months });
+  const result = simulateFinancing({ vehicle_price, entry_value, term_months, monthly_rate });
 
   await supabaseAdmin.from("financing_simulations").insert({
     store_id:        storeId,

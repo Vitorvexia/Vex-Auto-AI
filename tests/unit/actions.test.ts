@@ -240,6 +240,9 @@ describe("saveFinancingSimulation", () => {
     fd.append("vehicle_price", overrides.vehicle_price ?? "50000");
     fd.append("entry_value", overrides.entry_value ?? "5000");
     fd.append("term_months", overrides.term_months ?? "48");
+    if (overrides.monthly_rate_pct !== undefined) {
+      fd.append("monthly_rate_pct", overrides.monthly_rate_pct);
+    }
     return fd;
   }
 
@@ -324,5 +327,27 @@ describe("saveFinancingSimulation", () => {
     await saveFinancingSimulation("lead-1", "conv-42", "store-1", makeSimFormData());
 
     expect(mockRevalidate).toHaveBeenCalledWith("/conversations/conv-42");
+  });
+
+  it("S6: taxa customizada (monthly_rate_pct=2.0) é salva como 0.02 no banco", async () => {
+    const { insertSim } = setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-1", "store-1",
+      makeSimFormData({ monthly_rate_pct: "2.0" })
+    );
+
+    expect(insertSim).toHaveBeenCalledWith(
+      expect.objectContaining({ monthly_rate: 0.02 })
+    );
+  });
+
+  it("S7: monthly_rate_pct ausente → usa DEFAULT_MONTHLY_RATE (0.018)", async () => {
+    const { insertSim } = setupTwoTableMocks();
+
+    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData());
+
+    expect(insertSim).toHaveBeenCalledWith(
+      expect.objectContaining({ monthly_rate: 0.018 })
+    );
   });
 });

@@ -66,8 +66,6 @@ export function FinancingSimulator({ leadId, conversationId, storeId, lastSimula
       <div className="financing-header">Simulação de Financiamento</div>
 
       <form action={saveAction} className="financing-form">
-        <input type="hidden" name="monthly_rate_raw" value={monthlyRate} />
-
         <div className="financing-fields">
           <label className="financing-field">
             <span>Preço do veículo (R$)</span>
