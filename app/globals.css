@@ -179,6 +179,40 @@ a { color: inherit; text-decoration: none; }
 .lead-card-time  { font-size: 11px; color: var(--muted); }
 .lead-card-chat  { font-size: 11px; color: var(--accent); font-weight: 600; }
 
+/* ─── Lead card wrapper + Kanban move form ───── */
+.lead-card-wrap { display: flex; flex-direction: column; }
+.lead-card-wrap.has-move .lead-card {
+  border-bottom: none;
+  border-radius: 8px 8px 0 0;
+}
+.lead-card-move {
+  display: flex; gap: 4px;
+  padding: 5px 6px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  border-top: none;
+  border-radius: 0 0 8px 8px;
+}
+.lead-card-move select {
+  flex: 1; min-width: 0;
+  font-size: 11.5px; color: var(--text);
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 3px 5px;
+  cursor: pointer;
+}
+.lead-card-move button {
+  font-size: 13px; font-weight: 700;
+  background: var(--accent); color: #fff;
+  border: none; border-radius: 4px;
+  padding: 3px 9px;
+  cursor: pointer;
+  transition: opacity 0.15s;
+  flex-shrink: 0;
+}
+.lead-card-move button:hover { opacity: 0.82; }
+
 /* ─── Score badge ────────────────────────────── */
 .score-badge {
   display: inline-flex; align-items: center; justify-content: center;
