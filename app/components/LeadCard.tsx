@@ -2,6 +2,18 @@ import Link from "next/link";
 import { relativeTime, scoreClass } from "@/lib/format";
 import type { LeadStatus } from "@/types/domain";
 import type { PriorityTier } from "@/lib/lead-priority";
+import { LEAD_TRANSITIONS } from "@/lib/status";
+import { moveLeadStatus } from "@/lib/actions";
+
+const STATUS_LABELS: Record<LeadStatus, string> = {
+  NOVO: "Novo",
+  ENGAJADO: "Engajado",
+  INTERESSADO: "Interessado",
+  QUENTE: "Quente",
+  NEGOCIACAO: "Negociação",
+  FECHADO: "Fechado",
+  PERDIDO: "Perdido",
+};
 
 type Props = {
   id: string;
@@ -31,39 +43,56 @@ function urgencyLevel(ts: string): UrgencyLevel | null {
 }
 
 export function LeadCard({
+  id,
   nome,
   phone_normalized,
   score,
+  lead_status,
   conversation_id,
   ultima_atividade,
   priority,
   priority_label,
 }: Props) {
-  const href    = conversation_id ? `/conversations/${conversation_id}` : "#";
-  const sc      = scoreClass(score);
-  const urgency = urgencyLevel(ultima_atividade);
+  const href        = conversation_id ? `/conversations/${conversation_id}` : "#";
+  const sc          = scoreClass(score);
+  const urgency     = urgencyLevel(ultima_atividade);
+  const transitions = LEAD_TRANSITIONS[lead_status] ?? [];
 
   return (
-    <Link href={href} className="lead-card">
-      <div className="lead-card-top">
-        <span className="lead-card-name">{nome ?? "Sem nome"}</span>
-        <span className={`score-badge ${sc}`}>{score}</span>
-      </div>
+    <div className={`lead-card-wrap${transitions.length > 0 ? " has-move" : ""}`}>
+      <Link href={href} className="lead-card">
+        <div className="lead-card-top">
+          <span className="lead-card-name">{nome ?? "Sem nome"}</span>
+          <span className={`score-badge ${sc}`}>{score}</span>
+        </div>
 
-      <div className="lead-card-phone">{phone_normalized}</div>
+        <div className="lead-card-phone">{phone_normalized}</div>
 
-      <div className={`priority-badge ${priority}`}>{priority_label}</div>
+        <div className={`priority-badge ${priority}`}>{priority_label}</div>
 
-      {urgency && (
-        <div className={`urgency-badge ${urgency}`}>{URGENCY_LABEL[urgency]}</div>
-      )}
-
-      <div className="lead-card-footer">
-        <span className="lead-card-time">{relativeTime(ultima_atividade)}</span>
-        {conversation_id && (
-          <span className="lead-card-chat">Abrir conversa &rarr;</span>
+        {urgency && (
+          <div className={`urgency-badge ${urgency}`}>{URGENCY_LABEL[urgency]}</div>
         )}
-      </div>
-    </Link>
+
+        <div className="lead-card-footer">
+          <span className="lead-card-time">{relativeTime(ultima_atividade)}</span>
+          {conversation_id && (
+            <span className="lead-card-chat">Abrir conversa &rarr;</span>
+          )}
+        </div>
+      </Link>
+
+      {transitions.length > 0 && (
+        <form action={moveLeadStatus.bind(null, id)} className="lead-card-move">
+          <select name="lead_status" defaultValue="">
+            <option value="" disabled>Mover para…</option>
+            {transitions.map((s) => (
+              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+            ))}
+          </select>
+          <button type="submit" aria-label="Mover lead">→</button>
+        </form>
+      )}
+    </div>
   );
 }

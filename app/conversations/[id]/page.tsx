@@ -2,8 +2,16 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { scoreClass, relativeTime } from "@/lib/format";
-import type { Autor } from "@/types/domain";
+import type { Autor, ConversationStatus, LeadStatus } from "@/types/domain";
 import { MessageBubble } from "@/app/components/MessageBubble";
+import { buildLeadDossier } from "@/lib/lead-dossier";
+import { DossieCard } from "@/app/components/DossieCard";
+import {
+  assignConversationToHuman,
+  returnConversationToAI,
+  updateLeadStatus,
+} from "@/lib/actions";
+import { LEAD_TRANSITIONS } from "@/lib/status";
 
 const LEAD_STATUS_LABELS: Record<string, string> = {
   NOVO: "Novo", ENGAJADO: "Engajado", INTERESSADO: "Interessado",
@@ -32,13 +40,6 @@ export default async function ConversationPage({
     .eq("id", params.id)
     .maybeSingle();
 
-  const { data: sidebarConvs } = await supabaseAdmin
-    .from("conversations")
-    .select(`id, conversation_status, handoff_to, ultima_mensagem_em, leads ( nome )`)
-    .neq("conversation_status", "ENCERRADA")
-    .order("ultima_mensagem_em", { ascending: false })
-    .limit(30);
-
   if (error) {
     return (
       <main className="container">
@@ -49,12 +50,62 @@ export default async function ConversationPage({
 
   if (!conv) notFound();
 
+  const lead = Array.isArray(conv.leads) ? conv.leads[0] : (conv.leads as any);
+
+  const [
+    { data: sidebarConvs },
+    { data: scoreEventsRaw },
+    { data: followUpLogsRaw },
+    { data: reactivationLogsRaw },
+  ] = await Promise.all([
+    supabaseAdmin
+      .from("conversations")
+      .select(`id, conversation_status, handoff_to, ultima_mensagem_em, leads ( nome )`)
+      .neq("conversation_status", "ENCERRADA")
+      .order("ultima_mensagem_em", { ascending: false })
+      .limit(30),
+    supabaseAdmin
+      .from("lead_score_events")
+      .select("delta, reasons, created_at")
+      .eq("lead_id", lead?.id ?? "")
+      .order("created_at", { ascending: false })
+      .limit(5),
+    supabaseAdmin
+      .from("follow_up_logs")
+      .select("attempt_number, status")
+      .eq("lead_id", lead?.id ?? "")
+      .order("attempt_number", { ascending: false })
+      .limit(10),
+    supabaseAdmin
+      .from("reactivation_logs")
+      .select("attempt_number, status")
+      .eq("lead_id", lead?.id ?? "")
+      .order("attempt_number", { ascending: false })
+      .limit(10),
+  ]);
+
+  const dossier = buildLeadDossier({
+    lead: {
+      id: lead?.id ?? "",
+      nome: lead?.nome ?? null,
+      lead_status: (lead?.lead_status ?? "NOVO") as LeadStatus,
+      score: lead?.score ?? 0,
+    },
+    conversation: {
+      summary: conv.summary ?? null,
+      ultima_mensagem_em: conv.ultima_mensagem_em ?? new Date().toISOString(),
+      conversation_status: conv.conversation_status as ConversationStatus,
+    },
+    scoreEvents: (scoreEventsRaw ?? []) as Array<{ delta: number; reasons: string[]; created_at: string }>,
+    followUpLogs: (followUpLogsRaw ?? []) as Array<{ attempt_number: number; status: "sent" | "failed" }>,
+    reactivationLogs: (reactivationLogsRaw ?? []) as Array<{ attempt_number: number; status: "sent" | "failed" }>,
+  });
+
   const sidebar = [...(sidebarConvs ?? [])].sort((a: any, b: any) =>
     a.conversation_status === "AGUARDANDO_HUMANO" ? -1
     : b.conversation_status === "AGUARDANDO_HUMANO" ? 1 : 0
   );
 
-  const lead = Array.isArray(conv.leads) ? conv.leads[0] : (conv.leads as any);
   const messages = (conv.messages ?? []).slice().sort(
     (a: any, b: any) =>
       new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
@@ -121,6 +172,29 @@ export default async function ConversationPage({
           </span>
         </div>
       </div>
+
+      <div className="conv-actions">
+        {conv.handoff_to === "IA" ? (
+          <form action={assignConversationToHuman.bind(null, conv.id)}>
+            <button type="submit" className="btn-assume">Assumir conversa</button>
+          </form>
+        ) : (
+          <form action={returnConversationToAI.bind(null, conv.id)}>
+            <button type="submit" className="btn-return">Voltar para IA</button>
+          </form>
+        )}
+
+        <form action={updateLeadStatus.bind(null, lead?.id ?? "", conv.id)}>
+          <select name="lead_status" defaultValue={lead?.lead_status}>
+            {(LEAD_TRANSITIONS[lead?.lead_status as LeadStatus] ?? []).map((s) => (
+              <option key={s} value={s}>{LEAD_STATUS_LABELS[s] ?? s}</option>
+            ))}
+          </select>
+          <button type="submit">›</button>
+        </form>
+      </div>
+
+      <DossieCard dossier={dossier} score={lead?.score} />
 
       <div className="chat">
         {messages.length === 0 && (
