@@ -8,14 +8,38 @@
 // Falha aqui é não-fatal: reply já está salvo no banco.
 // ============================================================================
 
+export type SendErrorCategory =
+  | "rate_limited"      // 429
+  | "invalid_recipient" // 400
+  | "service_error"     // 5xx
+  | "auth_error"        // 401, 403
+  | "unknown";
+
+// Categorias que nunca devem ser retentadas — erros permanentes.
+// Fonte de verdade para retry-failed/route.ts.
+export const PERMANENT_CATEGORIES: readonly SendErrorCategory[] = [
+  "invalid_recipient",
+  "auth_error",
+] as const;
+
 export class WhatsAppSendError extends Error {
   constructor(
     message: string,
-    public readonly statusCode?: number
+    public readonly statusCode?: number,
+    public readonly category: SendErrorCategory = "unknown",
+    public readonly isRetryable: boolean = true
   ) {
     super(message);
     this.name = "WhatsAppSendError";
   }
+}
+
+function classifyStatus(status: number): { category: SendErrorCategory; isRetryable: boolean } {
+  if (status === 429) return { category: "rate_limited", isRetryable: true };
+  if (status >= 500) return { category: "service_error", isRetryable: true };
+  if (status === 400) return { category: "invalid_recipient", isRetryable: false };
+  if (status === 401 || status === 403) return { category: "auth_error", isRetryable: false };
+  return { category: "unknown", isRetryable: true };
 }
 
 const WA_API_BASE = "https://graph.facebook.com";
@@ -77,16 +101,15 @@ export async function sendWhatsAppMessage(
   });
 
   if (!res.ok) {
-    let detail = "";
-    try {
-      const json = (await res.json()) as { error?: { message?: string } };
-      detail = json?.error?.message ?? "";
-    } catch {
-      // ignora erro de parse na resposta de erro
-    }
+    // Descartar json?.error?.message — pode conter PII ou dados sensíveis da Meta.
+    // Apenas o status code é seguro para logar/propagar.
+    try { await res.json(); } catch { /* descarta */ }
+    const { category, isRetryable } = classifyStatus(res.status);
     throw new WhatsAppSendError(
-      `WhatsApp API retornou ${res.status}${detail ? `: ${detail}` : ""}`,
-      res.status
+      `WhatsApp API retornou ${res.status}`,
+      res.status,
+      category,
+      isRetryable
     );
   }
 }

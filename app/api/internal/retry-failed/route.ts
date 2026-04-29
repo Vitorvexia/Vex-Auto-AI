@@ -17,7 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase";
-import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
+import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES } from "@/lib/whatsapp-send";
 
 export const runtime = "nodejs";
 
@@ -26,6 +26,9 @@ const MAX_WINDOW_HOURS = 72;
 const MAX_LIMIT = 200;
 const DEFAULT_WINDOW_HOURS = 24;
 const DEFAULT_LIMIT = 50;
+const MAX_RETRY_ATTEMPTS = 3;
+// Registros em ok_send_failed_retrying por mais de 15min → processo crashou mid-loop
+const STALE_RETRYING_MINUTES = 15;
 
 // ============================================================================
 // Comparação de chave resistente a timing attack
@@ -81,11 +84,25 @@ export async function POST(req: NextRequest) {
 
   const since = new Date(Date.now() - windowHours * 60 * 60_000).toISOString();
 
+  // ---- Staleness recovery --------------------------------------------------
+  // Registros em ok_send_failed_retrying > STALE_RETRYING_MINUTES indicam
+  // processo que crashou mid-loop. Resetar para ok_send_failed para reprocessar.
+  // updated_at é mantido pelo trigger ai_logs_updated_at (moddatetime).
+  const staleThreshold = new Date(Date.now() - STALE_RETRYING_MINUTES * 60_000).toISOString();
+  await supabaseAdmin
+    .from("ai_logs")
+    .update({ status: "ok_send_failed" })
+    .eq("status", "ok_send_failed_retrying")
+    .lt("updated_at", staleThreshold);
+
   // ---- Buscar candidatos ---------------------------------------------------
   const { data: candidates, error: fetchErr } = await supabaseAdmin
     .from("ai_logs")
-    .select("id, conversation_id, lead_id, store_id")
+    .select("id, conversation_id, lead_id, store_id, message_id, retry_count, last_send_error")
     .eq("status", "ok_send_failed")
+    .lt("retry_count", MAX_RETRY_ATTEMPTS)
+    .neq("last_send_error", "invalid_recipient")
+    .neq("last_send_error", "auth_error")
     .gte("created_at", since)
     .order("created_at", { ascending: true })
     .limit(limit);
@@ -122,15 +139,14 @@ export async function POST(req: NextRequest) {
   // ---- Claim atômico -------------------------------------------------------
   // Atualiza para "ok_send_failed_retrying" somente os registros ainda
   // em "ok_send_failed". Chamadas concorrentes obterão conjunto disjunto.
-  // Status "ok_send_failed_retrying" é um estado transitório — limpo ao final.
   const candidateIds = candidates.map((c) => c.id);
 
   const { data: claimed, error: claimErr } = await supabaseAdmin
     .from("ai_logs")
     .update({ status: "ok_send_failed_retrying" })
     .in("id", candidateIds)
-    .eq("status", "ok_send_failed")   // condição de guarda — race-safe
-    .select("id, conversation_id, lead_id, store_id");
+    .eq("status", "ok_send_failed")
+    .select("id, conversation_id, lead_id, store_id, message_id, retry_count, last_send_error");
 
   if (claimErr) {
     console.error(
@@ -150,16 +166,47 @@ export async function POST(req: NextRequest) {
 
   // ---- Processar apenas os registros efetivamente claimados ----------------
   for (const log of claimed ?? []) {
-    // Mensagem mais recente de saída da IA para esta conversa
-    const { data: msg } = await supabaseAdmin
-      .from("messages")
-      .select("mensagem")
-      .eq("conversation_id", log.conversation_id)
-      .eq("direcao", "saida")
-      .eq("autor", "ia")
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle();
+    // Pre-send guard: categoria permanente conhecida → escalada direta sem tentar envio
+    if (
+      log.last_send_error &&
+      PERMANENT_CATEGORIES.includes(log.last_send_error as typeof PERMANENT_CATEGORIES[number])
+    ) {
+      await supabaseAdmin
+        .from("ai_logs")
+        .update({
+          status: "ok_send_failed_permanent",
+          retry_count: (log.retry_count ?? 0) + 1,
+        })
+        .eq("id", log.id);
+      failed++;
+      continue;
+    }
+
+    // Buscar texto da mensagem
+    let msgText: string | null = null;
+
+    if (log.message_id) {
+      // DIRECT: link exato ao message_id — elimina risco de double-send
+      const { data: msg } = await supabaseAdmin
+        .from("messages")
+        .select("mensagem")
+        .eq("id", log.message_id)
+        .maybeSingle();
+      msgText = msg?.mensagem ?? null;
+    } else {
+      // FALLBACK: logs antigos sem message_id — remover após janela de 72h
+      // TODO(PR16): remover este fallback após 2026-05-02
+      const { data: msg } = await supabaseAdmin
+        .from("messages")
+        .select("mensagem")
+        .eq("conversation_id", log.conversation_id)
+        .eq("direcao", "saida")
+        .eq("autor", "ia")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      msgText = msg?.mensagem ?? null;
+    }
 
     // Telefone do lead
     const { data: lead } = await supabaseAdmin
@@ -168,38 +215,58 @@ export async function POST(req: NextRequest) {
       .eq("id", log.lead_id)
       .maybeSingle();
 
-    if (!msg?.mensagem || !lead?.phone_normalized) {
-      // Não temos dados suficientes para reenviar — reverter para ok_send_failed
+    if (!msgText || !lead?.phone_normalized) {
+      // Sem dados para reenviar — permanente (não vai melhorar com mais tentativas)
       await supabaseAdmin
         .from("ai_logs")
-        .update({ status: "ok_send_failed" })
+        .update({
+          status: "ok_send_failed_permanent",
+          retry_count: (log.retry_count ?? 0) + 1,
+        })
         .eq("id", log.id);
       failed++;
       continue;
     }
 
     try {
-      await sendWhatsAppMessage(lead.phone_normalized, msg.mensagem);
+      await sendWhatsAppMessage(lead.phone_normalized, msgText);
 
       await supabaseAdmin
         .from("ai_logs")
-        .update({ status: "ok" })
+        .update({
+          status: "ok",
+          retry_count: (log.retry_count ?? 0) + 1,
+        })
         .eq("id", log.id);
 
       retried++;
     } catch (sendErr) {
-      // Reverter para ok_send_failed — próxima invocação tentará novamente
+      const newCount = (log.retry_count ?? 0) + 1;
+      const isPermanent = sendErr instanceof WhatsAppSendError && !sendErr.isRetryable;
+      const isMaxed = newCount >= MAX_RETRY_ATTEMPTS;
+      const finalStatus = isPermanent || isMaxed ? "ok_send_failed_permanent" : "ok_send_failed";
+      const errorCategory =
+        sendErr instanceof WhatsAppSendError ? sendErr.category : "unknown";
+      const errorStatusCode =
+        sendErr instanceof WhatsAppSendError ? sendErr.statusCode : undefined;
+
       await supabaseAdmin
         .from("ai_logs")
-        .update({ status: "ok_send_failed" })
+        .update({
+          status: finalStatus,
+          retry_count: newCount,
+          last_send_error: errorCategory,
+        })
         .eq("id", log.id);
 
+      // Logar apenas categoria e status_code — nunca sendErr.message (pode conter PII da Meta)
       console.error(
         JSON.stringify({
           level: "error",
           event: "retry_failed_send_error",
           log_id: log.id,
-          error: sendErr instanceof Error ? sendErr.message : String(sendErr),
+          category: errorCategory,
+          status_code: errorStatusCode,
           ts: new Date().toISOString(),
         })
       );
