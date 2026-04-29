@@ -8,6 +8,7 @@ import {
 } from "@/lib/status";
 import { simulateFinancing } from "@/lib/financing";
 import type { LeadStatus } from "@/types/domain";
+import { ingestLeadManually, type IngestLeadResult } from "@/lib/lead-ingestion";
 
 const VALID_LEAD_STATUSES = new Set<string>([
   "NOVO",
@@ -63,6 +64,25 @@ export async function updateLeadStatus(
   await transitionLeadStatus(leadId, newStatus as LeadStatus);
   revalidatePath(`/conversations/${conversationId}`);
   revalidatePath("/conversations");
+}
+
+export async function importLead(
+  _prev: IngestLeadResult | null,
+  formData: FormData
+): Promise<IngestLeadResult> {
+  const nome = (formData.get("nome") as string | null)?.trim() ?? "";
+  const telefone = (formData.get("telefone") as string | null)?.trim() ?? "";
+  const interesse = (formData.get("interesse") as string | null)?.trim() || null;
+  const observacao = (formData.get("observacao") as string | null)?.trim() || null;
+  const storeId = process.env.DEFAULT_STORE_ID ?? "";
+
+  const result = await ingestLeadManually({ nome, telefone, interesse, observacao, storeId });
+
+  if (result.status === "created") {
+    revalidatePath("/leads");
+  }
+
+  return result;
 }
 
 export async function moveLeadStatus(

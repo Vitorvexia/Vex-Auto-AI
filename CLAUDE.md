@@ -286,6 +286,14 @@ Proteções: sem NaN, sem divisão por zero, sem PII.
 
 ---
 
+## Decisões de Arquitetura — Backlog Não-Bloqueante
+
+| Decisão | Status | Contexto |
+|---------|--------|---------|
+| `DEFAULT_STORE_ID` via env | MVP aceitável | Server Actions leem store via `process.env.DEFAULT_STORE_ID`. Aceitável para single-store. Precisa entrar no backlog junto da issue #12 (multi-tenant / `store_id` por usuário autenticado) antes de suportar múltiplas lojas. |
+
+---
+
 ## Regras para Claude neste Projeto
 
 1. Tratar este documento como fonte de verdade absoluta

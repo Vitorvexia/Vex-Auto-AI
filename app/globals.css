@@ -793,4 +793,37 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
 .metric-card.metric-info  { border-color: rgba(14,165,233,.25); background: rgba(14,165,233,.04); }
 .metric-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
 .metric-value { font-size: 28px; font-weight: 700; color: var(--text-strong); line-height: 1.1; }
+
+/* ─── Lead Import Card ───────────────────────── */
+.import-card {
+  background: var(--panel); border: 1px solid var(--border);
+  border-top: 2.5px solid var(--accent); border-radius: 10px;
+  padding: 16px 20px; margin-bottom: 20px;
+  box-shadow: 0 1px 3px rgba(28,43,58,.06);
+}
+.import-card-header { display: flex; align-items: baseline; gap: 12px; margin-bottom: 14px; }
+.import-card-title  { font-size: 13px; font-weight: 700; color: var(--text-strong); text-transform: uppercase; letter-spacing: .05em; }
+.import-card-sub    { font-size: 11px; color: var(--muted); }
+.import-form        { display: flex; flex-direction: column; gap: 10px; }
+.import-row         { display: flex; gap: 10px; flex-wrap: wrap; }
+.import-field       { display: flex; flex-direction: column; gap: 4px; flex: 1; min-width: 160px; }
+.import-label       { font-size: 11px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.import-input {
+  padding: 7px 10px; border-radius: 6px; font-size: 13px;
+  border: 1px solid var(--border); background: var(--bg);
+  color: var(--text-strong); outline: none; transition: border-color .15s;
+}
+.import-input:focus { border-color: var(--accent); }
+.import-actions     { display: flex; align-items: center; gap: 12px; margin-top: 4px; }
+.import-actions button {
+  padding: 7px 18px; border-radius: 6px; font-size: 12.5px; font-weight: 700;
+  background: var(--accent); color: #fff; border: none; cursor: pointer;
+  transition: opacity .15s; letter-spacing: .02em;
+}
+.import-actions button:disabled { opacity: .55; cursor: not-allowed; }
+.import-actions button:hover:not(:disabled) { opacity: .88; }
+.import-feedback        { font-size: 12.5px; font-weight: 600; padding: 5px 10px; border-radius: 6px; }
+.import-feedback.success{ background: rgba(34,197,94,.1);  color: #15803D; border: 1px solid rgba(34,197,94,.3); }
+.import-feedback.warning{ background: rgba(249,115,22,.1); color: #C2410C; border: 1px solid rgba(249,115,22,.3); }
+.import-feedback.error  { background: rgba(239,68,68,.1);  color: #B91C1C; border: 1px solid rgba(239,68,68,.3); }
 .metric-sub   { font-size: 11px; color: var(--text-muted); }
