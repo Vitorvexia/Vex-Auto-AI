@@ -3,6 +3,7 @@ import { OPEN_CONVERSATION_STATUSES, type LeadStatus } from "@/types/domain";
 import { calculateLeadPriority, sortLeads, type PriorityTier } from "@/lib/lead-priority";
 import { KanbanColumn } from "@/app/components/KanbanColumn";
 import { LeadCard } from "@/app/components/LeadCard";
+import { LeadImportCard } from "@/app/components/LeadImportCard";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -104,6 +105,8 @@ export default async function LeadsPage() {
           </div>
         </div>
       </div>
+
+      <LeadImportCard />
 
       <div className="leads-kpi-bar">
         <div className="leads-kpi-chip">
