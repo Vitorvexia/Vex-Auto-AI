@@ -1,6 +1,6 @@
 "use client";
 
-import { useActionState } from "react";
+import { useFormState } from "react-dom";
 import { importLead } from "@/lib/actions";
 import { SubmitButton } from "@/app/components/SubmitButton";
 
@@ -13,7 +13,7 @@ const FEEDBACK: Record<string, { cls: string; msg: string }> = {
 };
 
 export function LeadImportCard() {
-  const [state, action] = useActionState(importLead, null);
+  const [state, action] = useFormState(importLead, null);
   const fb = state ? FEEDBACK[state.status] : null;
 
   return (
