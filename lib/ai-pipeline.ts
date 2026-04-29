@@ -54,6 +54,7 @@ export async function logAi(params: {
       store_id: params.storeId,
       conversation_id: params.conversationId,
       lead_id: params.leadId,
+      kind: "pipeline",
       model: params.model,
       latency_ms: params.latencyMs,
       status: params.status,
