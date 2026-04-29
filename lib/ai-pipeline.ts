@@ -15,7 +15,7 @@ import {
   AgentOutputError,
 } from "@/lib/ai";
 import { transitionConversationStatus } from "@/lib/status";
-import { sendWhatsAppMessage, WhatsAppSendError } from "@/lib/whatsapp-send";
+import { sendWhatsAppMessage, WhatsAppSendError, type SendErrorCategory } from "@/lib/whatsapp-send";
 import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
 
 // ============================================================================
@@ -25,6 +25,7 @@ import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
 export type AgentStatus =
   | "ok"
   | "ok_send_failed"
+  | "ok_send_failed_permanent"
   | "skipped_handoff"
   | "skipped_duplicate"
   | "timeout"
@@ -45,6 +46,8 @@ export async function logAi(params: {
   model: string | null;
   output?: unknown;
   error?: string;
+  messageId?: string | null;
+  sendCategory?: SendErrorCategory | null;
 }) {
   try {
     await supabaseAdmin.from("ai_logs").insert({
@@ -56,6 +59,8 @@ export async function logAi(params: {
       status: params.status,
       error_code: params.error ?? null,
       llm_output: params.output ?? null,
+      message_id: params.messageId ?? null,
+      last_send_error: params.sendCategory ?? null,
     });
   } catch (e) {
     // ai_logs failure must never break the webhook response
@@ -134,15 +139,21 @@ export async function runAiPipeline(params: {
         : result.reply_text;
 
     // Gravar reply (saida/ia) — texto já truncado, igual ao que será enviado
-    await supabaseAdmin.from("messages").insert({
-      store_id: params.storeId,
-      conversation_id: params.conversationId,
-      lead_id: params.leadId,
-      direcao: "saida",
-      autor: "ia",
-      mensagem: replyText,
-      received_at: new Date().toISOString(),
-    });
+    // Capturar message_id para link direto no retry — elimina risco de double-send
+    const { data: savedMsg } = await supabaseAdmin
+      .from("messages")
+      .insert({
+        store_id: params.storeId,
+        conversation_id: params.conversationId,
+        lead_id: params.leadId,
+        direcao: "saida",
+        autor: "ia",
+        mensagem: replyText,
+        received_at: new Date().toISOString(),
+      })
+      .select("id")
+      .single();
+    const messageId = savedMsg?.id ?? null;
 
     // Enviar reply via WhatsApp Cloud API (não-fatal: reply já salvo no banco)
     const phone = ctx.lead.phone_normalized ?? "";
@@ -150,13 +161,23 @@ export async function runAiPipeline(params: {
       ? phone.slice(-4).padStart(phone.length, "*")
       : "****";
     let sendFailed = false;
+    let sendCategory: SendErrorCategory | null = null;
     try {
       await sendWhatsAppMessage(ctx.lead.phone_normalized, replyText);
       console.log(`[whatsapp-send] mensagem enviada para ${phoneMasked}`);
     } catch (sendErr) {
       sendFailed = true;
       if (sendErr instanceof WhatsAppSendError) {
-        console.error(`[whatsapp-send] falha ao enviar para ${phoneMasked}: ${sendErr.message}`);
+        sendCategory = sendErr.category;
+        // Logar apenas categoria e status_code — nunca sendErr.message (pode conter PII da Meta)
+        console.error(JSON.stringify({
+          level: "error",
+          event: "whatsapp_send_failed",
+          category: sendErr.category,
+          status_code: sendErr.statusCode,
+          phone: phoneMasked,
+          ts: new Date().toISOString(),
+        }));
       } else {
         console.error("[whatsapp-send] erro inesperado:", sendErr);
       }
@@ -234,6 +255,8 @@ export async function runAiPipeline(params: {
       latencyMs: Date.now() - start,
       model,
       output: result,
+      messageId,
+      sendCategory,
     });
 
     return { agent_status: finalStatus };

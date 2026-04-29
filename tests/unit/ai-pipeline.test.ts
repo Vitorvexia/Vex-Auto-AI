@@ -17,7 +17,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("@/lib/supabase", () => {
   const mkChain = () => {
     const c: any = {};
-    c.insert = vi.fn().mockResolvedValue({ data: null, error: null });
+    // insert returns a chainable object so that .insert().select("id").single() works.
+    // Also directly awaitable for old-style `await insert({...})` callers.
+    const insertResult: any = {
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+      }),
+      then: (resolve: any, reject?: any) =>
+        Promise.resolve({ data: null, error: null }).then(resolve, reject),
+    };
+    c.insert = vi.fn().mockReturnValue(insertResult);
     c.update = vi.fn().mockReturnValue({
       eq: vi.fn().mockResolvedValue({ data: null, error: null }),
     });
@@ -68,9 +78,10 @@ vi.mock("@/lib/status", () => ({
 vi.mock("@/lib/whatsapp-send", () => ({
   sendWhatsAppMessage: vi.fn(),
   WhatsAppSendError: class WhatsAppSendError extends Error {
-    statusCode?: number;
-    constructor(msg: string, code?: number) {
-      super(msg); this.name = "WhatsAppSendError"; this.statusCode = code;
+    statusCode?: number; category: string; isRetryable: boolean;
+    constructor(msg: string, code?: number, cat = "unknown", retryable = true) {
+      super(msg); this.name = "WhatsAppSendError";
+      this.statusCode = code; this.category = cat; this.isRetryable = retryable;
     }
   },
 }));
@@ -380,7 +391,14 @@ describe("runAiPipeline — regressão: scorer determinístico (test 15)", () =>
       }
       // Default chain for messages, ai_logs, follow_up_logs, reactivation_logs, etc.
       const c: any = {};
-      c.insert = vi.fn().mockResolvedValue({ data: null, error: null });
+      const insertResult: any = {
+        select: vi.fn().mockReturnValue({
+          single: vi.fn().mockResolvedValue({ data: null, error: null }),
+        }),
+        then: (resolve: any, reject?: any) =>
+          Promise.resolve({ data: null, error: null }).then(resolve, reject),
+      };
+      c.insert = vi.fn().mockReturnValue(insertResult);
       c.select = vi.fn().mockReturnValue(c);
       c.eq = vi.fn().mockReturnValue(c);
       c.order = vi.fn().mockReturnValue(c);
@@ -408,5 +426,83 @@ describe("runAiPipeline — regressão: scorer determinístico (test 15)", () =>
       new_score: 15,
       delta: 5,
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// message_id capture e sendCategory — PR 15
+// ---------------------------------------------------------------------------
+
+describe("runAiPipeline — PR 15: message_id e sendCategory", () => {
+  it("message_id capturado do insert de messages é persistido em ai_logs", async () => {
+    const aiLogsInsertMock = vi.fn().mockResolvedValue({ data: null, error: null });
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "messages") {
+        // Suporta insert().select("id").single() → retorna id da mensagem salva
+        const singleMock = vi.fn().mockResolvedValue({ data: { id: "msg-captured-123" }, error: null });
+        const selectAfterInsert = vi.fn().mockReturnValue({ single: singleMock });
+        const insertMock = vi.fn().mockReturnValue({ select: selectAfterInsert });
+        return { insert: insertMock } as any;
+      }
+      if (table === "ai_logs") {
+        return { insert: aiLogsInsertMock } as any;
+      }
+      // Default chain for all other tables
+      const c: any = {};
+      c.insert = vi.fn().mockResolvedValue({ data: null, error: null });
+      c.select = vi.fn().mockReturnValue(c);
+      c.eq = vi.fn().mockReturnValue(c);
+      c.order = vi.fn().mockReturnValue(c);
+      c.limit = vi.fn().mockReturnValue(c);
+      c.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+      c.then = (resolve: any, reject?: any) =>
+        Promise.resolve({ data: null, error: null, count: 0 }).then(resolve, reject);
+      return c;
+    });
+
+    await runAiPipeline(BASE_PARAMS);
+
+    // ai_logs.insert deve ter sido chamado com message_id = id retornado pelo messages.insert
+    expect(aiLogsInsertMock).toHaveBeenCalledOnce();
+    const aiLogPayload = aiLogsInsertMock.mock.calls[0][0];
+    expect(aiLogPayload.message_id).toBe("msg-captured-123");
+  });
+
+  it("sendCategory da WhatsAppSendError é persistido em ai_logs como last_send_error", async () => {
+    const aiLogsInsertMock = vi.fn().mockResolvedValue({ data: null, error: null });
+
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "messages") {
+        const singleMock = vi.fn().mockResolvedValue({ data: { id: "msg-abc" }, error: null });
+        const selectAfterInsert = vi.fn().mockReturnValue({ single: singleMock });
+        const insertMock = vi.fn().mockReturnValue({ select: selectAfterInsert });
+        return { insert: insertMock } as any;
+      }
+      if (table === "ai_logs") {
+        return { insert: aiLogsInsertMock } as any;
+      }
+      const c: any = {};
+      c.insert = vi.fn().mockResolvedValue({ data: null, error: null });
+      c.select = vi.fn().mockReturnValue(c);
+      c.eq = vi.fn().mockReturnValue(c);
+      c.order = vi.fn().mockReturnValue(c);
+      c.limit = vi.fn().mockReturnValue(c);
+      c.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+      c.then = (resolve: any, reject?: any) =>
+        Promise.resolve({ data: null, error: null, count: 0 }).then(resolve, reject);
+      return c;
+    });
+
+    vi.mocked(sendWhatsAppMessage).mockRejectedValueOnce(
+      new WhatsAppSendError("WhatsApp API retornou 400", 400, "invalid_recipient", false)
+    );
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("ok_send_failed");
+    expect(aiLogsInsertMock).toHaveBeenCalledOnce();
+    const aiLogPayload = aiLogsInsertMock.mock.calls[0][0];
+    expect(aiLogPayload.last_send_error).toBe("invalid_recipient");
   });
 });

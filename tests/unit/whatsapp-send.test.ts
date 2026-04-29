@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { sendWhatsAppMessage, WhatsAppSendError } from "@/lib/whatsapp-send";
+import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES } from "@/lib/whatsapp-send";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -203,5 +203,119 @@ describe("sendWhatsAppMessage", () => {
       // detalhe vazio: mensagem só tem o status code
       message: "WhatsApp API retornou 401",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Error classification — category + isRetryable
+// ---------------------------------------------------------------------------
+
+describe("sendWhatsAppMessage — error classification", () => {
+  it("HTTP 429 → category=rate_limited, isRetryable=true", async () => {
+    mockFetchError(429, "rate limit exceeded");
+    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+      name: "WhatsAppSendError",
+      statusCode: 429,
+      category: "rate_limited",
+      isRetryable: true,
+    });
+  });
+
+  it("HTTP 400 → category=invalid_recipient, isRetryable=false", async () => {
+    mockFetchError(400, "invalid phone number");
+    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+      name: "WhatsAppSendError",
+      statusCode: 400,
+      category: "invalid_recipient",
+      isRetryable: false,
+    });
+  });
+
+  it("HTTP 500 → category=service_error, isRetryable=true", async () => {
+    mockFetchError(500, "internal server error");
+    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+      name: "WhatsAppSendError",
+      statusCode: 500,
+      category: "service_error",
+      isRetryable: true,
+    });
+  });
+
+  it("HTTP 503 → category=service_error, isRetryable=true", async () => {
+    mockFetchError(503, "service unavailable");
+    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+      name: "WhatsAppSendError",
+      statusCode: 503,
+      category: "service_error",
+      isRetryable: true,
+    });
+  });
+
+  it("HTTP 401 → category=auth_error, isRetryable=false", async () => {
+    mockFetchError(401, "Invalid OAuth access token");
+    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+      name: "WhatsAppSendError",
+      statusCode: 401,
+      category: "auth_error",
+      isRetryable: false,
+    });
+  });
+
+  it("HTTP 403 → category=auth_error, isRetryable=false", async () => {
+    mockFetchError(403, "forbidden");
+    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+      name: "WhatsAppSendError",
+      statusCode: 403,
+      category: "auth_error",
+      isRetryable: false,
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Sanitização — token e phone nunca vazam no erro
+// ---------------------------------------------------------------------------
+
+describe("sendWhatsAppMessage — sanitização de logs", () => {
+  it("mensagem de erro não contém o access token", async () => {
+    mockFetchError(401, "bad token");
+    let caughtErr: WhatsAppSendError | null = null;
+    try {
+      await sendWhatsAppMessage("+5511999990000", "oi");
+    } catch (e) {
+      if (e instanceof WhatsAppSendError) caughtErr = e;
+    }
+    expect(caughtErr).not.toBeNull();
+    expect(caughtErr!.message).not.toContain("test-token");
+  });
+
+  it("mensagem de erro não contém dígitos do número de telefone do destinatário", async () => {
+    mockFetchError(400, "number 5511999990000 not valid");
+    let caughtErr: WhatsAppSendError | null = null;
+    try {
+      await sendWhatsAppMessage("+5511999990000", "oi");
+    } catch (e) {
+      if (e instanceof WhatsAppSendError) caughtErr = e;
+    }
+    expect(caughtErr).not.toBeNull();
+    // A mensagem do erro não deve conter o número do destinatário
+    expect(caughtErr!.message).not.toContain("5511999990000");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PERMANENT_CATEGORIES export
+// ---------------------------------------------------------------------------
+
+describe("PERMANENT_CATEGORIES", () => {
+  it("contém invalid_recipient e auth_error", () => {
+    expect(PERMANENT_CATEGORIES).toContain("invalid_recipient");
+    expect(PERMANENT_CATEGORIES).toContain("auth_error");
+  });
+
+  it("não contém categorias retryable (rate_limited, service_error, unknown)", () => {
+    expect(PERMANENT_CATEGORIES).not.toContain("rate_limited");
+    expect(PERMANENT_CATEGORIES).not.toContain("service_error");
+    expect(PERMANENT_CATEGORIES).not.toContain("unknown");
   });
 });
