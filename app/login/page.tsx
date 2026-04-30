@@ -15,16 +15,18 @@ function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  );
-
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
+    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+    const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !key) {
+      setError("Configuração de autenticação ausente.");
+      return;
+    }
     setLoading(true);
     setError(null);
 
+    const supabase = createBrowserClient(url, key);
     const { error } = await supabase.auth.signInWithPassword({ email, password });
 
     if (error) {
