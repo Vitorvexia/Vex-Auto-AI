@@ -1,12 +1,8 @@
 {
   "crons": [
     {
-      "path": "/api/internal/follow-up/run",
+      "path": "/api/internal/daily-run",
       "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/internal/reactivation/run",
-      "schedule": "0 10 * * *"
     }
   ]
 }
