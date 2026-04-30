@@ -12,6 +12,16 @@ Não é CRM, ERP ou ferramenta de gestão tradicional.
 
 É o trilho por onde a economia da loja passa — orquestra a jornada de venda de ponta a ponta. Se o sistema cair, a operação comercial da loja é impactada diretamente.
 
+O Vex Auto é projetado para se tornar infraestrutura crítica — a operação da loja deve depender dele para funcionar.
+
+---
+
+## O que o Vex Auto NÃO é
+
+- não é CRM tradicional
+- não é ferramenta de gestão passiva
+- não é chatbot de atendimento
+
 ---
 
 ## Princípio Central
@@ -437,7 +447,7 @@ O Vex Auto já está operando em produção com:
 - infraestrutura estável (Vercel + Supabase)
 - login funcional e páginas principais operacionais
 
-O sistema já executa partes reais da operação comercial, incluindo atendimento, follow-up e reativação de leads, com impacto direto na conversão.
+O sistema já executa partes reais da operação comercial, reduzindo dependência humana e aumentando velocidade de resposta e conversão.
 
 ---
 
