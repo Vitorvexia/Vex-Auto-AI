@@ -268,11 +268,15 @@ Proteções: sem NaN, sem divisão por zero, sem PII.
 
 ## Roadmap
 
+> Detalhamento por fase em **Roadmap Atualizado** ao final do documento.
+
 | Fase | Status | Descrição |
 |------|--------|-----------|
-| Fase 1 | ✔ CONCLUÍDA | IA responde e acompanha |
-| Fase 2 | ✔ CONCLUÍDA | IA prioriza, dá contexto ao vendedor, ações humanas, Kanban, métricas |
-| Fase 3 | Próxima | IA orquestra toda a venda |
+| Fase 1 | ✔ CONCLUÍDA | IA responde, acompanha, deploy em produção |
+| Fase 2 | Em andamento | Multi-tenant, autenticação real, equipe |
+| Fase 3 | Planejada | UX operacional (inbox, kanban avançado, dashboard) |
+| Fase 4 | Planejada | Escala (CSV, portais, reativação em massa) |
+| Fase 5 | Planejada | Monetização (planos, ROI, relatórios) |
 
 ---
 
@@ -318,12 +322,12 @@ Proteções: sem NaN, sem divisão por zero, sem PII.
 
 - Deploy ativo na Vercel (plano Hobby)
 - Domínio configurado e operacional
-- Variáveis de ambiente configuradas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `OPENAI_API_KEY`, `WHATSAPP_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `INTERNAL_API_KEY`, `DEFAULT_STORE_ID`
+- Variáveis de ambiente configuradas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `WHATSAPP_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `INTERNAL_API_KEY`, `DEFAULT_STORE_ID`
 - Banco Supabase com todas as migrations aplicadas em produção
 
 ### WhatsApp
 
-- Webhook Meta configurado e respondendo (`/api/webhook`)
+- Webhook Meta configurado e respondendo (`/api/whatsapp/webhook`)
 - Envio e recebimento de mensagens operacional via WhatsApp Cloud API
 - Pipeline de IA integrado ao fluxo de entrada/saída de mensagens
 - Validação HMAC ativa em todos os requests do webhook
@@ -411,3 +415,28 @@ Garantias operacionais:
 - Planos e cobrança por loja (Stripe ou equivalente)
 - Métricas de ROI por loja: faturamento gerado, conversão, CAC
 - Relatórios exportáveis para gestão
+
+---
+
+## Status do Produto
+
+O Vex Auto já está operando em produção com:
+
+- envio e recebimento real via WhatsApp (Meta Cloud API)
+- pipeline de IA ativo (Claude via Anthropic API)
+- automação de follow-up e reativação operacional
+- sistema de retry com classificação de erro e prevenção de double-send
+- infraestrutura estável (Vercel + Supabase)
+- login funcional e páginas principais operacionais
+
+O sistema já executa partes reais da operação comercial sem intervenção humana.
+
+---
+
+## Princípio de Execução
+
+Toda nova feature deve responder:
+
+> "Isso aumenta faturamento, margem ou conversão?"
+
+Se não aumentar, não é prioridade.
