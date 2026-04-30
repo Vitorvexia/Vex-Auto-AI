@@ -26,6 +26,14 @@ Existe para:
 
 ---
 
+## IA como Agente Operacional
+
+A IA do Vex Auto não é um chatbot passivo.
+
+Ela atua como agente operacional, executando ações com impacto direto no fluxo de vendas.
+
+---
+
 ## Filosofia AI-First
 
 | Princípio | Descrição |
@@ -388,8 +396,8 @@ Garantias operacionais:
 
 ### Fase 1 — Validação Real ✔ CONCLUÍDA
 
-- Conectar WhatsApp real via Meta Cloud API
-- Testar fluxo completo: lead entra → IA responde → mensagem enviada
+- WhatsApp real integrado e validado via Meta Cloud API
+- Fluxo completo testado e confirmado: lead entra → IA responde → mensagem enviada
 - Deploy em produção com env vars reais
 
 ### Fase 2 — Base Estrutural (Em andamento)
@@ -429,7 +437,7 @@ O Vex Auto já está operando em produção com:
 - infraestrutura estável (Vercel + Supabase)
 - login funcional e páginas principais operacionais
 
-O sistema já executa partes reais da operação comercial sem intervenção humana.
+O sistema já executa partes reais da operação comercial, incluindo atendimento, follow-up e reativação de leads, com impacto direto na conversão.
 
 ---
 
@@ -440,3 +448,9 @@ Toda nova feature deve responder:
 > "Isso aumenta faturamento, margem ou conversão?"
 
 Se não aumentar, não é prioridade.
+
+---
+
+## Objetivo Final
+
+O objetivo final do sistema é se tornar indispensável — a operação comercial da loja deve depender dele para funcionar.
