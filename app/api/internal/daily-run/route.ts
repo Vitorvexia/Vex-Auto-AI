@@ -13,7 +13,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { runFollowUpJob } from "@/lib/follow-up";
 import { runReactivationJob } from "@/lib/reactivation";
-import { POST as runRetryFailed } from "@/app/api/internal/retry-failed/route";
+import { runRetryFailedJob } from "@/lib/retry-failed";
 
 export const runtime = "nodejs";
 
@@ -54,31 +54,20 @@ export async function POST(req: NextRequest) {
 
   const results: Record<string, unknown> = {};
 
-  // 1. Follow-up
   try {
     results.follow_up = await runFollowUpJob({ storeId, limit });
   } catch (e) {
     results.follow_up = { error: e instanceof Error ? e.message : String(e) };
   }
 
-  // 2. Reactivation
   try {
     results.reactivation = await runReactivationJob({ storeId, limit });
   } catch (e) {
     results.reactivation = { error: e instanceof Error ? e.message : String(e) };
   }
 
-  // 3. Retry WhatsApp send failures — chama POST handler com request sintético
   try {
-    const syntheticReq = new NextRequest(
-      "http://localhost/api/internal/retry-failed",
-      {
-        method: "POST",
-        headers: { "x-internal-key": expectedKey },
-      }
-    );
-    const retryRes = await runRetryFailed(syntheticReq);
-    results.retry_failed = await retryRes.json();
+    results.retry_failed = await runRetryFailedJob({ limit });
   } catch (e) {
     results.retry_failed = { error: e instanceof Error ? e.message : String(e) };
   }
