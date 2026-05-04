@@ -1,5 +1,6 @@
 import Link from "next/link";
-import { supabaseAdmin } from "@/lib/supabase";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { AuthError } from "@/lib/auth";
 import { relativeTime } from "@/lib/format";
 
 const LEAD_STATUS_LABELS: Record<string, string> = {
@@ -20,7 +21,11 @@ export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
 export default async function ConversationsPage() {
-  const { data: conversations, error } = await supabaseAdmin
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new AuthError();
+
+  const { data: conversations, error } = await supabase
     .from("conversations")
     .select(
       `id, conversation_status, handoff_to, summary, ultima_mensagem_em,

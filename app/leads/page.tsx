@@ -1,4 +1,5 @@
-import { supabaseAdmin } from "@/lib/supabase";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { AuthError } from "@/lib/auth";
 import { OPEN_CONVERSATION_STATUSES, type LeadStatus } from "@/types/domain";
 import { calculateLeadPriority, sortLeads, type PriorityTier } from "@/lib/lead-priority";
 import { KanbanColumn } from "@/app/components/KanbanColumn";
@@ -33,7 +34,11 @@ type Enriched = {
 };
 
 export default async function LeadsPage() {
-  const { data: leads, error } = await supabaseAdmin
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new AuthError();
+
+  const { data: leads, error } = await supabase
     .from("leads")
     .select(
       `id, nome, phone_normalized, score, lead_status, updated_at,

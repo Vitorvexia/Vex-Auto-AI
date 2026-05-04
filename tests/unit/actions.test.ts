@@ -4,12 +4,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — variáveis para factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockTransitionConv, mockTransitionLead, mockRevalidate } =
+const { mockFrom, mockTransitionConv, mockTransitionLead, mockRevalidate, mockGetServerStoreId } =
   vi.hoisted(() => ({
     mockFrom: vi.fn(),
     mockTransitionConv: vi.fn(),
     mockTransitionLead: vi.fn(),
     mockRevalidate: vi.fn(),
+    mockGetServerStoreId: vi.fn(),
   }));
 
 // ---------------------------------------------------------------------------
@@ -18,6 +19,10 @@ const { mockFrom, mockTransitionConv, mockTransitionLead, mockRevalidate } =
 
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: { from: mockFrom },
+}));
+
+vi.mock("@/lib/auth", () => ({
+  getServerStoreId: mockGetServerStoreId,
 }));
 
 vi.mock("@/lib/status", () => ({
@@ -61,7 +66,12 @@ import {
 // ---------------------------------------------------------------------------
 
 function chainInsert(result: unknown = { error: null }) {
-  const c = { insert: vi.fn().mockResolvedValue(result) };
+  const c = {
+    insert: vi.fn().mockResolvedValue(result),
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "x" }, error: null }),
+  };
   mockFrom.mockReturnValue(c);
   return c;
 }
@@ -79,6 +89,16 @@ function makeFormData(leadStatus: string): FormData {
 beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
+  mockGetServerStoreId.mockResolvedValue("store-test");
+
+  // Default: ownership checks pass. Tests that need specific insert chains call chainInsert().
+  const defaultChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "x" }, error: null }),
+    insert: vi.fn().mockResolvedValue({ error: null }),
+  };
+  mockFrom.mockReturnValue(defaultChain);
 });
 
 afterEach(() => {
@@ -123,11 +143,13 @@ describe("assignConversationToHuman", () => {
     const err = new Error("Transicao invalida em conversation_status: ENCERRADA -> AGUARDANDO_HUMANO");
     err.name = "InvalidTransitionError";
     mockTransitionConv.mockRejectedValue(err);
+    const chain = chainInsert();
 
     await expect(assignConversationToHuman("conv-encerrada")).rejects.toMatchObject(
       { name: "InvalidTransitionError" }
     );
-    expect(mockFrom).not.toHaveBeenCalled();
+    // Ownership check runs (mockFrom called), but insert never happens (error thrown by transition)
+    expect(chain.insert).not.toHaveBeenCalled();
   });
 });
 
@@ -249,7 +271,13 @@ describe("saveFinancingSimulation", () => {
   function setupTwoTableMocks() {
     const insertSim = vi.fn().mockResolvedValue({ error: null });
     const insertMsg = vi.fn().mockResolvedValue({ error: null });
+    const ownershipChain = {
+      select: vi.fn().mockReturnThis(),
+      eq: vi.fn().mockReturnThis(),
+      maybeSingle: vi.fn().mockResolvedValue({ data: { id: "lead-1" }, error: null }),
+    };
     mockFrom.mockImplementation((table: string) => {
+      if (table === "leads") return ownershipChain;
       if (table === "financing_simulations") return { insert: insertSim };
       if (table === "messages") return { insert: insertMsg };
       return { insert: vi.fn().mockResolvedValue({ error: null }) };
@@ -260,7 +288,7 @@ describe("saveFinancingSimulation", () => {
   it("S1: vehicle_price <= 0 → não insere nenhuma row", async () => {
     const { insertSim, insertMsg } = setupTwoTableMocks();
 
-    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData({ vehicle_price: "0" }));
+    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData({ vehicle_price: "0" }));
 
     expect(insertSim).not.toHaveBeenCalled();
     expect(insertMsg).not.toHaveBeenCalled();
@@ -269,7 +297,7 @@ describe("saveFinancingSimulation", () => {
   it("S1b: term_months fora do range (< 12) → não insere", async () => {
     const { insertSim } = setupTwoTableMocks();
 
-    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData({ term_months: "6" }));
+    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData({ term_months: "6" }));
 
     expect(insertSim).not.toHaveBeenCalled();
   });
@@ -277,7 +305,7 @@ describe("saveFinancingSimulation", () => {
   it("S1c: term_months fora do range (> 72) → não insere", async () => {
     const { insertSim } = setupTwoTableMocks();
 
-    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData({ term_months: "84" }));
+    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData({ term_months: "84" }));
 
     expect(insertSim).not.toHaveBeenCalled();
   });
@@ -285,12 +313,12 @@ describe("saveFinancingSimulation", () => {
   it("S2: entrada válida → insere em financing_simulations com store_id e provider='internal'", async () => {
     const { insertSim } = setupTwoTableMocks();
 
-    await saveFinancingSimulation("lead-1", "conv-1", "store-99", makeSimFormData());
+    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData());
 
     expect(insertSim).toHaveBeenCalledOnce();
     expect(insertSim).toHaveBeenCalledWith(
       expect.objectContaining({
-        store_id: "store-99",
+        store_id: "store-test", // resolvido via getServerStoreId() da sessão
         lead_id: "lead-1",
         conversation_id: "conv-1",
         provider: "internal",
@@ -304,7 +332,7 @@ describe("saveFinancingSimulation", () => {
   it("S3: mensagem de sistema inserida contendo 'estimada'", async () => {
     const { insertMsg } = setupTwoTableMocks();
 
-    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData());
+    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData());
 
     expect(insertMsg).toHaveBeenCalledOnce();
     const call = insertMsg.mock.calls[0][0] as { mensagem: string };
@@ -314,7 +342,7 @@ describe("saveFinancingSimulation", () => {
   it("S4: mensagem de sistema NÃO contém 'aprovado' nem 'aprovação'", async () => {
     const { insertMsg } = setupTwoTableMocks();
 
-    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData());
+    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData());
 
     const call = insertMsg.mock.calls[0][0] as { mensagem: string };
     expect(call.mensagem.toLowerCase()).not.toContain("aprovado");
@@ -324,7 +352,7 @@ describe("saveFinancingSimulation", () => {
   it("S5: revalidatePath chamado para a conversa após insert", async () => {
     setupTwoTableMocks();
 
-    await saveFinancingSimulation("lead-1", "conv-42", "store-1", makeSimFormData());
+    await saveFinancingSimulation("lead-1", "conv-42", makeSimFormData());
 
     expect(mockRevalidate).toHaveBeenCalledWith("/conversations/conv-42");
   });
@@ -332,7 +360,7 @@ describe("saveFinancingSimulation", () => {
   it("S6: taxa customizada (monthly_rate_pct=2.0) é salva como 0.02 no banco", async () => {
     const { insertSim } = setupTwoTableMocks();
 
-    await saveFinancingSimulation("lead-1", "conv-1", "store-1",
+    await saveFinancingSimulation("lead-1", "conv-1",
       makeSimFormData({ monthly_rate_pct: "2.0" })
     );
 
@@ -344,7 +372,7 @@ describe("saveFinancingSimulation", () => {
   it("S7: monthly_rate_pct ausente → usa DEFAULT_MONTHLY_RATE (0.018)", async () => {
     const { insertSim } = setupTwoTableMocks();
 
-    await saveFinancingSimulation("lead-1", "conv-1", "store-1", makeSimFormData());
+    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData());
 
     expect(insertSim).toHaveBeenCalledWith(
       expect.objectContaining({ monthly_rate: 0.018 })

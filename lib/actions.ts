@@ -24,6 +24,15 @@ const VALID_LEAD_STATUSES = new Set<string>([
 export async function assignConversationToHuman(
   conversationId: string
 ): Promise<void> {
+  const storeId = await getServerStoreId();
+  const { data: check } = await supabaseAdmin
+    .from("conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (!check) throw new Error("Conversa não encontrada");
+
   await transitionConversationStatus(conversationId, "AGUARDANDO_HUMANO", {
     handoff_to: "HUMANO",
     assigned_to: null,
@@ -40,6 +49,15 @@ export async function assignConversationToHuman(
 export async function returnConversationToAI(
   conversationId: string
 ): Promise<void> {
+  const storeId = await getServerStoreId();
+  const { data: check } = await supabaseAdmin
+    .from("conversations")
+    .select("id")
+    .eq("id", conversationId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (!check) throw new Error("Conversa não encontrada");
+
   await transitionConversationStatus(conversationId, "ATIVA", {
     handoff_to: "IA",
     assigned_to: null,
@@ -58,6 +76,15 @@ export async function updateLeadStatus(
   conversationId: string,
   formData: FormData
 ): Promise<void> {
+  const storeId = await getServerStoreId();
+  const { data: check } = await supabaseAdmin
+    .from("leads")
+    .select("id")
+    .eq("id", leadId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (!check) throw new Error("Lead não encontrado");
+
   const newStatus = formData.get("lead_status") as string;
   if (!VALID_LEAD_STATUSES.has(newStatus)) {
     throw new Error(`Status inválido: ${newStatus}`);
@@ -90,6 +117,15 @@ export async function moveLeadStatus(
   leadId: string,
   formData: FormData
 ): Promise<void> {
+  const storeId = await getServerStoreId();
+  const { data: check } = await supabaseAdmin
+    .from("leads")
+    .select("id")
+    .eq("id", leadId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (!check) throw new Error("Lead não encontrado");
+
   const newStatus = formData.get("lead_status") as string;
   if (!VALID_LEAD_STATUSES.has(newStatus)) {
     throw new Error(`Status inválido: ${newStatus}`);
@@ -101,9 +137,17 @@ export async function moveLeadStatus(
 export async function saveFinancingSimulation(
   leadId: string,
   conversationId: string,
-  storeId: string,
   formData: FormData
 ): Promise<void> {
+  const storeId = await getServerStoreId();
+  const { data: check } = await supabaseAdmin
+    .from("leads")
+    .select("id")
+    .eq("id", leadId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (!check) throw new Error("Lead não encontrado");
+
   const vehicle_price    = Number(formData.get("vehicle_price"));
   const entry_value      = Number(formData.get("entry_value") ?? 0);
   const term_months      = Number(formData.get("term_months"));
