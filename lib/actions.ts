@@ -9,6 +9,7 @@ import {
 import { simulateFinancing } from "@/lib/financing";
 import type { LeadStatus } from "@/types/domain";
 import { ingestLeadManually, type IngestLeadResult } from "@/lib/lead-ingestion";
+import { getServerStoreId } from "@/lib/auth";
 
 const VALID_LEAD_STATUSES = new Set<string>([
   "NOVO",
@@ -74,7 +75,7 @@ export async function importLead(
   const telefone = (formData.get("telefone") as string | null)?.trim() ?? "";
   const interesse = (formData.get("interesse") as string | null)?.trim() || null;
   const observacao = (formData.get("observacao") as string | null)?.trim() || null;
-  const storeId = process.env.DEFAULT_STORE_ID ?? "";
+  const storeId = await getServerStoreId();
 
   const result = await ingestLeadManually({ nome, telefone, interesse, observacao, storeId });
 

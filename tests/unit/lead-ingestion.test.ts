@@ -4,11 +4,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — refs compartilhados nas factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockSendWA, mockRunAI, mockRevalidate } = vi.hoisted(() => ({
+const { mockFrom, mockSendWA, mockRunAI, mockRevalidate, mockGetServerStoreId } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockSendWA: vi.fn(),
   mockRunAI: vi.fn(),
   mockRevalidate: vi.fn(),
+  mockGetServerStoreId: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -29,6 +30,10 @@ vi.mock("@/lib/ai-pipeline", () => ({
 
 vi.mock("next/cache", () => ({
   revalidatePath: mockRevalidate,
+}));
+
+vi.mock("@/lib/auth", () => ({
+  getServerStoreId: mockGetServerStoreId,
 }));
 
 // ---------------------------------------------------------------------------
@@ -88,7 +93,7 @@ const BASE = {
 beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
-  process.env.DEFAULT_STORE_ID = "store-1";
+  mockGetServerStoreId.mockResolvedValue("store-1");
 });
 
 afterEach(() => {
@@ -323,4 +328,20 @@ it("T16: lead com conversa AGUARDANDO_HUMANO retorna existing sem tentar criar n
     conversationId: "conv-human",
   });
   expect(mockFrom).toHaveBeenCalledTimes(2); // sem INSERT de conversa
+});
+
+// ---------------------------------------------------------------------------
+// T17 — importLead usa getServerStoreId(), não DEFAULT_STORE_ID
+// ---------------------------------------------------------------------------
+
+it("T17: importLead chama getServerStoreId() para resolver storeId (não DEFAULT_STORE_ID)", async () => {
+  setupNewLead();
+
+  const formData = new FormData();
+  formData.append("nome", "João Silva");
+  formData.append("telefone", "+5511999990001");
+
+  await importLead(null, formData);
+
+  expect(mockGetServerStoreId).toHaveBeenCalledOnce();
 });
