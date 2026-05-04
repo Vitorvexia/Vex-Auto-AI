@@ -2,7 +2,8 @@ import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthError } from "@/lib/auth";
 import { calculateOperationalMetrics } from "@/lib/metrics";
-import type { SupabaseClient } from "@supabase/supabase-js";
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 const WINDOW_DAYS = 30;
 
@@ -21,8 +22,7 @@ function mins(avg: number): string {
   return avg < 1 ? `${Math.round(avg * 60)}s` : `${avg.toFixed(1)} min`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-async function fetchMetrics(supabase: SupabaseClient<any, any, any>) {
+async function fetchMetrics(supabase: SupabaseServerClient) {
   const since = windowStart();
 
   const [leadsRes, allLeadsRes, convsRes, msgsRes, followRes, reactRes] = await Promise.all([
