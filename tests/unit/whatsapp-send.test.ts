@@ -34,8 +34,9 @@ function mockFetchNetworkError() {
 
 const ENV_VARS = {
   WHATSAPP_ACCESS_TOKEN: "test-token",
-  WHATSAPP_PHONE_NUMBER_ID: "123456789",
 };
+
+const TEST_PHONE_ID = "123456789";
 
 beforeEach(() => {
   Object.entries(ENV_VARS).forEach(([k, v]) => (process.env[k] = v));
@@ -54,7 +55,7 @@ describe("sendWhatsAppMessage", () => {
   it("chama WA API com payload correto e resolve sem erro", async () => {
     const spy = mockFetchOk();
 
-    await sendWhatsAppMessage("+5511999990000", "Olá, tudo bem?");
+    await sendWhatsAppMessage("+5511999990000", "Olá, tudo bem?", TEST_PHONE_ID);
 
     expect(spy).toHaveBeenCalledOnce();
     const [url, init] = spy.mock.calls[0] as [string, RequestInit];
@@ -76,14 +77,14 @@ describe("sendWhatsAppMessage", () => {
 
   it("strip '+' do número antes de enviar", async () => {
     const spy = mockFetchOk();
-    await sendWhatsAppMessage("+5511987654321", "oi");
+    await sendWhatsAppMessage("+5511987654321", "oi", TEST_PHONE_ID);
     const body = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
     expect(body.to).toBe("5511987654321");
   });
 
   it("número sem '+' passa sem modificação", async () => {
     const spy = mockFetchOk();
-    await sendWhatsAppMessage("5511987654321", "oi");
+    await sendWhatsAppMessage("5511987654321", "oi", TEST_PHONE_ID);
     const body = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
     expect(body.to).toBe("5511987654321");
   });
@@ -92,7 +93,7 @@ describe("sendWhatsAppMessage", () => {
     mockFetchError(400, "invalid phone number");
 
     await expect(
-      sendWhatsAppMessage("+5511999990000", "oi")
+      sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)
     ).rejects.toMatchObject({
       name: "WhatsAppSendError",
       statusCode: 400,
@@ -104,7 +105,7 @@ describe("sendWhatsAppMessage", () => {
     mockFetchError(401, "Invalid OAuth access token");
 
     await expect(
-      sendWhatsAppMessage("+5511999990000", "oi")
+      sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)
     ).rejects.toMatchObject({
       name: "WhatsAppSendError",
       statusCode: 401,
@@ -115,7 +116,7 @@ describe("sendWhatsAppMessage", () => {
     mockFetchNetworkError();
 
     await expect(
-      sendWhatsAppMessage("+5511999990000", "oi")
+      sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)
     ).rejects.toThrow(TypeError);
   });
 
@@ -123,17 +124,15 @@ describe("sendWhatsAppMessage", () => {
     delete process.env.WHATSAPP_ACCESS_TOKEN;
 
     await expect(
-      sendWhatsAppMessage("+5511999990000", "oi")
+      sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)
     ).rejects.toMatchObject({
       name: "WhatsAppSendError",
     });
   });
 
-  it("lança WhatsAppSendError quando WHATSAPP_PHONE_NUMBER_ID ausente", async () => {
-    delete process.env.WHATSAPP_PHONE_NUMBER_ID;
-
+  it("lança WhatsAppSendError quando phoneNumberId é string vazia", async () => {
     await expect(
-      sendWhatsAppMessage("+5511999990000", "oi")
+      sendWhatsAppMessage("+5511999990000", "oi", "")
     ).rejects.toMatchObject({
       name: "WhatsAppSendError",
     });
@@ -142,7 +141,7 @@ describe("sendWhatsAppMessage", () => {
   it("trunca texto em 4096 chars com reticências", async () => {
     const spy = mockFetchOk();
     const longText = "a".repeat(5000);
-    await sendWhatsAppMessage("+5511999990000", longText);
+    await sendWhatsAppMessage("+5511999990000", longText, TEST_PHONE_ID);
     const body = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
     expect(body.text.body).toHaveLength(4096);
     expect(body.text.body.endsWith("...")).toBe(true);
@@ -152,7 +151,7 @@ describe("sendWhatsAppMessage", () => {
   it("texto com exatamente 4096 chars não é truncado", async () => {
     const spy = mockFetchOk();
     const exactText = "b".repeat(4096);
-    await sendWhatsAppMessage("+5511999990000", exactText);
+    await sendWhatsAppMessage("+5511999990000", exactText, TEST_PHONE_ID);
     const body = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
     expect(body.text.body).toHaveLength(4096);
     expect(body.text.body.endsWith("...")).toBe(false);
@@ -161,7 +160,7 @@ describe("sendWhatsAppMessage", () => {
   it("usa WHATSAPP_API_VERSION env var quando definida", async () => {
     process.env.WHATSAPP_API_VERSION = "v22.0";
     const spy = mockFetchOk();
-    await sendWhatsAppMessage("+5511999990000", "oi");
+    await sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID);
     const [url] = spy.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("v22.0");
     expect(url).not.toContain("v21.0");
@@ -171,7 +170,7 @@ describe("sendWhatsAppMessage", () => {
   it("usa v21.0 como padrão quando WHATSAPP_API_VERSION não definida", async () => {
     delete process.env.WHATSAPP_API_VERSION;
     const spy = mockFetchOk();
-    await sendWhatsAppMessage("+5511999990000", "oi");
+    await sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID);
     const [url] = spy.mock.calls[0] as [string, RequestInit];
     expect(url).toContain("v21.0");
   });
@@ -182,7 +181,7 @@ describe("sendWhatsAppMessage", () => {
     );
 
     await expect(
-      sendWhatsAppMessage("+5511999990000", "oi")
+      sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)
     ).rejects.toMatchObject({
       name: "WhatsAppSendError",
       statusCode: 500,
@@ -196,11 +195,10 @@ describe("sendWhatsAppMessage", () => {
     );
 
     await expect(
-      sendWhatsAppMessage("+5511999990000", "oi")
+      sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)
     ).rejects.toMatchObject({
       name: "WhatsAppSendError",
       statusCode: 401,
-      // detalhe vazio: mensagem só tem o status code
       message: "WhatsApp API retornou 401",
     });
   });
@@ -213,7 +211,7 @@ describe("sendWhatsAppMessage", () => {
 describe("sendWhatsAppMessage — error classification", () => {
   it("HTTP 429 → category=rate_limited, isRetryable=true", async () => {
     mockFetchError(429, "rate limit exceeded");
-    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+    await expect(sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)).rejects.toMatchObject({
       name: "WhatsAppSendError",
       statusCode: 429,
       category: "rate_limited",
@@ -223,7 +221,7 @@ describe("sendWhatsAppMessage — error classification", () => {
 
   it("HTTP 400 → category=invalid_recipient, isRetryable=false", async () => {
     mockFetchError(400, "invalid phone number");
-    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+    await expect(sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)).rejects.toMatchObject({
       name: "WhatsAppSendError",
       statusCode: 400,
       category: "invalid_recipient",
@@ -233,7 +231,7 @@ describe("sendWhatsAppMessage — error classification", () => {
 
   it("HTTP 500 → category=service_error, isRetryable=true", async () => {
     mockFetchError(500, "internal server error");
-    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+    await expect(sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)).rejects.toMatchObject({
       name: "WhatsAppSendError",
       statusCode: 500,
       category: "service_error",
@@ -243,7 +241,7 @@ describe("sendWhatsAppMessage — error classification", () => {
 
   it("HTTP 503 → category=service_error, isRetryable=true", async () => {
     mockFetchError(503, "service unavailable");
-    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+    await expect(sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)).rejects.toMatchObject({
       name: "WhatsAppSendError",
       statusCode: 503,
       category: "service_error",
@@ -253,7 +251,7 @@ describe("sendWhatsAppMessage — error classification", () => {
 
   it("HTTP 401 → category=auth_error, isRetryable=false", async () => {
     mockFetchError(401, "Invalid OAuth access token");
-    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+    await expect(sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)).rejects.toMatchObject({
       name: "WhatsAppSendError",
       statusCode: 401,
       category: "auth_error",
@@ -263,7 +261,7 @@ describe("sendWhatsAppMessage — error classification", () => {
 
   it("HTTP 403 → category=auth_error, isRetryable=false", async () => {
     mockFetchError(403, "forbidden");
-    await expect(sendWhatsAppMessage("+5511999990000", "oi")).rejects.toMatchObject({
+    await expect(sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)).rejects.toMatchObject({
       name: "WhatsAppSendError",
       statusCode: 403,
       category: "auth_error",
@@ -281,7 +279,7 @@ describe("sendWhatsAppMessage — sanitização de logs", () => {
     mockFetchError(401, "bad token");
     let caughtErr: WhatsAppSendError | null = null;
     try {
-      await sendWhatsAppMessage("+5511999990000", "oi");
+      await sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID);
     } catch (e) {
       if (e instanceof WhatsAppSendError) caughtErr = e;
     }
@@ -293,12 +291,11 @@ describe("sendWhatsAppMessage — sanitização de logs", () => {
     mockFetchError(400, "number 5511999990000 not valid");
     let caughtErr: WhatsAppSendError | null = null;
     try {
-      await sendWhatsAppMessage("+5511999990000", "oi");
+      await sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID);
     } catch (e) {
       if (e instanceof WhatsAppSendError) caughtErr = e;
     }
     expect(caughtErr).not.toBeNull();
-    // A mensagem do erro não deve conter o número do destinatário
     expect(caughtErr!.message).not.toContain("5511999990000");
   });
 });

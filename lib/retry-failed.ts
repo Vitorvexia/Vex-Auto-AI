@@ -7,6 +7,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES } from "@/lib/whatsapp-send";
+import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 
 const MAX_WINDOW_HOURS = 72;
 const MAX_LIMIT = 200;
@@ -158,7 +159,8 @@ export async function runRetryFailedJob(opts?: {
     }
 
     try {
-      await sendWhatsAppMessage(lead.phone_normalized, msgText);
+      const phoneId = await getStoreWhatsAppPhoneId(log.store_id);
+      await sendWhatsAppMessage(lead.phone_normalized, msgText, phoneId);
       await supabaseAdmin
         .from("ai_logs")
         .update({ status: "ok", retry_count: (log.retry_count ?? 0) + 1 })

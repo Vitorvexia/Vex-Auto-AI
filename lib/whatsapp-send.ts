@@ -52,24 +52,24 @@ function getApiVersion(): string {
 /**
  * Envia mensagem de texto via WhatsApp Cloud API.
  *
- * Requer env vars:
- *   WHATSAPP_ACCESS_TOKEN    — token de acesso do app Meta
- *   WHATSAPP_PHONE_NUMBER_ID — ID do número de telefone do negócio
+ * Requer env var:
+ *   WHATSAPP_ACCESS_TOKEN — token de acesso do app Meta
  *
- * @param to   Número do destinatário em E.164 (com ou sem +)
- * @param text Texto da mensagem (truncado em 4096 chars — limite da WA Cloud API)
- * @throws WhatsAppSendError em falha HTTP ou env vars ausentes
+ * @param to            Número do destinatário em E.164 (com ou sem +)
+ * @param text          Texto da mensagem (truncado em 4096 chars — limite da WA Cloud API)
+ * @param phoneNumberId Phone Number ID da Meta (resolvido por getStoreWhatsAppPhoneId)
+ * @throws WhatsAppSendError em falha HTTP ou credenciais ausentes
  */
 export async function sendWhatsAppMessage(
   to: string,
-  text: string
+  text: string,
+  phoneNumberId: string
 ): Promise<void> {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID;
 
   if (!token || !phoneNumberId) {
     throw new WhatsAppSendError(
-      "WHATSAPP_ACCESS_TOKEN e WHATSAPP_PHONE_NUMBER_ID são obrigatórios"
+      "WHATSAPP_ACCESS_TOKEN e phone number ID são obrigatórios"
     );
   }
 

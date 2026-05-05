@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
+import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 
 // ---------------------------------------------------------------------------
 // Templates — 2 tentativas, tom de reabordagem cuidadosa
@@ -100,7 +101,8 @@ export async function runReactivationJob(opts?: {
     const maskedPhone = `****${lead.phone_normalized.slice(-4)}`;
 
     try {
-      await sendWhatsAppMessage(lead.phone_normalized, text);
+      const phoneId = await getStoreWhatsAppPhoneId(lead.store_id);
+      await sendWhatsAppMessage(lead.phone_normalized, text, phoneId);
 
       await supabaseAdmin.from("messages").insert({
         conversation_id: lead.conversation_id,

@@ -12,10 +12,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — variáveis usadas nas factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, mockSend } = vi.hoisted(() => ({
+const { mockFrom, mockRpc, mockSend, mockGetPhoneId } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockRpc: vi.fn(),
   mockSend: vi.fn(),
+  mockGetPhoneId: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,10 @@ vi.mock("@/lib/whatsapp-send", () => ({
       this.name = "WhatsAppSendError";
     }
   },
+}));
+
+vi.mock("@/lib/whatsapp-credentials", () => ({
+  getStoreWhatsAppPhoneId: mockGetPhoneId,
 }));
 
 // ---------------------------------------------------------------------------
@@ -87,7 +92,7 @@ const ELIGIBLE_CONV = {
 
 beforeEach(() => {
   process.env.WHATSAPP_ACCESS_TOKEN = "tok";
-  process.env.WHATSAPP_PHONE_NUMBER_ID = "123456";
+  mockGetPhoneId.mockResolvedValue("123456");
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -97,7 +102,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
   delete process.env.WHATSAPP_ACCESS_TOKEN;
-  delete process.env.WHATSAPP_PHONE_NUMBER_ID;
 });
 
 // ---------------------------------------------------------------------------
@@ -333,6 +337,46 @@ describe("runFollowUpJob — falha no envio WA", () => {
     const result = await runFollowUpJob();
 
     expect(result).toMatchObject({ processed: 2, sent: 1, failed: 1 });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runFollowUpJob — falha na busca de credencial
+// ---------------------------------------------------------------------------
+
+describe("runFollowUpJob — falha no getStoreWhatsAppPhoneId", () => {
+  it("service_error na credencial → failed=1, WA não chamado", async () => {
+    mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_CONV], error: null });
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockGetPhoneId.mockRejectedValueOnce(
+      new (class extends Error {
+        name = "WhatsAppSendError"; category = "service_error"; isRetryable = true;
+        constructor() { super("store_credential_lookup_failed"); }
+      })()
+    );
+    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));
+
+    const result = await runFollowUpJob();
+
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 });
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("auth_error na credencial → failed=1, WA não chamado", async () => {
+    mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_CONV], error: null });
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockGetPhoneId.mockRejectedValueOnce(
+      new (class extends Error {
+        name = "WhatsAppSendError"; category = "auth_error"; isRetryable = false;
+        constructor() { super("store_whatsapp_not_configured"); }
+      })()
+    );
+    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));
+
+    const result = await runFollowUpJob();
+
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 });
+    expect(mockSend).not.toHaveBeenCalled();
   });
 });
 
