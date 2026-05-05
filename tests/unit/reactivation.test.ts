@@ -12,10 +12,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, mockSend } = vi.hoisted(() => ({
+const { mockFrom, mockRpc, mockSend, mockGetPhoneId } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockRpc: vi.fn(),
   mockSend: vi.fn(),
+  mockGetPhoneId: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -34,6 +35,10 @@ vi.mock("@/lib/whatsapp-send", () => ({
       this.name = "WhatsAppSendError";
     }
   },
+}));
+
+vi.mock("@/lib/whatsapp-credentials", () => ({
+  getStoreWhatsAppPhoneId: mockGetPhoneId,
 }));
 
 // ---------------------------------------------------------------------------
@@ -86,7 +91,7 @@ const ELIGIBLE_LEAD = {
 
 beforeEach(() => {
   process.env.WHATSAPP_ACCESS_TOKEN = "tok";
-  process.env.WHATSAPP_PHONE_NUMBER_ID = "123456";
+  mockGetPhoneId.mockResolvedValue("123456");
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});
@@ -96,7 +101,6 @@ afterEach(() => {
   vi.restoreAllMocks();
   vi.clearAllMocks();
   delete process.env.WHATSAPP_ACCESS_TOKEN;
-  delete process.env.WHATSAPP_PHONE_NUMBER_ID;
 });
 
 // ---------------------------------------------------------------------------

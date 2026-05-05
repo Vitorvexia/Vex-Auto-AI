@@ -18,9 +18,10 @@ import { NextRequest } from "next/server";
 // vi.hoisted() — variáveis usadas nas factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockSend } = vi.hoisted(() => ({
+const { mockFrom, mockSend, mockGetPhoneId } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockSend: vi.fn(),
+  mockGetPhoneId: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -46,6 +47,10 @@ vi.mock("@/lib/whatsapp-send", () => ({
       this.isRetryable = retryable;
     }
   },
+}));
+
+vi.mock("@/lib/whatsapp-credentials", () => ({
+  getStoreWhatsAppPhoneId: mockGetPhoneId,
 }));
 
 // ---------------------------------------------------------------------------
@@ -97,7 +102,7 @@ function chain(overrides: Record<string, unknown> = {}): Record<string, ReturnTy
 beforeEach(() => {
   process.env.INTERNAL_API_KEY = "valid-secret-key";
   process.env.WHATSAPP_ACCESS_TOKEN = "tok";
-  process.env.WHATSAPP_PHONE_NUMBER_ID = "123456";
+  mockGetPhoneId.mockResolvedValue("123456");
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   vi.spyOn(console, "warn").mockImplementation(() => {});

@@ -77,6 +77,7 @@ vi.mock("@/lib/status", () => ({
 
 vi.mock("@/lib/whatsapp-send", () => ({
   sendWhatsAppMessage: vi.fn(),
+  PERMANENT_CATEGORIES: ["invalid_recipient", "auth_error"],
   WhatsAppSendError: class WhatsAppSendError extends Error {
     statusCode?: number; category: string; isRetryable: boolean;
     constructor(msg: string, code?: number, cat = "unknown", retryable = true) {
@@ -84,6 +85,10 @@ vi.mock("@/lib/whatsapp-send", () => ({
       this.statusCode = code; this.category = cat; this.isRetryable = retryable;
     }
   },
+}));
+
+vi.mock("@/lib/whatsapp-credentials", () => ({
+  getStoreWhatsAppPhoneId: vi.fn().mockResolvedValue("test-phone-id"),
 }));
 
 vi.mock("@/lib/lead-scoring", () => ({
@@ -183,7 +188,8 @@ describe("runAiPipeline — integração sendWhatsAppMessage", () => {
     expect(sendWhatsAppMessage).toHaveBeenCalledOnce();
     expect(sendWhatsAppMessage).toHaveBeenCalledWith(
       BASE_CTX.lead.phone_normalized,
-      BASE_RESULT.reply_text
+      BASE_RESULT.reply_text,
+      "test-phone-id"
     );
   });
 
@@ -196,7 +202,8 @@ describe("runAiPipeline — integração sendWhatsAppMessage", () => {
     const expectedText = "x".repeat(4093) + "...";
     expect(sendWhatsAppMessage).toHaveBeenCalledWith(
       BASE_CTX.lead.phone_normalized,
-      expectedText
+      expectedText,
+      "test-phone-id"
     );
   });
 
@@ -500,7 +507,8 @@ describe("runAiPipeline — PR 15: message_id e sendCategory", () => {
 
     const result = await runAiPipeline(BASE_PARAMS);
 
-    expect(result.agent_status).toBe("ok_send_failed");
+    // D2: invalid_recipient é PERMANENT_CATEGORY → ok_send_failed_permanent (não retried)
+    expect(result.agent_status).toBe("ok_send_failed_permanent");
     expect(aiLogsInsertMock).toHaveBeenCalledOnce();
     const aiLogPayload = aiLogsInsertMock.mock.calls[0][0];
     expect(aiLogPayload.last_send_error).toBe("invalid_recipient");

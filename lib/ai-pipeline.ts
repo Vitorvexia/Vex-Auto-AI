@@ -15,7 +15,8 @@ import {
   AgentOutputError,
 } from "@/lib/ai";
 import { transitionConversationStatus } from "@/lib/status";
-import { sendWhatsAppMessage, WhatsAppSendError, type SendErrorCategory } from "@/lib/whatsapp-send";
+import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES, type SendErrorCategory } from "@/lib/whatsapp-send";
+import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
 
 // ============================================================================
@@ -162,14 +163,17 @@ export async function runAiPipeline(params: {
       ? phone.slice(-4).padStart(phone.length, "*")
       : "****";
     let sendFailed = false;
+    let sendPermanent = false;
     let sendCategory: SendErrorCategory | null = null;
     try {
-      await sendWhatsAppMessage(ctx.lead.phone_normalized, replyText);
+      const phoneId = await getStoreWhatsAppPhoneId(params.storeId);
+      await sendWhatsAppMessage(ctx.lead.phone_normalized, replyText, phoneId);
       console.log(`[whatsapp-send] mensagem enviada para ${phoneMasked}`);
     } catch (sendErr) {
       sendFailed = true;
       if (sendErr instanceof WhatsAppSendError) {
         sendCategory = sendErr.category;
+        sendPermanent = PERMANENT_CATEGORIES.includes(sendErr.category);
         // Logar apenas categoria e status_code — nunca sendErr.message (pode conter PII da Meta)
         console.error(JSON.stringify({
           level: "error",
@@ -246,7 +250,11 @@ export async function runAiPipeline(params: {
       }
     }
 
-    const finalStatus: AgentStatus = sendFailed ? "ok_send_failed" : "ok";
+    const finalStatus: AgentStatus = !sendFailed
+      ? "ok"
+      : sendPermanent
+        ? "ok_send_failed_permanent"
+        : "ok_send_failed";
 
     await logAi({
       storeId: params.storeId,
