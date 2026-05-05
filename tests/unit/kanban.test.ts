@@ -4,14 +4,24 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockTransitionLead, mockRevalidate } = vi.hoisted(() => ({
+const { mockTransitionLead, mockRevalidate, mockGetServerStoreId, mockFrom } = vi.hoisted(() => ({
   mockTransitionLead: vi.fn(),
   mockRevalidate: vi.fn(),
+  mockGetServerStoreId: vi.fn(),
+  mockFrom: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
 // Mocks
 // ---------------------------------------------------------------------------
+
+vi.mock("@/lib/supabase", () => ({
+  supabaseAdmin: { from: mockFrom },
+}));
+
+vi.mock("@/lib/auth", () => ({
+  getServerStoreId: mockGetServerStoreId,
+}));
 
 vi.mock("@/lib/status", () => ({
   transitionLeadStatus: mockTransitionLead,
@@ -55,6 +65,15 @@ function makeFormData(status: string): FormData {
 beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
+  mockGetServerStoreId.mockResolvedValue("store-test");
+
+  const defaultChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "x" }, error: null }),
+    insert: vi.fn().mockResolvedValue({ error: null }),
+  };
+  mockFrom.mockReturnValue(defaultChain);
 });
 
 afterEach(() => {

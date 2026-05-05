@@ -8,7 +8,6 @@ import type { FinancingSimulation } from "@/types/domain";
 interface Props {
   leadId: string;
   conversationId: string;
-  storeId: string;
   lastSimulation: FinancingSimulation | null;
 }
 
@@ -16,7 +15,7 @@ function fmtBRL(n: number): string {
   return n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-export function FinancingSimulator({ leadId, conversationId, storeId, lastSimulation }: Props) {
+export function FinancingSimulator({ leadId, conversationId, lastSimulation }: Props) {
   const [vehiclePrice, setVehiclePrice] = useState(
     lastSimulation ? String(lastSimulation.vehicle_price) : ""
   );
@@ -50,7 +49,7 @@ export function FinancingSimulator({ leadId, conversationId, storeId, lastSimula
     }
   }, [vehiclePrice, entryValue, termMonths, monthlyRate]);
 
-  const saveAction = saveFinancingSimulation.bind(null, leadId, conversationId, storeId);
+  const saveAction = saveFinancingSimulation.bind(null, leadId, conversationId);
 
   const isValid =
     preview !== null &&

@@ -6,7 +6,11 @@
 //
 // POST /api/internal/daily-run
 // Header: x-internal-key: <INTERNAL_API_KEY>
-// Body (opcional): { "storeId": "...", "limit": 20 }
+// Body (opcional): { "limit": 20 }
+//
+// Itera todas as stores com active=true sequencialmente.
+// Falha em uma store não bloqueia as demais (try/catch por store).
+// runRetryFailedJob roda 1x global (não por store — D4).
 // ============================================================================
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,6 +18,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { runFollowUpJob } from "@/lib/follow-up";
 import { runReactivationJob } from "@/lib/reactivation";
 import { runRetryFailedJob } from "@/lib/retry-failed";
+import { supabaseAdmin } from "@/lib/supabase";
 
 export const runtime = "nodejs";
 
@@ -26,6 +31,14 @@ function verifyKey(provided: string, expected: string): boolean {
     return false;
   }
 }
+
+type StoreResult = {
+  store_id: string;
+  store_nome: string;
+  follow_up: unknown;
+  reactivation: unknown;
+  error?: string;
+};
 
 export async function POST(req: NextRequest) {
   const startMs = Date.now();
@@ -42,43 +55,90 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
-  let storeId: string | undefined;
   let limit: number | undefined;
   try {
     const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    if (typeof body.storeId === "string") storeId = body.storeId;
     if (typeof body.limit === "number") limit = body.limit;
   } catch {
     // usa defaults
   }
 
-  const results: Record<string, unknown> = {};
+  // Busca stores ativas
+  const { data: stores, error: storesError } = await supabaseAdmin
+    .from("stores")
+    .select("id, nome")
+    .eq("active", true);
 
-  try {
-    results.follow_up = await runFollowUpJob({ storeId, limit });
-  } catch (e) {
-    results.follow_up = { error: e instanceof Error ? e.message : String(e) };
+  if (storesError) {
+    console.error(JSON.stringify({
+      level: "error",
+      event: "daily_run_stores_fetch_failed",
+      error: storesError.message,
+      ts: new Date().toISOString(),
+    }));
+    return NextResponse.json({ error: "stores_fetch_failed" }, { status: 500 });
   }
 
-  try {
-    results.reactivation = await runReactivationJob({ storeId, limit });
-  } catch (e) {
-    results.reactivation = { error: e instanceof Error ? e.message : String(e) };
+  const activeStores = (stores ?? []) as { id: string; nome: string }[];
+  const storeResults: StoreResult[] = [];
+
+  // Itera sequencialmente por design (não paralelo).
+  // Risco de escala: Vercel Hobby tem limite de 10s por serverless function.
+  // Com N stores × 2 jobs sequenciais, risco real a partir de ~5 stores.
+  // Mitigação futura (B2+): batch com limite de stores ou Vercel Pro (60s).
+  // Não bloqueia MVP — lojas iniciais < 5.
+  for (const store of activeStores) {
+    const storeResult: StoreResult = {
+      store_id: store.id,
+      store_nome: store.nome,
+      follow_up: null,
+      reactivation: null,
+    };
+
+    try {
+      storeResult.follow_up = await runFollowUpJob({ storeId: store.id, limit });
+      storeResult.reactivation = await runReactivationJob({ storeId: store.id, limit });
+    } catch (e) {
+      storeResult.error = e instanceof Error ? e.message : String(e);
+      console.error(JSON.stringify({
+        level: "error",
+        event: "daily_run_store_failed",
+        store_id: store.id,
+        error: storeResult.error,
+        ts: new Date().toISOString(),
+      }));
+    }
+
+    storeResults.push(storeResult);
   }
 
-  try {
-    results.retry_failed = await runRetryFailedJob({ limit });
-  } catch (e) {
-    results.retry_failed = { error: e instanceof Error ? e.message : String(e) };
+  // runRetryFailedJob roda 1x global (não por store — D4).
+  // Pulado se não há stores ativas.
+  // Risco futuro: mensagens órfãs (store_id nulo ou store deletada) nunca
+  // recebem retry nesse modelo. Reavaliar quando houver offboarding de lojas.
+  let retryResult: unknown = null;
+  if (activeStores.length > 0) {
+    try {
+      retryResult = await runRetryFailedJob({ limit });
+    } catch (e) {
+      retryResult = { error: e instanceof Error ? e.message : String(e) };
+    }
   }
+
+  const response = {
+    ok: true,
+    stores: storeResults,
+    retry_failed: retryResult,
+    latency_ms: Date.now() - startMs,
+  };
 
   console.log(JSON.stringify({
     level: "info",
     event: "daily_run_complete",
-    results,
-    latency_ms: Date.now() - startMs,
+    store_count: activeStores.length,
+    latency_ms: response.latency_ms,
     ts: new Date().toISOString(),
   }));
 
-  return NextResponse.json({ ok: true, results, latency_ms: Date.now() - startMs });
+  return NextResponse.json(response);
 }

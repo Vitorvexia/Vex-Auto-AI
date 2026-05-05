@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { supabaseAdmin } from "@/lib/supabase";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { AuthError } from "@/lib/auth";
 import { scoreClass, relativeTime } from "@/lib/format";
 import type { Autor, ConversationStatus, LeadStatus } from "@/types/domain";
 import { MessageBubble } from "@/app/components/MessageBubble";
@@ -31,7 +32,11 @@ export default async function ConversationPage({
 }: {
   params: { id: string };
 }) {
-  const { data: conv, error } = await supabaseAdmin
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new AuthError();
+
+  const { data: conv, error } = await supabase
     .from("conversations")
     .select(
       `id, store_id, conversation_status, handoff_to, summary, iniciada_em, ultima_mensagem_em,
@@ -60,31 +65,31 @@ export default async function ConversationPage({
     { data: reactivationLogsRaw },
     { data: lastSimulationData },
   ] = await Promise.all([
-    supabaseAdmin
+    supabase
       .from("conversations")
       .select(`id, conversation_status, handoff_to, ultima_mensagem_em, leads ( nome )`)
       .neq("conversation_status", "ENCERRADA")
       .order("ultima_mensagem_em", { ascending: false })
       .limit(30),
-    supabaseAdmin
+    supabase
       .from("lead_score_events")
       .select("delta, reasons, created_at")
       .eq("lead_id", lead?.id ?? "")
       .order("created_at", { ascending: false })
       .limit(5),
-    supabaseAdmin
+    supabase
       .from("follow_up_logs")
       .select("attempt_number, status")
       .eq("lead_id", lead?.id ?? "")
       .order("attempt_number", { ascending: false })
       .limit(10),
-    supabaseAdmin
+    supabase
       .from("reactivation_logs")
       .select("attempt_number, status")
       .eq("lead_id", lead?.id ?? "")
       .order("attempt_number", { ascending: false })
       .limit(10),
-    supabaseAdmin
+    supabase
       .from("financing_simulations")
       .select("id, vehicle_price, entry_value, financed_amount, term_months, monthly_rate, monthly_payment, total_amount, provider, created_at")
       .eq("conversation_id", params.id)
@@ -208,7 +213,6 @@ export default async function ConversationPage({
       <FinancingSimulator
         leadId={lead?.id ?? ""}
         conversationId={conv.id}
-        storeId={(conv as any).store_id ?? ""}
         lastSimulation={lastSimulationData ?? null}
       />
 

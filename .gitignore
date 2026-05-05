@@ -16,3 +16,6 @@ tsconfig.tsbuildinfo
 # Dev tooling
 gstack/
 .gstack/
+
+# Supabase local state
+supabase/.temp/

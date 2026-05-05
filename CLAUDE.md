@@ -12,6 +12,16 @@ Não é CRM, ERP ou ferramenta de gestão tradicional.
 
 É o trilho por onde a economia da loja passa — orquestra a jornada de venda de ponta a ponta. Se o sistema cair, a operação comercial da loja é impactada diretamente.
 
+O Vex Auto é projetado para se tornar infraestrutura crítica — a operação da loja deve depender dele para funcionar.
+
+---
+
+## O que o Vex Auto NÃO é
+
+- não é CRM tradicional
+- não é ferramenta de gestão passiva
+- não é chatbot de atendimento
+
 ---
 
 ## Princípio Central
@@ -23,6 +33,14 @@ Existe para:
 - proteger margem
 - aumentar conversão
 - escalar operação
+
+---
+
+## IA como Agente Operacional
+
+A IA do Vex Auto não é um chatbot passivo.
+
+Ela atua como agente operacional, executando ações com impacto direto no fluxo de vendas.
 
 ---
 
@@ -268,11 +286,15 @@ Proteções: sem NaN, sem divisão por zero, sem PII.
 
 ## Roadmap
 
+> Detalhamento por fase em **Roadmap Atualizado** ao final do documento.
+
 | Fase | Status | Descrição |
 |------|--------|-----------|
-| Fase 1 | ✔ CONCLUÍDA | IA responde e acompanha |
-| Fase 2 | ✔ CONCLUÍDA | IA prioriza, dá contexto ao vendedor, ações humanas, Kanban, métricas |
-| Fase 3 | Próxima | IA orquestra toda a venda |
+| Fase 1 | ✔ CONCLUÍDA | IA responde, acompanha, deploy em produção |
+| Fase 2 | Em andamento | Multi-tenant, autenticação real, equipe |
+| Fase 3 | Planejada | UX operacional (inbox, kanban avançado, dashboard) |
+| Fase 4 | Planejada | Escala (CSV, portais, reativação em massa) |
+| Fase 5 | Planejada | Monetização (planos, ROI, relatórios) |
 
 ---
 
@@ -307,3 +329,138 @@ Proteções: sem NaN, sem divisão por zero, sem PII.
 
 > O Vex Auto não organiza dados. O Vex Auto gera resultado.  
 > Enquanto o lojista dorme, o sistema opera.
+
+---
+
+## Estado Atual do Sistema (Produção)
+
+> Última atualização: 2026-04-30
+
+### Infraestrutura
+
+- Deploy ativo na Vercel (plano Hobby)
+- Domínio configurado e operacional
+- Variáveis de ambiente configuradas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `WHATSAPP_TOKEN`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `INTERNAL_API_KEY`, `DEFAULT_STORE_ID`
+- Banco Supabase com todas as migrations aplicadas em produção
+
+### WhatsApp
+
+- Webhook Meta configurado e respondendo (`/api/whatsapp/webhook`)
+- Envio e recebimento de mensagens operacional via WhatsApp Cloud API
+- Pipeline de IA integrado ao fluxo de entrada/saída de mensagens
+- Validação HMAC ativa em todos os requests do webhook
+
+### Pipeline de IA
+
+Fluxo em produção:
+
+```
+webhook → buildAgentContext → runGuardrails → buildPrompt → runAgent
+  → messages.insert → sendWhatsAppMessage → transitionConversationStatus → leads.update → logAi
+```
+
+Garantias operacionais:
+- Persistência no banco **antes** do envio WA — falha de envio não perde mensagem
+- Idempotência via `skipped_duplicate` — reprocessamento seguro
+- Tolerância a falha de envio — `ok_send_failed` registrado, retry possível
+- Webhook sempre retorna HTTP 200 à Meta — erros internos nunca expostos
+
+### Sistema de Retry (PR 15)
+
+- Campo `message_id` (WhatsApp Message ID) salvo na tabela `messages` — previne double-send
+- Classificação de erro: `retryable` (timeout, 5xx, rede) vs `permanent` (4xx, token inválido)
+- Staleness recovery: mensagens com `ok_send_failed` há mais de X minutos são reprocessadas
+- `agent_status` estendido:
+
+| Status | Significado |
+|--------|-------------|
+| `ok_send_failed` | Falha no envio, elegível para retry |
+| `ok_send_failed_retrying` | Retry em andamento |
+| `ok_send_failed_permanent` | Erro permanente, sem novo retry |
+
+### Automação
+
+- Follow-up automático operacional — cadência 2h → 24h → 72h
+- Reativação de leads operacional — 14d → 30d sem resposta
+- Cron consolidado em `/api/internal/daily-run` (compatível com Vercel Hobby — máx 1 execução/dia)
+- Proteção por `INTERNAL_API_KEY` em todos os endpoints internos
+
+### Segurança
+
+- Validação HMAC em todos os requests do webhook Meta
+- Telefones mascarados nos logs (últimos 4 dígitos) — conformidade LGPD
+- Logs sem PII
+- Endpoints internos protegidos por `INTERNAL_API_KEY`
+
+### Frontend
+
+- Login funcional (autenticação via Supabase Auth)
+- Páginas operacionais: leads, conversations, kanban, analytics
+- Observação: UX ainda não está em versão final — fluxos funcionam, design em refinamento
+
+---
+
+## Roadmap Atualizado
+
+> Substitui a tabela de roadmap anterior. Detalhamento por fase.
+
+### Fase 1 — Validação Real ✔ CONCLUÍDA
+
+- WhatsApp real integrado e validado via Meta Cloud API
+- Fluxo completo testado e confirmado: lead entra → IA responde → mensagem enviada
+- Deploy em produção com env vars reais
+
+### Fase 2 — Base Estrutural (Em andamento)
+
+- Multi-tenant: isolamento por `store_id` em todas as queries
+- Autenticação real de usuários (Supabase Auth integrada ao `store_id`)
+- Equipe: `assigned_to` funcional, gestão de vendedores por loja
+
+### Fase 3 — UX Operacional
+
+- Inbox estilo WhatsApp (conversa em tempo real, histórico completo)
+- Kanban com drag-and-drop e filtros avançados
+- Dashboard operacional com métricas em tempo real
+
+### Fase 4 — Escala
+
+- Importação de base via CSV (leads e veículos)
+- Integrações com portais de veículos (OLX Autos, WebMotors, iCarros)
+- Reativação em massa com controle de cadência e limites LGPD
+
+### Fase 5 — Monetização
+
+- Planos e cobrança por loja (Stripe ou equivalente)
+- Métricas de ROI por loja: faturamento gerado, conversão, CAC
+- Relatórios exportáveis para gestão
+
+---
+
+## Status do Produto
+
+O Vex Auto já está operando em produção com:
+
+- envio e recebimento real via WhatsApp (Meta Cloud API)
+- pipeline de IA ativo (Claude via Anthropic API)
+- automação de follow-up e reativação operacional
+- sistema de retry com classificação de erro e prevenção de double-send
+- infraestrutura estável (Vercel + Supabase)
+- login funcional e páginas principais operacionais
+
+O sistema já executa partes reais da operação comercial, reduzindo dependência humana e aumentando velocidade de resposta e conversão.
+
+---
+
+## Princípio de Execução
+
+Toda nova feature deve responder:
+
+> "Isso aumenta faturamento, margem ou conversão?"
+
+Se não aumentar, não é prioridade.
+
+---
+
+## Objetivo Final
+
+O objetivo final do sistema é se tornar indispensável — a operação comercial da loja deve depender dele para funcionar.

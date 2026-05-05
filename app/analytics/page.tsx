@@ -1,6 +1,9 @@
 import Link from "next/link";
-import { supabaseAdmin } from "@/lib/supabase";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { AuthError } from "@/lib/auth";
 import { calculateOperationalMetrics } from "@/lib/metrics";
+
+type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 const WINDOW_DAYS = 30;
 
@@ -19,29 +22,29 @@ function mins(avg: number): string {
   return avg < 1 ? `${Math.round(avg * 60)}s` : `${avg.toFixed(1)} min`;
 }
 
-async function fetchMetrics() {
+async function fetchMetrics(supabase: SupabaseServerClient) {
   const since = windowStart();
 
   const [leadsRes, allLeadsRes, convsRes, msgsRes, followRes, reactRes] = await Promise.all([
-    supabaseAdmin
+    supabase
       .from("leads")
       .select("lead_status, created_at")
       .gte("created_at", since),
-    supabaseAdmin
+    supabase
       .from("leads")
       .select("lead_status, created_at"),
-    supabaseAdmin
+    supabase
       .from("conversations")
       .select("id, handoff_to, lead_id"),
-    supabaseAdmin
+    supabase
       .from("messages")
       .select("conversation_id, direcao, autor, received_at, mensagem")
       .gte("received_at", since),
-    supabaseAdmin
+    supabase
       .from("follow_up_logs")
       .select("lead_id, status, logged_at, conversation_id")
       .gte("logged_at", since),
-    supabaseAdmin
+    supabase
       .from("reactivation_logs")
       .select("lead_id, status, logged_at, conversation_id")
       .gte("logged_at", since),
@@ -64,7 +67,11 @@ type MetricCard = {
 };
 
 export default async function AnalyticsPage() {
-  const m = await fetchMetrics();
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new AuthError();
+
+  const m = await fetchMetrics(supabase);
 
   const convRate = m.total_leads > 0
     ? pct(m.closed_leads / m.total_leads)
