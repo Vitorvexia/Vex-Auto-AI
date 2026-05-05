@@ -132,4 +132,14 @@ describe("getStoreWhatsAppPhoneId", () => {
     expect(result).toBe(PHONE_ID_DB); // banco tem precedência
     expect(result).not.toBe(PHONE_ID_ENV);
   });
+
+  it("string vazia no banco ('') lança auth_error — empty string é tratado como ausente", async () => {
+    mockStoreQuery({ data: { whatsapp_phone_number_id: "" }, error: null });
+
+    await expect(getStoreWhatsAppPhoneId(STORE_ID)).rejects.toMatchObject({
+      name: "WhatsAppSendError",
+      category: "auth_error",
+      isRetryable: false,
+    });
+  });
 });

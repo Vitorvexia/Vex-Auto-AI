@@ -320,6 +320,46 @@ describe("runReactivationJob — falha no envio WA", () => {
 });
 
 // ---------------------------------------------------------------------------
+// runReactivationJob — falha na busca de credencial
+// ---------------------------------------------------------------------------
+
+describe("runReactivationJob — falha no getStoreWhatsAppPhoneId", () => {
+  it("service_error na credencial → failed=1, WA não chamado", async () => {
+    mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockGetPhoneId.mockRejectedValueOnce(
+      new (class extends Error {
+        name = "WhatsAppSendError"; category = "service_error"; isRetryable = true;
+        constructor() { super("store_credential_lookup_failed"); }
+      })()
+    );
+    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));
+
+    const result = await runReactivationJob();
+
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 });
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+
+  it("auth_error na credencial → failed=1, WA não chamado", async () => {
+    mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockGetPhoneId.mockRejectedValueOnce(
+      new (class extends Error {
+        name = "WhatsAppSendError"; category = "auth_error"; isRetryable = false;
+        constructor() { super("store_whatsapp_not_configured"); }
+      })()
+    );
+    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));
+
+    const result = await runReactivationJob();
+
+    expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 });
+    expect(mockSend).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // runReactivationJob — idempotência (23505)
 // ---------------------------------------------------------------------------
 

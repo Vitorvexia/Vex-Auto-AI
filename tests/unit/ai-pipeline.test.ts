@@ -88,7 +88,7 @@ vi.mock("@/lib/whatsapp-send", () => ({
 }));
 
 vi.mock("@/lib/whatsapp-credentials", () => ({
-  getStoreWhatsAppPhoneId: vi.fn().mockResolvedValue("test-phone-id"),
+  getStoreWhatsAppPhoneId: vi.fn(),
 }));
 
 vi.mock("@/lib/lead-scoring", () => ({
@@ -107,6 +107,7 @@ import { runAgent, AgentTimeoutError, AgentParseError, AgentOutputError } from "
 import { transitionConversationStatus } from "@/lib/status";
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage, WhatsAppSendError } from "@/lib/whatsapp-send";
+import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { calculateLeadScore } from "@/lib/lead-scoring";
 
 // ---------------------------------------------------------------------------
@@ -163,6 +164,7 @@ beforeEach(() => {
   vi.mocked(buildPrompt).mockReturnValue({ system: "sys", messages: [] } as any);
   vi.mocked(runAgent).mockResolvedValue(BASE_RESULT as any);
   vi.mocked(sendWhatsAppMessage).mockResolvedValue(undefined);
+  vi.mocked(getStoreWhatsAppPhoneId).mockResolvedValue("test-phone-id");
   vi.mocked(calculateLeadScore).mockReturnValue(DEFAULT_SCORE_RESULT as any);
   process.env.ANTHROPIC_MODEL = "claude-haiku-4-5";
 });
@@ -228,6 +230,28 @@ describe("runAiPipeline — integração sendWhatsAppMessage", () => {
 
     expect(result.agent_status).toBe("ok_send_failed");
     expect(result.error).toBeUndefined();
+  });
+
+  it("getStoreWhatsAppPhoneId service_error → ok_send_failed (retryable)", async () => {
+    vi.mocked(getStoreWhatsAppPhoneId).mockRejectedValueOnce(
+      new WhatsAppSendError("store_credential_lookup_failed", undefined, "service_error", true)
+    );
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("ok_send_failed");
+    expect(sendWhatsAppMessage).not.toHaveBeenCalled();
+  });
+
+  it("getStoreWhatsAppPhoneId auth_error → ok_send_failed_permanent (não retried)", async () => {
+    vi.mocked(getStoreWhatsAppPhoneId).mockRejectedValueOnce(
+      new WhatsAppSendError("store_whatsapp_not_configured", undefined, "auth_error", false)
+    );
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("ok_send_failed_permanent");
+    expect(sendWhatsAppMessage).not.toHaveBeenCalled();
   });
 
   it("retorna skipped_handoff sem chamar sendWhatsAppMessage em human_handoff", async () => {
