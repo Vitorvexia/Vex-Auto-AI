@@ -39,7 +39,7 @@ function IconLogout() {
   );
 }
 
-export function Header() {
+export function Header({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
   const [dropOpen, setDropOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
@@ -99,6 +99,14 @@ export function Header() {
           >
             Analytics
           </Link>
+          {isAdmin && (
+            <Link
+              href="/admin"
+              className={`header-nav-link${pathname.startsWith("/admin") ? " active" : ""}`}
+            >
+              Admin
+            </Link>
+          )}
         </nav>
 
         <div className="header-user-wrap" ref={dropRef}>

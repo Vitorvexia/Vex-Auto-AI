@@ -29,7 +29,7 @@ vi.mock("next/navigation", () => ({
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { assertSuperAdmin } from "@/lib/admin-auth";
+import { assertSuperAdmin, isSuperAdmin } from "@/lib/admin-auth";
 
 // ---------------------------------------------------------------------------
 // Constantes
@@ -61,6 +61,45 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 // Testes
 // ---------------------------------------------------------------------------
+
+describe("isSuperAdmin", () => {
+  it("email na ADMIN_EMAILS → true", () => {
+    process.env.ADMIN_EMAILS = ADMIN_EMAIL;
+    expect(isSuperAdmin(ADMIN_EMAIL)).toBe(true);
+  });
+
+  it("email NOT na ADMIN_EMAILS → false", () => {
+    process.env.ADMIN_EMAILS = ADMIN_EMAIL;
+    expect(isSuperAdmin("intruso@x.com")).toBe(false);
+  });
+
+  it("ADMIN_EMAILS vazia → false", () => {
+    process.env.ADMIN_EMAILS = "";
+    expect(isSuperAdmin(ADMIN_EMAIL)).toBe(false);
+  });
+
+  it("email undefined → false", () => {
+    process.env.ADMIN_EMAILS = ADMIN_EMAIL;
+    expect(isSuperAdmin(undefined)).toBe(false);
+  });
+
+  it("email null → false", () => {
+    process.env.ADMIN_EMAILS = ADMIN_EMAIL;
+    expect(isSuperAdmin(null)).toBe(false);
+  });
+
+  it("ADMIN_EMAILS com espaços → trim, autoriza", () => {
+    process.env.ADMIN_EMAILS = `  ${ADMIN_EMAIL}  `;
+    expect(isSuperAdmin(ADMIN_EMAIL)).toBe(true);
+  });
+
+  it("múltiplos emails → ambos autorizados", () => {
+    const second = "outro@gmail.com";
+    process.env.ADMIN_EMAILS = `${ADMIN_EMAIL}, ${second}`;
+    expect(isSuperAdmin(ADMIN_EMAIL)).toBe(true);
+    expect(isSuperAdmin(second)).toBe(true);
+  });
+});
 
 describe("assertSuperAdmin", () => {
   it("email na ADMIN_EMAILS → autorizado, retorna user.id", async () => {

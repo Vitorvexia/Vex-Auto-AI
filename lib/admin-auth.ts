@@ -1,6 +1,18 @@
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 
+export function getAdminEmails(): string[] {
+  return (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim())
+    .filter(Boolean);
+}
+
+export function isSuperAdmin(email: string | undefined | null): boolean {
+  if (!email) return false;
+  return getAdminEmails().includes(email);
+}
+
 export async function assertSuperAdmin(): Promise<string> {
   const supabase = await createSupabaseServerClient();
   const {
@@ -10,12 +22,7 @@ export async function assertSuperAdmin(): Promise<string> {
 
   if (error || !user) redirect("/login");
 
-  const adminEmails = (process.env.ADMIN_EMAILS ?? "")
-    .split(",")
-    .map((e) => e.trim())
-    .filter(Boolean);
-
-  if (!adminEmails.includes(user.email ?? "")) {
+  if (!isSuperAdmin(user.email)) {
     redirect("/leads");
   }
 

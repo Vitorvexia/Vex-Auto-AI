@@ -1,6 +1,8 @@
 import "./globals.css";
 import { Exo_2, Barlow } from "next/font/google";
 import { Header } from "@/app/components/Header";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { isSuperAdmin } from "@/lib/admin-auth";
 
 const exo2 = Exo_2({
   subsets: ["latin"],
@@ -27,15 +29,20 @@ export const metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
   return (
     <html lang="pt-BR" className={`${exo2.variable} ${barlow.variable}`}>
       <body>
-        <Header />
+        <Header isAdmin={isSuperAdmin(user?.email)} />
         {children}
       </body>
     </html>
