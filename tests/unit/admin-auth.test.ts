@@ -115,4 +115,21 @@ describe("assertSuperAdmin", () => {
     await expect(assertSuperAdmin()).rejects.toThrow("redirect:/login");
     expect(mockRedirect).toHaveBeenCalledWith("/login");
   });
+
+  it("ADMIN_EMAILS com múltiplos emails → ambos autorizados", async () => {
+    const secondEmail = "outro@gmail.com";
+    process.env.ADMIN_EMAILS = `${ADMIN_EMAIL}, ${secondEmail}`;
+
+    const result = await assertSuperAdmin();
+
+    expect(result).toBe(USER_ID);
+    expect(mockRedirect).not.toHaveBeenCalled();
+
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "other-id", email: secondEmail } },
+      error: null,
+    });
+    const result2 = await assertSuperAdmin();
+    expect(result2).toBe("other-id");
+  });
 });

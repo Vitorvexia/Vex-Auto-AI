@@ -134,6 +134,15 @@ describe("createStore", () => {
 
     expect(mockRevalidatePath).toHaveBeenCalledWith("/admin");
   });
+
+  it("assertSuperAdmin rejeita → erro propagado, sem insert", async () => {
+    mockAssertSuperAdmin.mockRejectedValue(new Error("redirect:/leads"));
+
+    await expect(
+      createStore(makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" }))
+    ).rejects.toThrow("redirect:/leads");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -188,6 +197,28 @@ describe("updateStore", () => {
     );
 
     expect(result).toEqual({ error: expect.stringContaining("formato inválido") });
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("DB error no update → propaga error.message", async () => {
+    const c = chain({ eq: { data: null, error: { message: "update failed" } } });
+    c.update.mockReturnValue(c);
+    mockFrom.mockReturnValue(c);
+
+    const result = await updateStore(
+      "s-1",
+      makeForm({ nome: "L", whatsapp_numero: "+5511999990001" })
+    );
+
+    expect(result).toEqual({ error: "update failed" });
+  });
+
+  it("assertSuperAdmin rejeita → erro propagado, sem update", async () => {
+    mockAssertSuperAdmin.mockRejectedValue(new Error("redirect:/leads"));
+
+    await expect(
+      updateStore("s-1", makeForm({ nome: "L", whatsapp_numero: "+5511999990001" }))
+    ).rejects.toThrow("redirect:/leads");
     expect(mockFrom).not.toHaveBeenCalled();
   });
 });
@@ -285,7 +316,7 @@ describe("createStoreUser", () => {
       chain({ insert: { data: null, error: { message: "FK violation" } } })
     );
     mockDeleteUser.mockRejectedValue(new Error("network error"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error");
 
     const result = await createStoreUser(
       makeForm({ email: "u@x.com", nome: "User", role: "admin", store_id: "s-1" })
@@ -311,5 +342,26 @@ describe("createStoreUser", () => {
 
     expect(result).toMatchObject({ success: true });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/admin");
+  });
+
+  it("role inválido → retorna error sem invite", async () => {
+    const result = await createStoreUser(
+      makeForm({ email: "u@x.com", nome: "User", role: "superadmin", store_id: "s-1" })
+    );
+
+    expect(result).toEqual({ error: expect.stringContaining("role inválido") });
+    expect(mockInvite).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("assertSuperAdmin rejeita → erro propagado, sem invite", async () => {
+    mockAssertSuperAdmin.mockRejectedValue(new Error("redirect:/leads"));
+
+    await expect(
+      createStoreUser(
+        makeForm({ email: "u@x.com", nome: "User", role: "admin", store_id: "s-1" })
+      )
+    ).rejects.toThrow("redirect:/leads");
+    expect(mockInvite).not.toHaveBeenCalled();
   });
 });

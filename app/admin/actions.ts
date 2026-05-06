@@ -69,6 +69,9 @@ export async function createStoreUser(formData: FormData) {
   if (!email || !nome || !storeId)
     return { error: "email, nome e store_id são obrigatórios" };
 
+  if (!["admin", "vendedor"].includes(role))
+    return { error: "role inválido: use 'admin' ou 'vendedor'" };
+
   const { data: authData, error: authErr } =
     await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
       data: { nome },
@@ -89,7 +92,7 @@ export async function createStoreUser(formData: FormData) {
     await supabaseAdmin.auth.admin
       .deleteUser(authData.user.id)
       .catch(() => {
-        console.error("rollback_failed: orphan auth user", authData.user.id);
+        console.error("rollback_failed: orphan auth user", authData.user.id.slice(-8));
       });
     return { error: userErr.message };
   }
