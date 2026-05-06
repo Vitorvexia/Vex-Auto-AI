@@ -52,5 +52,6 @@ export const config = {
     "/equipe/:path*",
     "/analytics/:path*",
     "/inicio/:path*",
+    "/admin/:path*",
   ],
 };
