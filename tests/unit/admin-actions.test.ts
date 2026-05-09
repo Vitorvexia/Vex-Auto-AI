@@ -43,7 +43,7 @@ vi.mock("next/cache", () => ({
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { createStore, updateStore, createStoreUser, createStoreUserDirect } from "@/app/admin/actions";
+import { createStore, updateStore, createStoreUser, createStoreUserDirect, type CreateStoreState } from "@/app/admin/actions";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -93,16 +93,18 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("createStore", () => {
+  const prev: CreateStoreState = null;
+
   it("assertSuperAdmin chamado antes do insert", async () => {
     mockFrom.mockReturnValue(chain({ insert: { data: null, error: null } }));
 
-    await createStore(makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" }));
+    await createStore(prev, makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" }));
 
     expect(mockAssertSuperAdmin).toHaveBeenCalledTimes(1);
   });
 
   it("nome ausente → retorna error, sem insert", async () => {
-    const result = await createStore(makeForm({ whatsapp_numero: "+5511999990001" }));
+    const result = await createStore(prev, makeForm({ whatsapp_numero: "+5511999990001" }));
 
     expect(result).toEqual({ error: "nome e whatsapp_numero são obrigatórios" });
     expect(mockFrom).not.toHaveBeenCalled();
@@ -110,6 +112,7 @@ describe("createStore", () => {
 
   it("whatsapp_numero formato inválido → retorna error sem insert", async () => {
     const result = await createStore(
+      prev,
       makeForm({ nome: "Loja X", whatsapp_numero: "11999990001" })
     );
 
@@ -123,17 +126,19 @@ describe("createStore", () => {
     );
 
     const result = await createStore(
+      prev,
       makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" })
     );
 
     expect(result).toEqual({ error: "duplicate key" });
   });
 
-  it("sucesso → revalidatePath('/admin') chamado", async () => {
+  it("sucesso → revalidatePath('/admin') chamado e retorna { success: true }", async () => {
     mockFrom.mockReturnValue(chain({ insert: { data: null, error: null } }));
 
-    await createStore(makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" }));
+    const result = await createStore(prev, makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" }));
 
+    expect(result).toEqual({ success: true });
     expect(mockRevalidatePath).toHaveBeenCalledWith("/admin");
   });
 
@@ -141,7 +146,7 @@ describe("createStore", () => {
     mockAssertSuperAdmin.mockRejectedValue(new Error("redirect:/leads"));
 
     await expect(
-      createStore(makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" }))
+      createStore(prev, makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" }))
     ).rejects.toThrow("redirect:/leads");
     expect(mockFrom).not.toHaveBeenCalled();
   });

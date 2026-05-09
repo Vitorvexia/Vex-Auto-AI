@@ -4,6 +4,8 @@ import { revalidatePath } from "next/cache";
 import { assertSuperAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
+export type CreateStoreState = { success: true } | { error: string } | null;
+
 export type CreateUserState =
   | { success: true; password: string; email: string }
   | { error: string }
@@ -14,7 +16,10 @@ export type CreateUserState =
 
 const E164_REGEX = /^\+[1-9][0-9]{6,14}$/;
 
-export async function createStore(formData: FormData) {
+export async function createStore(
+  _prev: CreateStoreState,
+  formData: FormData
+): Promise<CreateStoreState> {
   await assertSuperAdmin();
 
   const nome = ((formData.get("nome") as string) ?? "").trim();
@@ -36,6 +41,7 @@ export async function createStore(formData: FormData) {
 
   if (error) return { error: error.message };
   revalidatePath("/admin");
+  return { success: true };
 }
 
 export async function updateStore(storeId: string, formData: FormData) {

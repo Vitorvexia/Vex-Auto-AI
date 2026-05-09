@@ -1,7 +1,8 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { assertSuperAdmin } from "@/lib/admin-auth";
-import { createStore, updateStore, createStoreUser } from "./actions";
+import { updateStore, createStoreUser } from "./actions";
 import { DirectUserForm } from "./DirectUserForm";
+import { CreateStoreForm } from "./CreateStoreForm";
 
 // Next.js allows Server Actions to return values (accessible via useActionState),
 // but React's form action type only accepts Promise<void>. Cast at call site.
@@ -38,43 +39,7 @@ export default async function AdminPage() {
           </summary>
           <div className="absolute right-0 mt-2 w-80 bg-white border rounded-lg shadow-lg p-4 z-10">
             <h3 className="font-semibold mb-3">Nova Loja</h3>
-            <form action={createStore as unknown as FormAction} className="space-y-3">
-              <div>
-                <label className="block text-xs font-medium mb-1">Nome</label>
-                <input
-                  name="nome"
-                  required
-                  className="w-full border rounded px-2 py-1 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  WhatsApp Número (E.164)
-                </label>
-                <input
-                  name="whatsapp_numero"
-                  placeholder="+5511999990001"
-                  required
-                  className="w-full border rounded px-2 py-1 text-sm"
-                />
-              </div>
-              <div>
-                <label className="block text-xs font-medium mb-1">
-                  Phone Number ID
-                </label>
-                <input
-                  name="whatsapp_phone_number_id"
-                  placeholder="opcional"
-                  className="w-full border rounded px-2 py-1 text-sm"
-                />
-              </div>
-              <button
-                type="submit"
-                className="w-full bg-black text-white rounded py-1.5 text-sm font-medium"
-              >
-                Criar Loja
-              </button>
-            </form>
+            <CreateStoreForm />
           </div>
         </details>
       </div>
