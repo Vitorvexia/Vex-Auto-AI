@@ -2,8 +2,9 @@
 
 import Image from "next/image";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useState, useRef, useEffect } from "react";
+import { createBrowserClient } from "@supabase/ssr";
 
 function IconUser() {
   return (
@@ -41,8 +42,18 @@ function IconLogout() {
 
 export function Header({ isAdmin = false }: { isAdmin?: boolean }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [dropOpen, setDropOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+
+  async function handleLogout() {
+    const supabase = createBrowserClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    );
+    await supabase.auth.signOut();
+    router.push("/login");
+  }
 
   useEffect(() => {
     if (!dropOpen) return;
@@ -127,7 +138,10 @@ export function Header({ isAdmin = false }: { isAdmin?: boolean }) {
                 <IconMail /> Contato
               </a>
               <div className="header-dropdown-sep" />
-              <button className="header-dropdown-item danger" onClick={() => setDropOpen(false)}>
+              <button
+                className="header-dropdown-item danger"
+                onClick={() => { setDropOpen(false); handleLogout(); }}
+              >
                 <IconLogout /> Sair
               </button>
             </div>
