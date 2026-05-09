@@ -4,13 +4,13 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 export function getAdminEmails(): string[] {
   return (process.env.ADMIN_EMAILS ?? "")
     .split(",")
-    .map((e) => e.trim())
+    .map((e) => e.trim().toLowerCase())
     .filter(Boolean);
 }
 
 export function isSuperAdmin(email: string | undefined | null): boolean {
   if (!email) return false;
-  return getAdminEmails().includes(email);
+  return getAdminEmails().includes(email.toLowerCase());
 }
 
 export async function assertSuperAdmin(): Promise<string> {
@@ -23,7 +23,7 @@ export async function assertSuperAdmin(): Promise<string> {
   if (error || !user) redirect("/login");
 
   if (!isSuperAdmin(user.email)) {
-    redirect("/leads");
+    redirect("/acesso-restrito");
   }
 
   return user.id;

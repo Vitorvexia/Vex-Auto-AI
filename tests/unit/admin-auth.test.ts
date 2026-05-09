@@ -99,6 +99,21 @@ describe("isSuperAdmin", () => {
     expect(isSuperAdmin(ADMIN_EMAIL)).toBe(true);
     expect(isSuperAdmin(second)).toBe(true);
   });
+
+  it("email em uppercase → autorizado (ADMIN_EMAILS em lowercase)", () => {
+    process.env.ADMIN_EMAILS = ADMIN_EMAIL; // lowercase
+    expect(isSuperAdmin(ADMIN_EMAIL.toUpperCase())).toBe(true);
+  });
+
+  it("ADMIN_EMAILS em uppercase → autorizado (email em lowercase)", () => {
+    process.env.ADMIN_EMAILS = ADMIN_EMAIL.toUpperCase();
+    expect(isSuperAdmin(ADMIN_EMAIL)).toBe(true);
+  });
+
+  it("ambos uppercase → autorizado", () => {
+    process.env.ADMIN_EMAILS = ADMIN_EMAIL.toUpperCase();
+    expect(isSuperAdmin(ADMIN_EMAIL.toUpperCase())).toBe(true);
+  });
 });
 
 describe("assertSuperAdmin", () => {
@@ -109,21 +124,21 @@ describe("assertSuperAdmin", () => {
     expect(mockRedirect).not.toHaveBeenCalled();
   });
 
-  it("email NOT na ADMIN_EMAILS → redirect('/leads')", async () => {
+  it("email NOT na ADMIN_EMAILS → redirect('/acesso-restrito')", async () => {
     mockGetUser.mockResolvedValue({
       data: { user: { id: USER_ID, email: "intruso@x.com" } },
       error: null,
     });
 
-    await expect(assertSuperAdmin()).rejects.toThrow("redirect:/leads");
-    expect(mockRedirect).toHaveBeenCalledWith("/leads");
+    await expect(assertSuperAdmin()).rejects.toThrow("redirect:/acesso-restrito");
+    expect(mockRedirect).toHaveBeenCalledWith("/acesso-restrito");
   });
 
   it("ADMIN_EMAILS vazia → todos bloqueados", async () => {
     process.env.ADMIN_EMAILS = "";
 
-    await expect(assertSuperAdmin()).rejects.toThrow("redirect:/leads");
-    expect(mockRedirect).toHaveBeenCalledWith("/leads");
+    await expect(assertSuperAdmin()).rejects.toThrow("redirect:/acesso-restrito");
+    expect(mockRedirect).toHaveBeenCalledWith("/acesso-restrito");
   });
 
   it("ADMIN_EMAILS com espaços extras → trim, autoriza", async () => {

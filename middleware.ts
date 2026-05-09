@@ -41,6 +41,20 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
+  const path = request.nextUrl.pathname;
+  const isAdminRoute = path === "/admin" || path.startsWith("/admin/");
+  if (isAdminRoute) {
+    // Inlined — cannot import lib/admin-auth.ts here (Edge Runtime, no Node.js APIs).
+    const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+      .split(",")
+      .map((e) => e.trim().toLowerCase())
+      .filter(Boolean);
+    const userEmail = user.email?.toLowerCase() ?? "";
+    if (!adminEmails.includes(userEmail)) {
+      return NextResponse.redirect(new URL("/acesso-restrito", request.url));
+    }
+  }
+
   return response;
 }
 
@@ -52,6 +66,7 @@ export const config = {
     "/equipe/:path*",
     "/analytics/:path*",
     "/inicio/:path*",
+    "/admin",
     "/admin/:path*",
   ],
 };
