@@ -316,6 +316,32 @@ Proteções: sem NaN, sem divisão por zero, sem PII.
 
 ---
 
+## Fluxo Obrigatório antes de Push
+
+Todo `git push` executa automaticamente via **Husky v9** (`pre-push` hook):
+
+```sh
+npm run lint        # ESLint — zero warnings/errors
+npm run typecheck   # tsc --noEmit
+npm run test        # vitest run (unit + integration)
+```
+
+Push é bloqueado se qualquer comando falhar.
+
+### Setup para novo dev
+
+```sh
+git clone <repo>
+npm install   # prepare script roda `husky` automaticamente
+# hooks ativos — nenhum passo extra
+```
+
+### CI (GitHub Actions)
+
+`npm ci` detecta `CI=true` → Husky não instala hooks → sem conflito. CI roda `npm run test:unit` separadamente no workflow.
+
+---
+
 ## Regras para Claude neste Projeto
 
 1. Tratar este documento como fonte de verdade absoluta
@@ -324,6 +350,7 @@ Proteções: sem NaN, sem divisão por zero, sem PII.
 4. Guardrails são inegociáveis — nunca propor código que os viole
 5. Prioridade: faturamento e margem acima de qualquer outra métrica
 6. Arquitetura sempre modular e orientada a fluxo
+7. Antes de qualquer push: lint + typecheck + vitest run devem passar (hook automático via Husky)
 
 ---
 
