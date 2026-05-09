@@ -4,6 +4,11 @@ import { revalidatePath } from "next/cache";
 import { assertSuperAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 
+export type CreateUserState =
+  | { success: true; password: string; email: string }
+  | { error: string }
+  | null;
+
 // assertSuperAdmin() é chamada no topo de cada action — Server Actions não herdam
 // autenticação do Server Component que as invoca.
 
@@ -99,4 +104,55 @@ export async function createStoreUser(formData: FormData) {
 
   revalidatePath("/admin");
   return { success: true, message: `Convite enviado para ${email}` };
+}
+
+export async function createStoreUserDirect(
+  storeId: string,
+  _prev: CreateUserState,
+  formData: FormData
+): Promise<CreateUserState> {
+  await assertSuperAdmin();
+
+  const email = ((formData.get("email") as string) ?? "").trim();
+  const nome = ((formData.get("nome") as string) ?? "").trim();
+  const role = formData.get("role") as "admin" | "vendedor";
+
+  if (!email || !nome || !storeId)
+    return { error: "email, nome e store_id são obrigatórios" };
+
+  if (!["admin", "vendedor"].includes(role))
+    return { error: "role inválido: use 'admin' ou 'vendedor'" };
+
+  const { randomBytes } = await import("crypto");
+  const password = randomBytes(12).toString("base64url").slice(0, 16);
+
+  const { data: authData, error: authErr } =
+    await supabaseAdmin.auth.admin.createUser({
+      email,
+      password,
+      email_confirm: true,
+      user_metadata: { nome },
+    });
+
+  if (authErr) return { error: authErr.message };
+  if (!authData?.user?.id) return { error: "create_user_failed_no_id" };
+
+  const { error: userErr } = await supabaseAdmin.from("users").insert({
+    id: authData.user.id,
+    store_id: storeId,
+    nome,
+    role,
+  });
+
+  if (userErr) {
+    await supabaseAdmin.auth.admin
+      .deleteUser(authData.user.id)
+      .catch(() => {
+        console.error("rollback_failed: orphan auth user", authData.user.id.slice(-8));
+      });
+    return { error: userErr.message };
+  }
+
+  revalidatePath("/admin");
+  return { success: true, password, email };
 }

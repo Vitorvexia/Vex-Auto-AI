@@ -4,10 +4,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — refs compartilhados nas factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockInvite, mockDeleteUser, mockAssertSuperAdmin, mockRevalidatePath } =
+const { mockFrom, mockInvite, mockCreateUser, mockDeleteUser, mockAssertSuperAdmin, mockRevalidatePath } =
   vi.hoisted(() => ({
     mockFrom: vi.fn(),
     mockInvite: vi.fn(),
+    mockCreateUser: vi.fn(),
     mockDeleteUser: vi.fn(),
     mockAssertSuperAdmin: vi.fn(),
     mockRevalidatePath: vi.fn(),
@@ -23,6 +24,7 @@ vi.mock("@/lib/supabase", () => ({
     auth: {
       admin: {
         inviteUserByEmail: mockInvite,
+        createUser: mockCreateUser,
         deleteUser: mockDeleteUser,
       },
     },
@@ -41,7 +43,7 @@ vi.mock("next/cache", () => ({
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { createStore, updateStore, createStoreUser } from "@/app/admin/actions";
+import { createStore, updateStore, createStoreUser, createStoreUserDirect } from "@/app/admin/actions";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -363,5 +365,102 @@ describe("createStoreUser", () => {
       )
     ).rejects.toThrow("redirect:/leads");
     expect(mockInvite).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// createStoreUserDirect
+// ---------------------------------------------------------------------------
+
+describe("createStoreUserDirect", () => {
+  it("sucesso → retorna { success, email, password } e revalida /admin", async () => {
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "auth-id" } },
+      error: null,
+    });
+    mockFrom.mockReturnValue(chain({ insert: { data: null, error: null } }));
+
+    const result = await createStoreUserDirect(
+      "s-1",
+      null,
+      makeForm({ email: "u@x.com", nome: "User", role: "admin" })
+    );
+
+    expect(result).toEqual({
+      success: true,
+      email: "u@x.com",
+      password: expect.any(String),
+    });
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/admin");
+  });
+
+  it("createUser auth error → retorna error, sem insert nem rollback", async () => {
+    mockCreateUser.mockResolvedValue({
+      data: null,
+      error: { message: "email already taken" },
+    });
+
+    const result = await createStoreUserDirect(
+      "s-1",
+      null,
+      makeForm({ email: "u@x.com", nome: "User", role: "admin" })
+    );
+
+    expect(result).toEqual({ error: "email already taken" });
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockDeleteUser).not.toHaveBeenCalled();
+  });
+
+  it("insert falha → rollback (deleteUser chamado), retorna error", async () => {
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "auth-id" } },
+      error: null,
+    });
+    mockFrom.mockReturnValue(
+      chain({ insert: { data: null, error: { message: "FK violation" } } })
+    );
+    mockDeleteUser.mockResolvedValue({ data: null, error: null });
+
+    const result = await createStoreUserDirect(
+      "s-1",
+      null,
+      makeForm({ email: "u@x.com", nome: "User", role: "admin" })
+    );
+
+    expect(result).toEqual({ error: "FK violation" });
+    expect(mockDeleteUser).toHaveBeenCalledWith("auth-id");
+  });
+
+  it("sucesso → password não aparece em nenhum log de console", async () => {
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "auth-id" } },
+      error: null,
+    });
+    mockFrom.mockReturnValue(chain({ insert: { data: null, error: null } }));
+    const logSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await createStoreUserDirect(
+      "s-1",
+      null,
+      makeForm({ email: "u@x.com", nome: "User", role: "admin" })
+    );
+
+    expect(logSpy).not.toHaveBeenCalled();
+    expect(warnSpy).not.toHaveBeenCalled();
+    expect(errorSpy).not.toHaveBeenCalled();
+  });
+
+  it("role inválido → retorna error sem createUser", async () => {
+    const result = await createStoreUserDirect(
+      "s-1",
+      null,
+      makeForm({ email: "u@x.com", nome: "User", role: "superadmin" })
+    );
+
+    expect(result).toEqual({ error: expect.stringContaining("role inválido") });
+    expect(mockCreateUser).not.toHaveBeenCalled();
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });

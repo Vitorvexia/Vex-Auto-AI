@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { assertSuperAdmin } from "@/lib/admin-auth";
 import { createStore, updateStore, createStoreUser } from "./actions";
+import { DirectUserForm } from "./DirectUserForm";
 
 // Next.js allows Server Actions to return values (accessible via useActionState),
 // but React's form action type only accepts Promise<void>. Cast at call site.
@@ -206,10 +207,10 @@ export default async function AdminPage() {
                 </div>
               </details>
 
-              {/* Criar usuário */}
+              {/* Criar usuário com convite */}
               <details className="mt-2">
                 <summary className="cursor-pointer text-sm text-blue-600 hover:underline list-none">
-                  Criar usuário para esta loja
+                  Criar usuário (convite por email)
                 </summary>
                 <div className="mt-3 border-t pt-3">
                   <form action={createStoreUser as unknown as FormAction} className="space-y-3">
@@ -258,6 +259,9 @@ export default async function AdminPage() {
                   </form>
                 </div>
               </details>
+
+              {/* Criar usuário com senha temporária (sem email de convite) */}
+              <DirectUserForm storeId={s.id} />
             </div>
           );
         })}
