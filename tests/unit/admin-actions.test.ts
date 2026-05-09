@@ -120,9 +120,9 @@ describe("createStore", () => {
     expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it("DB error → propaga error.message", async () => {
+  it("DB error genérico → propaga error.message", async () => {
     mockFrom.mockReturnValue(
-      chain({ insert: { data: null, error: { message: "duplicate key" } } })
+      chain({ insert: { data: null, error: { code: "42P01", message: "table not found" } } })
     );
 
     const result = await createStore(
@@ -130,7 +130,20 @@ describe("createStore", () => {
       makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" })
     );
 
-    expect(result).toEqual({ error: "duplicate key" });
+    expect(result).toEqual({ error: "table not found" });
+  });
+
+  it("23505 unique violation → mensagem amigável de WhatsApp duplicado", async () => {
+    mockFrom.mockReturnValue(
+      chain({ insert: { data: null, error: { code: "23505", message: "duplicate key value violates unique constraint" } } })
+    );
+
+    const result = await createStore(
+      prev,
+      makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" })
+    );
+
+    expect(result).toEqual({ error: "Já existe uma loja cadastrada com este WhatsApp." });
   });
 
   it("sucesso → revalidatePath('/admin') chamado e retorna { success: true }", async () => {

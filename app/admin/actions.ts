@@ -39,7 +39,11 @@ export async function createStore(
     whatsapp_phone_number_id: phoneId,
   });
 
-  if (error) return { error: error.message };
+  if (error) {
+    if (error.code === "23505")
+      return { error: "Já existe uma loja cadastrada com este WhatsApp." };
+    return { error: error.message };
+  }
   revalidatePath("/admin");
   return { success: true };
 }
