@@ -275,12 +275,70 @@ Proteções: sem NaN, sem divisão por zero, sem PII.
 - Validação server-side obrigatória
 - Concorrência tratada corretamente
 
+### Multi-tenant B1 (`lib/auth.ts`, migration 016)
+
+Isolamento completo por `store_id`. Concluído em PR #16.
+
+`getServerStoreId()` — obtém `store_id` do usuário autenticado:
+- Busca usuário via `supabase.auth.getUser()`
+- Consulta `public.users` → retorna `store_id`
+- Lança `AuthError` (redirect `/login`) se não autenticado
+- Lança `StoreNotFoundError` se usuário não tem loja vinculada
+
+RLS ativo em 11+ tabelas via função helper `public.my_store_id()`. Isolamento duplo: `getServerStoreId()` nas Server Actions + RLS no banco.
+
+### Super-admin / Painel Administrativo (`lib/admin-auth.ts`)
+
+`/admin` é painel interno da Vex — **nunca visível para clientes ou lojistas**.
+
+Proteção em 3 camadas:
+1. **Middleware** — verifica `ADMIN_EMAILS`, redireciona para `/acesso-restrito` se não autorizado
+2. **Server Component** — `assertSuperAdmin()` no topo de `/app/admin/page.tsx`
+3. **Server Actions** — cada action chama `assertSuperAdmin()` individualmente
+
+Funções:
+- `isSuperAdmin(email)` — boolean puro, case-insensitive
+- `assertSuperAdmin()` — async, redireciona se não autorizado, retorna `user.id`
+- `getAdminEmails()` — lê `ADMIN_EMAILS` env var (CSV, trim automático)
+
+`/acesso-restrito` — página de acesso negado com link para `/leads`.
+
+Header mostra link "Admin" apenas para super-admins (calculado server-side em `app/layout.tsx`).
+
+### WhatsApp por Loja (`lib/whatsapp-credentials.ts`, migration 017)
+
+`stores.whatsapp_phone_number_id` (TEXT, nullable) — Phone Number ID da Meta por loja.
+
+`getStoreWhatsAppPhoneId(storeId: string)`:
+1. Consulta `stores.whatsapp_phone_number_id`
+2. Fallback: env var `WHATSAPP_PHONE_NUMBER_ID` (compatibilidade single-tenant)
+3. Erro permanente (`auth_error`, não retryable) se nenhum configurado
+
+`sendWhatsAppMessage(to, text, phoneNumberId)` — aceita `phoneNumberId` explícito. Token `WHATSAPP_ACCESS_TOKEN` ainda global (roadmap: per-loja).
+
+Classificação de erro: `rate_limited`, `invalid_recipient` (permanente), `service_error` (retryable), `auth_error` (permanente), `unknown` (retryable).
+
+### Onboarding Operacional (`app/admin/actions.ts`)
+
+Fluxo para provisionar nova loja:
+
+1. `createStore()` — cria loja com nome, `whatsapp_numero`, `whatsapp_phone_number_id`
+2. `createStoreUser()` — convite por email (Supabase Auth `inviteUserByEmail`)
+3. `createStoreUserDirect()` — cria usuário com senha temporária (16 chars, base64url)
+   - Rollback automático: se insert em `public.users` falhar, deleta auth user
+   - Senha exibida uma única vez na UI (aviso explícito no componente)
+   - Usuário vinculado a `store_id` diretamente no insert
+
+Todas as actions protegidas por `assertSuperAdmin()`.
+
 ### Dívidas Técnicas Conhecidas
 
-- Sem isolamento por `store_id` (multi-tenant pendente)
-- Query de mensagens sem limite
-- Autenticação de usuários real ausente
-- `assigned_to` ainda não utilizado
+- ~~Sem isolamento por `store_id`~~ — ✔ Multi-tenant B1 concluído (`getServerStoreId()` + RLS)
+- ~~Autenticação de usuários real ausente~~ — ✔ Supabase Auth integrada ao `store_id`
+- Query de mensagens sem limite — **pendente**
+- `assigned_to` ainda não utilizado — **pendente**
+- `WHATSAPP_ACCESS_TOKEN` global — por loja é roadmap B2+ — **pendente**
+- Masking de PII em logs — `lib/logger.ts` genérico não mascara telefone/email — **pendente** (LGPD)
 
 ---
 
@@ -312,7 +370,8 @@ Proteções: sem NaN, sem divisão por zero, sem PII.
 
 | Decisão | Status | Contexto |
 |---------|--------|---------|
-| `DEFAULT_STORE_ID` via env | MVP aceitável | Server Actions leem store via `process.env.DEFAULT_STORE_ID`. Aceitável para single-store. Precisa entrar no backlog junto da issue #12 (multi-tenant / `store_id` por usuário autenticado) antes de suportar múltiplas lojas. |
+| `DEFAULT_STORE_ID` via env | ✔ RESOLVIDO | Multi-tenant B1 implementado. `getServerStoreId()` obtém `store_id` via Supabase Auth. `DEFAULT_STORE_ID` não está mais em código produtivo. |
+| `WHATSAPP_ACCESS_TOKEN` global | Em andamento | Token ainda global por env. `phone_number_id` já é per-loja (migration 017). Token per-loja é roadmap B2+. |
 
 ---
 
@@ -361,14 +420,15 @@ npm install   # prepare script roda `husky` automaticamente
 
 ## Estado Atual do Sistema (Produção)
 
-> Última atualização: 2026-04-30
+> Última atualização: 2026-05-11
 
 ### Infraestrutura
 
 - Deploy ativo na Vercel (plano Hobby)
 - Domínio configurado e operacional
-- Variáveis de ambiente configuradas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `INTERNAL_API_KEY`, `DEFAULT_STORE_ID`
-- Banco Supabase com todas as migrations aplicadas em produção
+- Variáveis de ambiente configuradas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `INTERNAL_API_KEY`, `ADMIN_EMAILS`
+- ~~`DEFAULT_STORE_ID`~~ removido — substituído por `getServerStoreId()` (multi-tenant B1)
+- Banco Supabase com todas as migrations aplicadas em produção (001–017)
 
 ### WhatsApp
 
@@ -415,9 +475,29 @@ Garantias operacionais:
 ### Segurança
 
 - Validação HMAC em todos os requests do webhook Meta
-- Telefones mascarados nos logs (últimos 4 dígitos) — conformidade LGPD
-- Logs sem PII
+- Telefones mascarados nos logs — ⚠️ implementação pendente em `lib/logger.ts` (pipeline afirma masking, verificação necessária)
+- Logs sem PII — parcial (tokens Meta não logados; masking de número não universal)
 - Endpoints internos protegidos por `INTERNAL_API_KEY`
+
+### Multi-tenant B1
+
+- `getServerStoreId()` ativo em todas as Server Actions
+- RLS validado em 11+ tabelas via `public.my_store_id()`
+- Migrations 016 e 017 aplicadas em produção
+- `DEFAULT_STORE_ID` removido do código produtivo
+
+### Admin / Super-admin
+
+- `/admin` operacional com proteção 3 camadas (middleware + page + actions)
+- `ADMIN_EMAILS` configurado em produção
+- `/acesso-restrito` ativo
+- Lojista não vê link "Admin" no Header
+
+### WhatsApp por Loja
+
+- `stores.whatsapp_phone_number_id` ativo (migration 017)
+- `getStoreWhatsAppPhoneId()` resolvendo per-loja com fallback env
+- Token `WHATSAPP_ACCESS_TOKEN` ainda global — per-loja é roadmap
 
 ### Frontend
 
@@ -437,11 +517,15 @@ Garantias operacionais:
 - Fluxo completo testado e confirmado: lead entra → IA responde → mensagem enviada
 - Deploy em produção com env vars reais
 
-### Fase 2 — Base Estrutural (Em andamento)
+### Fase 2 — Base Estrutural (Parcialmente concluída)
 
-- Multi-tenant: isolamento por `store_id` em todas as queries
-- Autenticação real de usuários (Supabase Auth integrada ao `store_id`)
-- Equipe: `assigned_to` funcional, gestão de vendedores por loja
+- ✔ Multi-tenant B1: isolamento por `store_id` em todas as queries (PR #16, migration 016)
+- ✔ Autenticação real: Supabase Auth integrada ao `store_id` via `getServerStoreId()`
+- ✔ WhatsApp por loja: `stores.whatsapp_phone_number_id` (migration 017)
+- ✔ Admin/super-admin: painel interno com proteção 3 camadas + onboarding de lojas
+- Equipe: `assigned_to` funcional, gestão de vendedores por loja — **pendente**
+- Masking PII universal em logs — **pendente** (LGPD)
+- `WHATSAPP_ACCESS_TOKEN` per-loja (B2+) — **pendente**
 
 ### Fase 3 — UX Operacional
 
@@ -473,6 +557,9 @@ O Vex Auto já está operando em produção com:
 - sistema de retry com classificação de erro e prevenção de double-send
 - infraestrutura estável (Vercel + Supabase)
 - login funcional e páginas principais operacionais
+- multi-tenant B1 ativo — isolamento por `store_id` + RLS em todas as tabelas
+- WhatsApp por loja — `phone_number_id` per-store com fallback env
+- painel admin com onboarding de lojas e usuários (super-admin only)
 
 O sistema já executa partes reais da operação comercial, reduzindo dependência humana e aumentando velocidade de resposta e conversão.
 
