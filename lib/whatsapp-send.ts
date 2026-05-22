@@ -91,14 +91,25 @@ export async function sendWhatsAppMessage(
     text: { body: safeText },
   });
 
-  const res = await fetch(url, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${token}`,
-      "Content-Type": "application/json",
-    },
-    body,
-  });
+  // Abort fetch after 5s — Meta API p99 is ~1s under normal conditions.
+  // Without a timeout, a hanging Meta API will block until Vercel kills the function,
+  // preventing logAi from running and making the failed send unrecoverable by the retry job.
+  const controller = new AbortController();
+  const sendTimeout = setTimeout(() => controller.abort(), 5000);
+  let res: Response;
+  try {
+    res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+      },
+      body,
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(sendTimeout);
+  }
 
   if (!res.ok) {
     // Descartar json?.error?.message — pode conter PII ou dados sensíveis da Meta.

@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import Anthropic, { APIConnectionTimeoutError } from "@anthropic-ai/sdk";
 import type { AgentContext } from "@/lib/agent-context";
 import type { PromptPayload } from "@/lib/prompts";
 
@@ -48,7 +48,11 @@ async function callAnthropic(
   model: string,
   timeoutMs: number
 ): Promise<Anthropic.Message> {
-  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  // maxRetries: 0 — SDK retries silently multiply effective timeout by 3 (default=2).
+  // With Vercel Hobby wall at 10s and AGENT_TIMEOUT_MS=8s, retries push past the wall
+  // before AgentTimeoutError can propagate to the catch block. Disable retries so the
+  // timeout fires deterministically and the catch block always has a chance to run.
+  const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY, maxRetries: 0 });
   try {
     return await client.messages.create(
       {
@@ -60,10 +64,7 @@ async function callAnthropic(
       { timeout: timeoutMs }
     );
   } catch (e: unknown) {
-    if (
-      e instanceof Error &&
-      (e.name === "APITimeoutError" || (e as any).status === 408)
-    ) {
+    if (e instanceof APIConnectionTimeoutError) {
       throw new AgentTimeoutError();
     }
     throw e;

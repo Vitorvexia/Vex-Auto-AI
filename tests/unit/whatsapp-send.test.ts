@@ -301,6 +301,58 @@ describe("sendWhatsAppMessage — sanitização de logs", () => {
 });
 
 // ---------------------------------------------------------------------------
+// Patch B — timeout explícito de 5s via AbortController
+// ---------------------------------------------------------------------------
+
+describe("sendWhatsAppMessage — Patch B: AbortController timeout 5s", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
+
+  it("passa AbortSignal no fetch para permitir cancelamento por timeout", async () => {
+    // Mock que aguarda o sinal de abort antes de rejeitar (simula Meta API hanging)
+    const spy = vi.spyOn(global, "fetch").mockImplementation(
+      (_url: RequestInfo | URL, init?: RequestInit) =>
+        new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener("abort", () =>
+            reject(new DOMException("The operation was aborted.", "AbortError"))
+          );
+        })
+    );
+
+    vi.useFakeTimers();
+    const promise = sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID);
+
+    // Registrar handler ANTES de avançar o timer — evita "unhandled rejection"
+    // quando o AbortController.abort() dispara sincronamente durante advanceTimersByTimeAsync
+    const assertion = expect(promise).rejects.toThrow();
+
+    // Avança 5001ms para disparar o AbortController.abort()
+    await vi.advanceTimersByTimeAsync(5001);
+    vi.useRealTimers();
+
+    await assertion;
+
+    // Verifica que o signal foi passado ao fetch
+    const [, init] = spy.mock.calls[0] as [string, RequestInit];
+    expect(init.signal).toBeInstanceOf(AbortSignal);
+  });
+
+  it("clearTimeout cancela o abort após resposta bem-sucedida — sem timer leak", async () => {
+    // Fetch resolve imediatamente; clearTimeout deve cancelar o timeout de 5s
+    vi.spyOn(global, "fetch").mockResolvedValueOnce(
+      new Response(JSON.stringify({ messages: [{ id: "wamid.ok" }] }), { status: 200 })
+    );
+
+    // Deve resolver sem erro mesmo com o setTimeout de 5s pendente no background
+    await expect(
+      sendWhatsAppMessage("+5511999990000", "oi", TEST_PHONE_ID)
+    ).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
 // PERMANENT_CATEGORIES export
 // ---------------------------------------------------------------------------
 
