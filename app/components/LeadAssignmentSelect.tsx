@@ -35,8 +35,11 @@ export function LeadAssignmentSelect({ leadId, assignedTo, vendedores }: Props) 
         }
       } catch (err) {
         setValue(rollbackTo); // rollback to value at the time of the change, not stale prop
+        const raw = err instanceof Error ? err.message : "";
         setErrorMsg(
-          err instanceof Error ? err.message : "Erro ao atribuir vendedor"
+          raw.includes("assigned_to must belong to the same store")
+            ? "Não foi possível atribuir este lead ao vendedor selecionado."
+            : raw || "Erro ao atribuir vendedor"
         );
       }
     });

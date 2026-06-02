@@ -329,7 +329,7 @@ describeIf("leads.assigned_to — cross-tenant trigger (migration 018)", () => {
         .eq("store_id", storeId);
 
       expect(error).toBeTruthy();
-      expect(error!.message.toLowerCase()).toMatch(/same store|store/);
+      expect(error!.message.toLowerCase()).toMatch(/assigned_to must belong to the same store/);
     } finally {
       await deleteTestUser(otherUserId);
       await deleteStoreDeep(other.id);

@@ -134,7 +134,7 @@ describe("assignLeadToUser", () => {
       )
       .mockReturnValueOnce(makeUpdateChain({ error: dbError }));
 
-    await expect(assignLeadToUser("lead-1", "user-1")).rejects.toThrow();
+    await expect(assignLeadToUser("lead-1", "user-1")).rejects.toThrow("DB update failed");
   });
 });
 
