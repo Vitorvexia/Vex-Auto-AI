@@ -25,7 +25,8 @@ export interface Lead {
   phone_normalized: string;
   score: number;
   lead_status: LeadStatus;
-  assigned_to: string | null;  // UUID of responsible vendor. NULL = no owner
+  assigned_to: string | null;       // UUID of responsible vendor. NULL = no owner
+  conversation_status?: string | null; // active conversation status — used for hot-via-handoff detection
   updated_at: string;
 }
 

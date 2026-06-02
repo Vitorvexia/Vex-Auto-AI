@@ -44,7 +44,13 @@ export default async function LeadsPage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new AuthError();
 
-  const assignedToParam = searchParams?.assignedTo;
+  // Fix 6: validate assignedToParam — reject malformed UUIDs silently (treat as no filter)
+  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const rawParam = searchParams?.assignedTo;
+  const assignedToParam =
+    rawParam === "none" ? "none" :
+    rawParam && UUID_REGEX.test(rawParam) ? rawParam :
+    undefined;
 
   // Build leads query
   let leadsQuery = supabase
@@ -67,8 +73,8 @@ export default async function LeadsPage({
     supabase.from("users").select("id, nome").order("nome"),
     supabase
       .from("leads")
-      .select("id, score, lead_status, assigned_to, updated_at, nome, phone_normalized")
-      .in("lead_status", COLUMNS), // all leads for metrics
+      .select("id, score, lead_status, assigned_to, updated_at, nome, phone_normalized, conversations(conversation_status)")
+      .in("lead_status", COLUMNS), // all leads for metrics (includes conversation_status for hot-via-handoff)
   ]);
 
   if (leadsResult.error) {
@@ -82,6 +88,11 @@ export default async function LeadsPage({
   // silently degrade vendors if users fetch fails (non-critical)
   if (usersResult.error) {
     console.error("Falha ao carregar vendedores:", usersResult.error.message);
+  }
+
+  // Fix 3: explicitly handle allLeadsResult error — metrics degrade but don't crash
+  if (allLeadsResult.error) {
+    console.error("Falha ao carregar dados para métricas:", allLeadsResult.error.message);
   }
 
   const leads = leadsResult.data ?? [];
@@ -135,7 +146,21 @@ export default async function LeadsPage({
   const hotCount    = sorted.filter((l) => l.priority === "hot").length;
 
   // Seller metrics (computed from ALL leads in the store, not filtered)
-  const leadsForMetrics = (allLeadsResult.data ?? []) as Lead[];
+  // Extract active conversation_status per lead for hot-via-handoff detection (same rule as KPI bar)
+  const leadsForMetrics: Lead[] = (allLeadsResult.data ?? []).map((l) => {
+    const convs = (l as { conversations?: { conversation_status: string | null }[] }).conversations ?? [];
+    const activeConv = convs.find((c) => c.conversation_status !== "ENCERRADA" && c.conversation_status !== null);
+    return {
+      id: l.id,
+      nome: l.nome,
+      phone_normalized: l.phone_normalized,
+      score: l.score,
+      lead_status: l.lead_status as LeadStatus,
+      assigned_to: l.assigned_to ?? null,
+      conversation_status: activeConv?.conversation_status ?? null,
+      updated_at: l.updated_at,
+    };
+  });
 
   const sellerMetrics = calculateSellerMetrics(leadsForMetrics, vendedores);
   const assignmentSummary = getStoreAssignmentSummary(leadsForMetrics);
@@ -219,12 +244,14 @@ export default async function LeadsPage({
               ))}
             </tbody>
           </table>
-          <p className="assignment-summary">
-            {assignmentSummary.leads_with_owner} com responsável ·{" "}
-            {assignmentSummary.leads_without_owner} sem responsável
-          </p>
         </div>
       )}
+
+      {/* Fix 4: always visible — shows "0 com responsável · N sem responsável" even before any assignment */}
+      <p className="assignment-summary">
+        {assignmentSummary.leads_with_owner} com responsável ·{" "}
+        {assignmentSummary.leads_without_owner} sem responsável
+      </p>
 
       <div className="kanban">
         {COLUMNS.map((status) => {
