@@ -149,7 +149,7 @@ export default async function LeadsPage({
   // Extract active conversation_status per lead for hot-via-handoff detection (same rule as KPI bar)
   const leadsForMetrics: Lead[] = (allLeadsResult.data ?? []).map((l) => {
     const convs = (l as { conversations?: { conversation_status: string | null }[] }).conversations ?? [];
-    const activeConv = convs.find((c) => c.conversation_status !== "ENCERRADA" && c.conversation_status !== null);
+    const activeConv = convs.find((c) => (OPEN_CONVERSATION_STATUSES as string[]).includes(c.conversation_status ?? ""));
     return {
       id: l.id,
       nome: l.nome,
