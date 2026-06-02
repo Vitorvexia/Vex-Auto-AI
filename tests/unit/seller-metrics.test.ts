@@ -67,11 +67,21 @@ describe("calculateSellerMetrics", () => {
     expect(result[0].hot_leads).toBe(2);
   });
 
-  it("hot_leads = 0 para leads com score < 80", () => {
+  it("hot_leads = 0 para leads com score < 80 sem handoff", () => {
     const users = [makeUser({ id: "u1" })];
     const leads = [makeLead({ id: "l1", assigned_to: "u1", score: 79 })];
     const result = calculateSellerMetrics(leads, users);
     expect(result[0].hot_leads).toBe(0);
+  });
+
+  it("conta hot_leads para lead com score < 80 mas conversation_status = AGUARDANDO_HUMANO (handoff)", () => {
+    const users = [makeUser({ id: "u1" })];
+    const leads = [
+      makeLead({ id: "l1", assigned_to: "u1", score: 50, conversation_status: "AGUARDANDO_HUMANO" }),
+      makeLead({ id: "l2", assigned_to: "u1", score: 30, conversation_status: "ATIVA" }),
+    ];
+    const result = calculateSellerMetrics(leads, users);
+    expect(result[0].hot_leads).toBe(1); // only l1 qualifies via handoff
   });
 
   it("conta closed_leads para leads com lead_status = FECHADO", () => {

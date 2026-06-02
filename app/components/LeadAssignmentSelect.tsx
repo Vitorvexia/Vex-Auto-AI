@@ -23,7 +23,8 @@ export function LeadAssignmentSelect({ leadId, assignedTo, vendedores }: Props) 
 
   function handleChange(e: React.ChangeEvent<HTMLSelectElement>) {
     const userId = e.target.value;
-    setValue(userId); // optimistic update
+    const rollbackTo = value; // capture current value before optimistic update
+    setValue(userId);
     setErrorMsg(null);
     startTransition(async () => {
       try {
@@ -33,7 +34,7 @@ export function LeadAssignmentSelect({ leadId, assignedTo, vendedores }: Props) 
           await removeLeadAssignment(leadId);
         }
       } catch (err) {
-        setValue(assignedTo ?? ""); // rollback on failure
+        setValue(rollbackTo); // rollback to value at the time of the change, not stale prop
         setErrorMsg(
           err instanceof Error ? err.message : "Erro ao atribuir vendedor"
         );
@@ -41,7 +42,8 @@ export function LeadAssignmentSelect({ leadId, assignedTo, vendedores }: Props) 
     });
   }
 
-  const currentNome = vendedores.find((v) => v.id === assignedTo)?.nome ?? null;
+  // Fix: derive from `value` (controlled state) so the span stays in sync with the select
+  const currentNome = vendedores.find((v) => v.id === value)?.nome ?? null;
 
   return (
     <div className="lead-assignment">

@@ -100,7 +100,7 @@ export default async function LeadsPage({
 
   const enriched: Enriched[] = leads.map((l: { id: string; nome: string | null; phone_normalized: string; score: number; lead_status: string; assigned_to: string | null; updated_at: string; conversations?: { id: string; ultima_mensagem_em: string | null; conversation_status: string | null }[] }) => {
     const openConv = (l.conversations ?? []).find((c) =>
-      OPEN_CONVERSATION_STATUSES.includes(c.conversation_status as never)
+      (OPEN_CONVERSATION_STATUSES as string[]).includes(c.conversation_status ?? "")
     );
     const ultima_atividade =
       openConv?.ultima_mensagem_em ?? l.updated_at ?? new Date(0).toISOString();
