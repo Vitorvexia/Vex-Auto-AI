@@ -19,6 +19,16 @@ export type Autor = "lead" | "ia" | "humano" | "sistema";
 export type Canal = "whatsapp" | "instagram" | "portal_chat";
 export type Origem = "whatsapp" | "portal" | "base_inativa" | "manual";
 
+export interface Lead {
+  id: string;
+  nome: string | null;
+  phone_normalized: string;
+  score: number;
+  lead_status: LeadStatus;
+  assigned_to: string | null;  // UUID of responsible vendor. NULL = no owner
+  updated_at: string;
+}
+
 export interface FinancingSimulation {
   id: string;
   vehicle_price: number;
