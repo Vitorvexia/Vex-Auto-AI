@@ -2,7 +2,6 @@ import { describe, it, expect } from "vitest";
 import {
   calculateSellerMetrics,
   getStoreAssignmentSummary,
-  getLeadsWithoutOwner,
 } from "@/lib/seller-metrics";
 import type { Lead } from "@/types/domain";
 
@@ -187,44 +186,5 @@ describe("getStoreAssignmentSummary", () => {
     for (const val of Object.values(result)) {
       expect(Number.isFinite(val)).toBe(true);
     }
-  });
-});
-
-// ---------------------------------------------------------------------------
-// getLeadsWithoutOwner
-// ---------------------------------------------------------------------------
-
-describe("getLeadsWithoutOwner", () => {
-  it("retorna array vazio para input vazio", () => {
-    expect(getLeadsWithoutOwner([])).toHaveLength(0);
-  });
-
-  it("retorna array vazio quando todos têm owner", () => {
-    const leads = [
-      makeLead({ id: "l1", assigned_to: "u1" }),
-      makeLead({ id: "l2", assigned_to: "u2" }),
-    ];
-    expect(getLeadsWithoutOwner(leads)).toHaveLength(0);
-  });
-
-  it("retorna apenas leads com assigned_to = null", () => {
-    const leads = [
-      makeLead({ id: "l1", assigned_to: null }),
-      makeLead({ id: "l2", assigned_to: "u1" }),
-      makeLead({ id: "l3", assigned_to: null }),
-    ];
-    const result = getLeadsWithoutOwner(leads);
-    expect(result).toHaveLength(2);
-    expect(result.map((l) => l.id)).toContain("l1");
-    expect(result.map((l) => l.id)).toContain("l3");
-  });
-
-  it("não inclui leads com owner válido no resultado", () => {
-    const leads = [
-      makeLead({ id: "l1", assigned_to: "u1" }),
-      makeLead({ id: "l2", assigned_to: null }),
-    ];
-    const result = getLeadsWithoutOwner(leads);
-    expect(result.map((l) => l.id)).not.toContain("l1");
   });
 });

@@ -171,4 +171,16 @@ describe("removeLeadAssignment", () => {
     await expect(removeLeadAssignment("lead-x")).rejects.toThrow();
     expect(mockRevalidate).not.toHaveBeenCalled();
   });
+
+  it("R4: propaga erro do banco se o UPDATE falhar", async () => {
+    const dbError = new Error("DB update failed");
+    mockFrom
+      .mockReturnValueOnce(
+        makeSelectChain({ data: { id: "lead-1", store_id: "store-1" }, error: null })
+      )
+      .mockReturnValueOnce(makeUpdateChain({ error: dbError }));
+
+    await expect(removeLeadAssignment("lead-1")).rejects.toThrow("DB update failed");
+    expect(mockRevalidate).not.toHaveBeenCalled();
+  });
 });

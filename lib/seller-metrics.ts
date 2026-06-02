@@ -46,7 +46,3 @@ export function getStoreAssignmentSummary(leads: Lead[]): StoreAssignmentSummary
   const leads_without_owner = leads.filter((l) => l.assigned_to === null).length;
   return { leads_with_owner, leads_without_owner };
 }
-
-export function getLeadsWithoutOwner(leads: Lead[]): Lead[] {
-  return leads.filter((l) => l.assigned_to === null);
-}
