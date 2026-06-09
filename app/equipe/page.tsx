@@ -35,7 +35,7 @@ function statusBadgeText(
     case "active":    return "Ativo";
     case "inactive":
       return `Sem atividade há ${formatInactiveDuration(inactiveDurationMs ?? 0)}`;
-    case "no_leads":  return "Sem leads";
+    case "no_leads":  return "Nenhum lead atribuído";
   }
 }
 
@@ -77,7 +77,10 @@ export default async function EquipePage() {
       ),
   ]);
 
-  const sellers = (usersRes.data ?? []) as SellerUser[];
+  // Only vendedores appear in the team performance grid — admins are excluded
+  const sellers = ((usersRes.data ?? []) as SellerUser[]).filter(
+    (u) => u.role === "vendedor"
+  );
 
   // Normalise leads: flatten embedded conversations to active conversation_status
   const leads: Lead[] = (leadsRes.data ?? []).map(
@@ -167,11 +170,16 @@ export default async function EquipePage() {
         </div>
 
         <div className="kpi-card">
-          <div className="kpi-label">Total Fechamentos</div>
-          <div className="kpi-value" style={{ color: "#10B981" }}>
-            {kpis.total_closed_leads}
+          <div className="kpi-label">Aguardando Atendimento</div>
+          <div
+            className="kpi-value"
+            style={{ color: kpis.leads_awaiting_human > 0 ? "#B91C1C" : "#15803D" }}
+          >
+            {kpis.leads_awaiting_human}
           </div>
-          <div className="kpi-delta">leads fechados (todos os períodos)</div>
+          <div className="kpi-delta">
+            {kpis.leads_awaiting_human > 0 ? "requer ação imediata" : "nenhum aguardando"}
+          </div>
         </div>
       </div>
 
@@ -237,7 +245,9 @@ export default async function EquipePage() {
                   marginTop: "6px",
                 }}
               >
-                {s.last_activity_at
+                {s.status === "no_leads"
+                  ? "Atribua leads a este vendedor para acompanhar desempenho."
+                  : s.last_activity_at
                   ? `Última atividade: ${new Date(
                       s.last_activity_at
                     ).toLocaleString("pt-BR", {
