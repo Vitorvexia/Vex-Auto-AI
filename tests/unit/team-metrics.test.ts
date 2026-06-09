@@ -219,7 +219,7 @@ describe("calculateTeamKpis", () => {
     expect(calculateTeamKpis([])).toEqual({
       sellers_with_hot_lead: 0,
       sellers_inactive_2h: 0,
-      total_closed_leads: 0,
+      leads_awaiting_human: 0,
     });
   });
 
@@ -247,17 +247,18 @@ describe("calculateTeamKpis", () => {
     expect(calculateTeamKpis(data).sellers_inactive_2h).toBe(1);
   });
 
-  it("total_closed_leads soma fechados de todos os vendedores", () => {
+  it("leads_awaiting_human soma AGUARDANDO_HUMANO de todos os vendedores", () => {
     const data = calculateTeamPageData(
       [
-        makeLead({ id: "l1", assigned_to: "u1", lead_status: "FECHADO" }),
-        makeLead({ id: "l2", assigned_to: "u1", lead_status: "FECHADO" }),
-        makeLead({ id: "l3", assigned_to: "u2", lead_status: "FECHADO" }),
+        makeLead({ id: "l1", assigned_to: "u1", conversation_status: "AGUARDANDO_HUMANO" }),
+        makeLead({ id: "l2", assigned_to: "u1", conversation_status: "AGUARDANDO_HUMANO" }),
+        makeLead({ id: "l3", assigned_to: "u2", conversation_status: "AGUARDANDO_HUMANO" }),
+        makeLead({ id: "l4", assigned_to: "u2", conversation_status: "ATIVA" }),
       ],
       [makeUser({ id: "u1" }), makeUser({ id: "u2", nome: "Bob" })],
       NOW
     );
-    expect(calculateTeamKpis(data).total_closed_leads).toBe(3);
+    expect(calculateTeamKpis(data).leads_awaiting_human).toBe(3);
   });
 
   it("sem NaN ou Infinity nos valores retornados", () => {

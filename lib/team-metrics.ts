@@ -28,7 +28,7 @@ export type SellerPageData = SellerMetrics & {
 export type TeamKpis = {
   sellers_with_hot_lead: number;
   sellers_inactive_2h: number;
-  total_closed_leads: number;
+  leads_awaiting_human: number;
 };
 
 export type TeamAlert = {
@@ -140,13 +140,13 @@ export function calculateTeamPageData(
 // KPI bar: 3 metrics derived from seller page data.
 // sellers_with_hot_lead = sellers that have at least 1 hot lead assigned
 // sellers_inactive_2h   = sellers with no lead activity in >2h (status = inactive)
-// total_closed_leads    = sum of closed_leads across all sellers in the store
+// leads_awaiting_human  = total leads with AGUARDANDO_HUMANO across all sellers
 
 export function calculateTeamKpis(pageData: SellerPageData[]): TeamKpis {
   return {
     sellers_with_hot_lead: pageData.filter((s) => s.hot_leads > 0).length,
     sellers_inactive_2h: pageData.filter((s) => s.status === "inactive").length,
-    total_closed_leads: pageData.reduce((sum, s) => sum + s.closed_leads, 0),
+    leads_awaiting_human: pageData.reduce((sum, s) => sum + s.awaiting_human_count, 0),
   };
 }
 
