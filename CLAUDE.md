@@ -110,7 +110,7 @@ Lead → Conversão → Cliente → Reativação → Nova venda → (loop infini
 - atendimento inicial
 - resposta em tempo real via WhatsApp
 - follow-up automático (cadência 2h → 24h → 72h)
-- reativação de leads (14d → 30d sem resposta)
+- reativação de leads — 3 tentativas (14d → 30d → 30d), templates enriquecidos com nome + veículo + tentativa
 - qualificação e lead scoring determinístico (0–100)
 - comparação de opções
 
@@ -190,7 +190,7 @@ Módulo central extraído do webhook. Fluxo:
 buildAgentContext → runGuardrails → buildPrompt → runAgent
   → messages.insert (reply salvo) → sendWhatsAppMessage (não-fatal)
   → transitionConversationStatus (se handoff) → leads.update (score)
-  → logAi
+  → markReactivationResponded (non-fatal) → logAi
 ```
 
 **`agent_status` possíveis:**
@@ -222,9 +222,27 @@ Converte qualquer entrada para E.164. Regra especial Brasil:
 
 Cadência: 2h → 24h → 72h. Tabela `follow_up_logs` com idempotência (UNIQUE). Cron via Vercel. Não envia se lead já respondeu ou se duplicado.
 
-### Reativação de Leads
+### Reativação de Leads — Mina de Ouro (`lib/reactivation.ts`, migration 018–019)
 
-14 dias sem resposta → primeira tentativa. 30 dias → segunda. Exclui `FECHADO` e `PERDIDO`. Tabela `reactivation_logs`. LGPD-safe (sem spam contínuo).
+Reativa base inativa com templates enriquecidos e rastreio de resultado ponta a ponta.
+
+**Cadência:** 14d sem resposta → tentativa 1. 30d após última reativação → tentativa 2. 30d → tentativa 3. Máximo 3 tentativas por lead.
+
+**Elegibilidade:** `lead_status NOT IN ('FECHADO', 'PERDIDO')`, `conversation_status IN ('ATIVA', 'PAUSADA', 'ENCERRADA')`. Conversas ENCERRADA são elegíveis (reativação dispensa `handoff_to = 'IA'`).
+
+**Templates enriquecidos:** `buildReactivationText(attempt, nome, { veiculo_interesse })` — 6 templates (3 tentativas × com/sem veículo). Fallback: `"você"` se nome nulo; sem veículo se `veiculo_interesse` nulo.
+
+**Métricas de resultado:**
+- `responded_at` — quando lead respondeu após reativação (janela 30d). Atualizado por `markReactivationResponded` em toda msg entrante processada pelo pipeline (non-fatal).
+- `converted_at` — quando lead foi marcado FECHADO após ter respondido. Atualizado por `markReactivationConverted` em `updateLeadStatus` e `moveLeadStatus` (non-fatal). Requer `responded_at` preenchido.
+
+**Invariante de ordem:** `reactivation_logs.insert` (claim atômico) → `messages.insert` → `sendWhatsAppMessage`. Falha de envio nunca perde o histórico.
+
+**Idempotência:** `23505` no insert = concurrent claim → skip. `.is("responded_at", null)` e `.is("converted_at", null)` previnem double-update.
+
+**RPC `get_reactivation_eligible_leads`:** `DISTINCT ON (lead_id)` — 1 lead = 1 linha. Prioridade de conversa: ATIVA > PAUSADA > ENCERRADA. Retorna `veiculo_interesse` de `leads.contexto` (JSONB).
+
+Exclui `FECHADO` e `PERDIDO`. LGPD-safe (máx 3 tentativas por lead).
 
 ### Lead Scoring Determinístico
 
@@ -317,6 +335,20 @@ Header mostra link "Admin" apenas para super-admins (calculado server-side em `a
 `sendWhatsAppMessage(to, text, phoneNumberId)` — aceita `phoneNumberId` explícito. Token `WHATSAPP_ACCESS_TOKEN` ainda global (roadmap: per-loja).
 
 Classificação de erro: `rate_limited`, `invalid_recipient` (permanente), `service_error` (retryable), `auth_error` (permanente), `unknown` (retryable).
+
+### Gestão de Equipe (`leads.assigned_to`, migration 018)
+
+Atribuição manual de leads a vendedores com métricas por usuário.
+
+**Campo:** `leads.assigned_to` (UUID, nullable) — responsável atual pelo lead. Sem histórico de trocas (MVP).
+
+**Server Actions:** `assignLeadToUser(leadId, userId)` — guard duplo (lead pertence à loja + usuário pertence à loja). `removeLeadAssignment(leadId)` — remove atribuição.
+
+**Métricas por vendedor (`calculateSellerMetrics`):** `total_leads`, `active_leads`, `closed_leads`, `lost_leads`, `avg_score` — calculadas por `assigned_to`. Página `/equipe` com tabela de performance.
+
+**UX:** filtro por vendedor em `/leads`, badge "Aguardando Atendimento" acionável, KPI de leads sem atribuição no painel de equipe.
+
+**Dívidas:** RBAC pendente (qualquer usuário da loja pode reatribuir qualquer lead). Histórico de atribuição pendente (necessário para comissões/ROI futuro).
 
 ### Onboarding Operacional (`app/admin/actions.ts`)
 
@@ -423,7 +455,7 @@ npm install   # prepare script roda `husky` automaticamente
 
 ## Estado Atual do Sistema (Produção)
 
-> Última atualização: 2026-05-11
+> Última atualização: 2026-06-09
 
 ### Infraestrutura
 
@@ -431,7 +463,7 @@ npm install   # prepare script roda `husky` automaticamente
 - Domínio configurado e operacional
 - Variáveis de ambiente configuradas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `INTERNAL_API_KEY`, `ADMIN_EMAILS`
 - ~~`DEFAULT_STORE_ID`~~ removido — substituído por `getServerStoreId()` (multi-tenant B1)
-- Banco Supabase com todas as migrations aplicadas em produção (001–017)
+- Banco Supabase com todas as migrations aplicadas em produção (001–019)
 
 ### WhatsApp
 
@@ -446,7 +478,8 @@ Fluxo em produção:
 
 ```
 webhook → buildAgentContext → runGuardrails → buildPrompt → runAgent
-  → messages.insert → sendWhatsAppMessage → transitionConversationStatus → leads.update → logAi
+  → messages.insert → sendWhatsAppMessage → transitionConversationStatus → leads.update
+  → markReactivationResponded (non-fatal) → logAi
 ```
 
 Garantias operacionais:
@@ -471,7 +504,7 @@ Garantias operacionais:
 ### Automação
 
 - Follow-up automático operacional — cadência 2h → 24h → 72h
-- Reativação de leads operacional — 14d → 30d sem resposta
+- Reativação de leads operacional (Mina de Ouro) — 3 tentativas, templates enriquecidos, ENCERRADA elegível, métricas responded_at/converted_at
 - Cron consolidado em `/api/internal/daily-run` (compatível com Vercel Hobby — máx 1 execução/dia)
 - Proteção por `INTERNAL_API_KEY` em todos os endpoints internos
 
@@ -486,7 +519,7 @@ Garantias operacionais:
 
 - `getServerStoreId()` ativo em todas as Server Actions
 - RLS validado em 11+ tabelas via `public.my_store_id()`
-- Migrations 016 e 017 aplicadas em produção
+- Migrations 016–019 aplicadas em produção
 - `DEFAULT_STORE_ID` removido do código produtivo
 
 ### Admin / Super-admin
@@ -502,10 +535,26 @@ Garantias operacionais:
 - `getStoreWhatsAppPhoneId()` resolvendo per-loja com fallback env
 - Token `WHATSAPP_ACCESS_TOKEN` ainda global — per-loja é roadmap
 
+### Gestão de Equipe
+
+- `leads.assigned_to` ativo — atribuição manual de leads a vendedores
+- `/equipe` operacional — métricas por vendedor (total, ativos, fechados, score médio)
+- Filtro por vendedor em `/leads`
+- Badge "Aguardando Atendimento" acionável no painel de equipe
+- RBAC pendente (qualquer usuário da loja pode reatribuir)
+
+### Mina de Ouro
+
+- `runReactivationJob` operacional em produção
+- Templates enriquecidos ativos: nome + veículo de interesse + tentativa (1/2/3)
+- `responded_at` e `converted_at` rastreando resultado ponta a ponta
+- 5 leads elegíveis identificados no primeiro run pós-deploy
+- RPC `get_reactivation_eligible_leads` com DISTINCT ON + ENCERRADA + veiculo_interesse
+
 ### Frontend
 
 - Login funcional (autenticação via Supabase Auth)
-- Páginas operacionais: leads, conversations, kanban, analytics
+- Páginas operacionais: leads, conversations, kanban, analytics, equipe
 - Observação: UX ainda não está em versão final — fluxos funcionam, design em refinamento
 
 ---
@@ -526,7 +575,8 @@ Garantias operacionais:
 - ✔ Autenticação real: Supabase Auth integrada ao `store_id` via `getServerStoreId()`
 - ✔ WhatsApp por loja: `stores.whatsapp_phone_number_id` (migration 017)
 - ✔ Admin/super-admin: painel interno com proteção 3 camadas + onboarding de lojas
-- Equipe: `assigned_to` funcional, gestão de vendedores por loja — **pendente**
+- ✔ Equipe: `assigned_to` funcional, métricas por vendedor, filtro e UX operacional (PR #20/#22, migration 018)
+- ✔ Mina de Ouro: reativação com templates enriquecidos + métricas responded_at/converted_at + 3 tentativas (PR #23, migration 019)
 - Masking PII universal em logs — **pendente** (LGPD)
 - `WHATSAPP_ACCESS_TOKEN` per-loja (B2+) — **pendente**
 
@@ -563,6 +613,8 @@ O Vex Auto já está operando em produção com:
 - multi-tenant B1 ativo — isolamento por `store_id` + RLS em todas as tabelas
 - WhatsApp por loja — `phone_number_id` per-store com fallback env
 - painel admin com onboarding de lojas e usuários (super-admin only)
+- gestão de equipe — `assigned_to`, métricas por vendedor, filtro e UX operacional
+- Mina de Ouro ativa — templates enriquecidos, 3 tentativas, responded_at/converted_at em produção
 
 O sistema já executa partes reais da operação comercial, reduzindo dependência humana e aumentando velocidade de resposta e conversão.
 
