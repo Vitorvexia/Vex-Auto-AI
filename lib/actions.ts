@@ -10,6 +10,7 @@ import { simulateFinancing } from "@/lib/financing";
 import type { LeadStatus } from "@/types/domain";
 import { ingestLeadManually, type IngestLeadResult } from "@/lib/lead-ingestion";
 import { getServerStoreId } from "@/lib/auth";
+import { markReactivationConverted } from "@/lib/reactivation";
 
 const VALID_LEAD_STATUSES = new Set<string>([
   "NOVO",
@@ -90,6 +91,7 @@ export async function updateLeadStatus(
     throw new Error(`Status inválido: ${newStatus}`);
   }
   await transitionLeadStatus(leadId, newStatus as LeadStatus);
+  if (newStatus === "FECHADO") markReactivationConverted(leadId, storeId).catch(() => {});
   revalidatePath(`/conversations/${conversationId}`);
   revalidatePath("/conversations");
 }
@@ -131,6 +133,7 @@ export async function moveLeadStatus(
     throw new Error(`Status inválido: ${newStatus}`);
   }
   await transitionLeadStatus(leadId, newStatus as LeadStatus);
+  if (newStatus === "FECHADO") markReactivationConverted(leadId, storeId).catch(() => {});
   revalidatePath("/leads");
 }
 
