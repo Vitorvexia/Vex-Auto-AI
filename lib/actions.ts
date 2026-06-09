@@ -189,3 +189,55 @@ export async function saveFinancingSimulation(
 
   revalidatePath(`/conversations/${conversationId}`);
 }
+
+export async function assignLeadToUser(leadId: string, userId: string): Promise<void> {
+  const storeId = await getServerStoreId();
+
+  // Guard 1: verify lead belongs to this store
+  const { data: lead } = await supabaseAdmin
+    .from("leads")
+    .select("id")
+    .eq("id", leadId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (!lead) throw new Error("Lead não encontrado");
+
+  // Guard 2: verify user belongs to this store (cross-tenant guard)
+  const { data: user } = await supabaseAdmin
+    .from("users")
+    .select("id")
+    .eq("id", userId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (!user) throw new Error("Usuário inválido");
+
+  const { error } = await supabaseAdmin
+    .from("leads")
+    .update({ assigned_to: userId })
+    .eq("id", leadId)
+    .eq("store_id", storeId);
+  if (error) throw error;
+
+  revalidatePath("/leads");
+}
+
+export async function removeLeadAssignment(leadId: string): Promise<void> {
+  const storeId = await getServerStoreId();
+
+  const { data: lead } = await supabaseAdmin
+    .from("leads")
+    .select("id")
+    .eq("id", leadId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (!lead) throw new Error("Lead não encontrado");
+
+  const { error } = await supabaseAdmin
+    .from("leads")
+    .update({ assigned_to: null })
+    .eq("id", leadId)
+    .eq("store_id", storeId);
+  if (error) throw error;
+
+  revalidatePath("/leads");
+}

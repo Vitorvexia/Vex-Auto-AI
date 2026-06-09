@@ -261,3 +261,104 @@ describeIf("RPC webhook_ingest_message", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// leads.assigned_to — migration 018
+// Testa o trigger check_lead_assigned_to_store() e o índice (store_id, assigned_to, lead_status)
+// ---------------------------------------------------------------------------
+
+describeIf("leads.assigned_to — cross-tenant trigger (migration 018)", () => {
+  let storeId: string;
+
+  beforeAll(async () => {
+    const store = await createTestStore("leads-assigned");
+    storeId = store.id;
+  });
+
+  afterAll(async () => {
+    await deleteStoreDeep(storeId);
+  });
+
+  it("LT1: atribuição de user da mesma store é aceita", async () => {
+    const userId = await createTestUser(storeId, "Vendedor Same Store");
+    try {
+      const { data: lead, error: leadError } = await db
+        .from("leads")
+        .insert({
+          store_id: storeId,
+          phone_normalized: makePhone(),
+          origem: "whatsapp",
+        })
+        .select("id")
+        .single();
+
+      expect(leadError).toBeNull();
+
+      const { error } = await db
+        .from("leads")
+        .update({ assigned_to: userId })
+        .eq("id", lead!.id)
+        .eq("store_id", storeId);
+
+      expect(error).toBeNull();
+    } finally {
+      await deleteTestUser(userId);
+    }
+  });
+
+  it("LT2: atribuição de user de outra store é rejeitada pelo trigger do banco", async () => {
+    const other = await createTestStore("leads-assigned-other");
+    const otherUserId = await createTestUser(other.id, "Vendedor Outra Store");
+    try {
+      const { data: lead, error: leadError } = await db
+        .from("leads")
+        .insert({
+          store_id: storeId,
+          phone_normalized: makePhone(),
+          origem: "whatsapp",
+        })
+        .select("id")
+        .single();
+
+      expect(leadError).toBeNull();
+
+      const { error } = await db
+        .from("leads")
+        .update({ assigned_to: otherUserId })
+        .eq("id", lead!.id)
+        .eq("store_id", storeId);
+
+      expect(error).toBeTruthy();
+      expect(error!.message.toLowerCase()).toMatch(/assigned_to must belong to the same store/);
+    } finally {
+      await deleteTestUser(otherUserId);
+      await deleteStoreDeep(other.id);
+    }
+  });
+
+  it("LT3: atribuição pode ser removida (assigned_to = null) sem rejeição", async () => {
+    const userId = await createTestUser(storeId, "Vendedor Remove");
+    try {
+      const { data: lead } = await db
+        .from("leads")
+        .insert({
+          store_id: storeId,
+          phone_normalized: makePhone(),
+          assigned_to: userId,
+          origem: "whatsapp",
+        })
+        .select("id")
+        .single();
+
+      const { error } = await db
+        .from("leads")
+        .update({ assigned_to: null })
+        .eq("id", lead!.id)
+        .eq("store_id", storeId);
+
+      expect(error).toBeNull();
+    } finally {
+      await deleteTestUser(userId);
+    }
+  });
+});

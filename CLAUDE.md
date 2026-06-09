@@ -336,9 +336,12 @@ Todas as actions protegidas por `assertSuperAdmin()`.
 - ~~Sem isolamento por `store_id`~~ — ✔ Multi-tenant B1 concluído (`getServerStoreId()` + RLS)
 - ~~Autenticação de usuários real ausente~~ — ✔ Supabase Auth integrada ao `store_id`
 - Query de mensagens sem limite — **pendente**
-- `assigned_to` ainda não utilizado — **pendente**
+- ~~`assigned_to` ainda não utilizado~~ — ✔ feature/assigned-to (leads.assigned_to + atribuição manual + métricas por vendedor)
 - `WHATSAPP_ACCESS_TOKEN` global — por loja é roadmap B2+ — **pendente**
 - Masking de PII em logs — `lib/logger.ts` genérico não mascara telefone/email — **pendente** (LGPD)
+- `leads.assigned_to` guarda apenas responsável atual (sem histórico) — **pendente para ROI/comissões**: avaliar `lead_assignment_history` ou event sourcing quando comissão/ROI avançado/auditoria forem implementados
+- **Atribuição sem RBAC** — `assignLeadToUser`/`removeLeadAssignment` só validam `store_id` (modelo de auth atual, consistente com `updateLeadStatus`/`moveLeadStatus`). Qualquer usuário da loja reatribui qualquer lead. RBAC por papel (vendedor só toca os próprios leads) é decisão de produto futura — **pendente** (bloqueia atribuição confiável de comissões)
+- **Store-move de usuário não revalida `leads.assigned_to`** — trigger `check_lead_assigned_to_store` guarda escrita em `leads`, não `UPDATE users SET store_id`. Sem UI para mover user entre lojas hoje; se criar, revalidar leads atribuídos — **pendente**
 
 ---
 
