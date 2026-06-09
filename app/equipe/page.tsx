@@ -1,151 +1,286 @@
 import Link from "next/link";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { AuthError } from "@/lib/auth";
+import { OPEN_CONVERSATION_STATUSES, type LeadStatus } from "@/types/domain";
+import type { Lead } from "@/types/domain";
+import {
+  calculateTeamPageData,
+  calculateTeamKpis,
+  buildTeamAlerts,
+  formatInactiveDuration,
+  type SellerStatus,
+  type SellerUser,
+} from "@/lib/team-metrics";
 
-const TEAM = [
-  {
-    id: 1,
-    name: "Pedro Alves",
-    initials: "PA",
-    role: "Vendedor Sênior",
-    phone: "+55 11 99001-0001",
-    statusOp: "quente",
-    statusLabel: "Lead Quente Ativo",
-    atendendo: "Carlos Mendes",
-    ultimaAtividade: "2 min",
-    leads: 14,
-    fechamentos: 4,
-    conversion: "28%",
-  },
-  {
-    id: 2,
-    name: "Julia Santos",
-    initials: "JS",
-    role: "Vendedora",
-    phone: "+55 11 99001-0002",
-    statusOp: "atendendo",
-    statusLabel: "Em Atendimento",
-    atendendo: "Ana Pereira",
-    ultimaAtividade: "5 min",
-    leads: 9,
-    fechamentos: 2,
-    conversion: "22%",
-  },
-  {
-    id: 3,
-    name: "Rafael Moura",
-    initials: "RM",
-    role: "Vendedor",
-    phone: "+55 11 99001-0003",
-    statusOp: "parado",
-    statusLabel: "Parado há 2h",
-    atendendo: null,
-    ultimaAtividade: "2h",
-    leads: 6,
-    fechamentos: 1,
-    conversion: "17%",
-  },
-  {
-    id: 4,
-    name: "IA Vex Auto",
-    initials: "IA",
-    role: "Assistente Virtual",
-    phone: "Automático",
-    statusOp: "atendendo",
-    statusLabel: "6 Conversas Ativas",
-    atendendo: null,
-    ultimaAtividade: "agora",
-    leads: 47,
-    fechamentos: 5,
-    conversion: "11%",
-  },
-];
+export const dynamic = "force-dynamic";
+export const revalidate = 0;
 
-export default function EquipePage() {
-  const parados  = TEAM.filter((m) => m.statusOp === "parado").length;
-  const quentes  = TEAM.filter((m) => m.statusOp === "quente").length;
+// ─── Badge helpers ────────────────────────────────────────────────────────────
+
+function statusBadgeCss(status: SellerStatus): string {
+  switch (status) {
+    case "attending": return "atendendo";
+    case "active":    return "disponivel";
+    case "inactive":  return "parado";
+    case "no_leads":  return "disponivel";
+  }
+}
+
+function statusBadgeText(
+  status: SellerStatus,
+  inactiveDurationMs: number | null
+): string {
+  switch (status) {
+    case "attending": return "Em atendimento";
+    case "active":    return "Ativo";
+    case "inactive":
+      return `Sem atividade há ${formatInactiveDuration(inactiveDurationMs ?? 0)}`;
+    case "no_leads":  return "Nenhum lead atribuído";
+  }
+}
+
+function alertMessage(
+  sellerNome: string,
+  hotLeadsStale: number,
+  awaitingHuman: number
+): string {
+  const parts: string[] = [];
+  if (hotLeadsStale > 0) {
+    parts.push(
+      `${hotLeadsStale} lead${hotLeadsStale > 1 ? "s" : ""} quente${hotLeadsStale > 1 ? "s" : ""} sem interação há mais de 4h`
+    );
+  }
+  if (awaitingHuman > 0) {
+    parts.push(
+      `${awaitingHuman} lead${awaitingHuman > 1 ? "s" : ""} aguardando atendimento humano`
+    );
+  }
+  return `${sellerNome} possui ${parts.join(" e ")}`;
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
+export default async function EquipePage() {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new AuthError();
+
+  // Parallel fetch — 2 queries total, no N+1
+  const [usersRes, leadsRes] = await Promise.all([
+    supabase.from("users").select("id, nome, role").order("nome"),
+    // All leads (including FECHADO/PERDIDO) to accurately count closed_leads.
+    // Only fields needed for team metrics; no PII (phone_normalized omitted).
+    supabase
+      .from("leads")
+      .select(
+        "id, score, lead_status, assigned_to, updated_at, conversations(conversation_status)"
+      ),
+  ]);
+
+  // Only vendedores appear in the team performance grid — admins are excluded
+  const sellers = ((usersRes.data ?? []) as SellerUser[]).filter(
+    (u) => u.role === "vendedor"
+  );
+
+  // Normalise leads: flatten embedded conversations to active conversation_status
+  const leads: Lead[] = (leadsRes.data ?? []).map(
+    (l: {
+      id: string;
+      score: number;
+      lead_status: string;
+      assigned_to: string | null;
+      updated_at: string;
+      conversations?: { conversation_status: string | null }[];
+    }) => {
+      const convs = l.conversations ?? [];
+      const activeConv = convs.find((c) =>
+        (OPEN_CONVERSATION_STATUSES as string[]).includes(
+          c.conversation_status ?? ""
+        )
+      );
+      return {
+        id: l.id,
+        nome: null,
+        phone_normalized: "",
+        score: l.score,
+        lead_status: l.lead_status as LeadStatus,
+        assigned_to: l.assigned_to ?? null,
+        conversation_status: activeConv?.conversation_status ?? null,
+        updated_at: l.updated_at,
+      };
+    }
+  );
+
+  const pageData = calculateTeamPageData(leads, sellers);
+  const kpis     = calculateTeamKpis(pageData);
+  const alerts   = buildTeamAlerts(pageData);
+
+  const hasError = usersRes.error || leadsRes.error;
 
   return (
     <main className="container">
       <div className="page-header">
         <div>
           <h1>Equipe</h1>
-          <div className="subtitle">Operação em tempo real · dados simulados</div>
+          <div className="subtitle">
+            Operação em tempo real · {sellers.length}{" "}
+            {sellers.length === 1 ? "vendedor" : "vendedores"}
+          </div>
         </div>
       </div>
 
+      {hasError && (
+        <div className="alert-item warn" style={{ marginBottom: "16px" }}>
+          <span className="alert-icon">⚠</span>
+          <span>Erro ao carregar dados da equipe.</span>
+        </div>
+      )}
+
+      {/* ─── KPI bar ─────────────────────────────────────────────────── */}
       <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
         <div className="kpi-card">
           <div className="kpi-label">Com Lead Quente Agora</div>
-          <div className="kpi-value" style={{ color: "#B91C1C" }}>{quentes}</div>
-          <div className="kpi-delta">requer atenção</div>
+          <div
+            className="kpi-value"
+            style={{ color: kpis.sellers_with_hot_lead > 0 ? "#B91C1C" : "inherit" }}
+          >
+            {kpis.sellers_with_hot_lead}
+          </div>
+          <div className="kpi-delta">
+            {kpis.sellers_with_hot_lead > 0 ? "requer atenção" : "nenhum agora"}
+          </div>
         </div>
+
         <div className="kpi-card">
-          <div className="kpi-label">Parados</div>
-          <div className="kpi-value" style={{ color: parados > 0 ? "#C2410C" : "#15803D" }}>{parados}</div>
-          <div className="kpi-delta">{parados > 0 ? "sem atividade recente" : "todos ativos"}</div>
+          <div className="kpi-label">Sem Atividade &gt;2h</div>
+          <div
+            className="kpi-value"
+            style={{
+              color:
+                kpis.sellers_inactive_2h > 0 ? "#C2410C" : "#15803D",
+            }}
+          >
+            {kpis.sellers_inactive_2h}
+          </div>
+          <div className="kpi-delta">
+            {kpis.sellers_inactive_2h > 0
+              ? "sem atividade recente"
+              : "todos ativos"}
+          </div>
         </div>
+
         <div className="kpi-card">
-          <div className="kpi-label">Fechamentos / Mês</div>
-          <div className="kpi-value" style={{ color: "#10B981" }}>7</div>
-          <div className="kpi-delta up">↑ +2 vs mês anterior</div>
+          <div className="kpi-label">Aguardando Atendimento</div>
+          <div
+            className="kpi-value"
+            style={{ color: kpis.leads_awaiting_human > 0 ? "#B91C1C" : "#15803D" }}
+          >
+            {kpis.leads_awaiting_human}
+          </div>
+          <div className="kpi-delta">
+            {kpis.leads_awaiting_human > 0 ? "requer ação imediata" : "nenhum aguardando"}
+          </div>
         </div>
       </div>
 
-      {parados > 0 && (
-        <div className="alert-item warn" style={{ marginBottom: "16px" }}>
+      {/* ─── Alerts ──────────────────────────────────────────────────── */}
+      {alerts.map((alert) => (
+        <div
+          key={alert.seller_nome}
+          className="alert-item warn"
+          style={{ marginBottom: "8px" }}
+        >
           <span className="alert-icon">⏱</span>
           <span>
-            <strong>Rafael Moura parado há 2h</strong> — tem 1 lead quente não atendido.{" "}
-            <Link href="/conversations" style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}>
+            <strong>
+              {alertMessage(
+                alert.seller_nome,
+                alert.hot_leads_stale,
+                alert.awaiting_human
+              )}
+            </strong>
+            .{" "}
+            <Link
+              href="/conversations"
+              style={{
+                color: "inherit",
+                fontWeight: 700,
+                textDecoration: "underline",
+              }}
+            >
               Ver conversas →
             </Link>
           </span>
         </div>
-      )}
+      ))}
 
-      <div className="team-grid">
-        {TEAM.map((m) => (
-          <div key={m.id} className="team-card">
-            <div className="team-avatar">{m.initials}</div>
-            <div className="team-name">{m.name}</div>
-            <div className="team-role" style={{ marginBottom: "6px" }}>{m.role}</div>
-
-            <div className={`op-badge ${m.statusOp}`}>{m.statusLabel}</div>
-
-            {m.atendendo && (
-              <div style={{ fontSize: "11.5px", color: "var(--muted)", marginBottom: "10px" }}>
-                Atendendo: <strong style={{ color: "var(--text)" }}>{m.atendendo}</strong>
+      {/* ─── Team grid ───────────────────────────────────────────────── */}
+      {sellers.length === 0 ? (
+        <div
+          className="alert-item info"
+          style={{ marginTop: "16px" }}
+        >
+          <span className="alert-icon">ℹ</span>
+          <span>Nenhum vendedor cadastrado nesta loja ainda.</span>
+        </div>
+      ) : (
+        <div className="team-grid">
+          {pageData.map((s) => (
+            <div key={s.userId} className="team-card">
+              <div className="team-avatar">{s.initials}</div>
+              <div className="team-name">{s.nome}</div>
+              <div className="team-role" style={{ marginBottom: "6px" }}>
+                {s.role === "admin" ? "Admin" : "Vendedor"}
               </div>
-            )}
 
-            {!m.atendendo && m.statusOp !== "parado" && (
-              <div style={{ fontSize: "11.5px", color: "var(--muted)", marginBottom: "10px" }}>
-                Última atividade: {m.ultimaAtividade}
+              <div className={`op-badge ${statusBadgeCss(s.status)}`}>
+                {statusBadgeText(s.status, s.inactive_duration_ms)}
               </div>
-            )}
 
-            {m.statusOp === "parado" && (
-              <div style={{ fontSize: "11.5px", color: "#9F1239", marginBottom: "10px", fontWeight: 600 }}>
-                Sem atividade há {m.ultimaAtividade}
+              <div
+                style={{
+                  fontSize: "11.5px",
+                  color: "var(--muted)",
+                  marginBottom: "10px",
+                  marginTop: "6px",
+                }}
+              >
+                {s.status === "no_leads"
+                  ? "Atribua leads a este vendedor para acompanhar desempenho."
+                  : s.last_activity_at
+                  ? `Última atividade: ${new Date(
+                      s.last_activity_at
+                    ).toLocaleString("pt-BR", {
+                      day: "2-digit",
+                      month: "2-digit",
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}`
+                  : "Sem atividade registrada"}
               </div>
-            )}
 
-            <div className="team-stats">
-              <div>
-                <div className="team-stat-value">{m.leads}</div>
-                <div className="team-stat-label">Leads</div>
-              </div>
-              <div>
-                <div className="team-stat-value">{m.fechamentos}</div>
-                <div className="team-stat-label">Fechados</div>
-              </div>
-              <div>
-                <div className="team-stat-value">{m.conversion}</div>
-                <div className="team-stat-label">Conversão</div>
+              <div className="team-stats">
+                <div>
+                  <div className="team-stat-value">{s.total_leads}</div>
+                  <div className="team-stat-label">Leads</div>
+                </div>
+                <div>
+                  <div className="team-stat-value">{s.hot_leads}</div>
+                  <div className="team-stat-label">Quentes</div>
+                </div>
+                <div>
+                  <div className="team-stat-value">{s.closed_leads}</div>
+                  <div className="team-stat-label">Fechados</div>
+                </div>
+                <div>
+                  <div className="team-stat-value">{s.conversion_pct}%</div>
+                  <div className="team-stat-label">Conversão</div>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
-      </div>
+          ))}
+        </div>
+      )}
     </main>
   );
 }
