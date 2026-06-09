@@ -4,6 +4,7 @@ import type { LeadStatus } from "@/types/domain";
 import type { PriorityTier } from "@/lib/lead-priority";
 import { LEAD_TRANSITIONS } from "@/lib/status";
 import { moveLeadStatus } from "@/lib/actions";
+import { LeadAssignmentSelect } from "./LeadAssignmentSelect";
 
 const STATUS_LABELS: Record<LeadStatus, string> = {
   NOVO: "Novo",
@@ -25,6 +26,8 @@ type Props = {
   ultima_atividade: string;
   priority: PriorityTier;
   priority_label: string;
+  assignedTo?: string | null;
+  vendedores?: { id: string; nome: string }[];
 };
 
 type UrgencyLevel = "cooling" | "urgent" | "stale";
@@ -52,6 +55,8 @@ export function LeadCard({
   ultima_atividade,
   priority,
   priority_label,
+  assignedTo,
+  vendedores,
 }: Props) {
   const href        = conversation_id ? `/conversations/${conversation_id}` : "#";
   const sc          = scoreClass(score);
@@ -92,6 +97,14 @@ export function LeadCard({
           </select>
           <button type="submit" aria-label="Mover lead">→</button>
         </form>
+      )}
+
+      {vendedores && (
+        <LeadAssignmentSelect
+          leadId={id}
+          assignedTo={assignedTo ?? null}
+          vendedores={vendedores}
+        />
       )}
     </div>
   );
