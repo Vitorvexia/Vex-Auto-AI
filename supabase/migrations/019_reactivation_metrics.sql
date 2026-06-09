@@ -61,6 +61,10 @@ CREATE INDEX IF NOT EXISTS reactivation_logs_converted_idx
 --   - Tentativas 2+: última reativação há ≥ 30 dias (generaliza tentativa 3)
 -- =============================================================================
 
+-- DROP necessário porque PostgreSQL não permite ALTER do tipo de retorno via
+-- CREATE OR REPLACE (SQLSTATE 42P13). Adição de veiculo_interesse muda o RETURNS TABLE.
+DROP FUNCTION IF EXISTS public.get_reactivation_eligible_leads(uuid, int);
+
 CREATE OR REPLACE FUNCTION public.get_reactivation_eligible_leads(
   p_store_id  uuid DEFAULT NULL,
   p_limit     int  DEFAULT 20
