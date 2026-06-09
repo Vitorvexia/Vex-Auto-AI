@@ -95,6 +95,10 @@ vi.mock("@/lib/lead-scoring", () => ({
   calculateLeadScore: vi.fn(),
 }));
 
+vi.mock("@/lib/reactivation", () => ({
+  markReactivationResponded: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports após mocks
 // ---------------------------------------------------------------------------

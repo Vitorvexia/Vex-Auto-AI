@@ -3,23 +3,99 @@ import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 
 // ---------------------------------------------------------------------------
-// Templates — 2 tentativas, tom de reabordagem cuidadosa
+// Context de reativação — dados do lead usados para enriquecer templates
 // ---------------------------------------------------------------------------
 
-const TEMPLATES: Record<number, (nome: string) => string> = {
+export interface LeadReactivationContext {
+  veiculo_interesse?: string | null;
+}
+
+// ---------------------------------------------------------------------------
+// Templates — 3 tentativas, enriquecidos com nome + veículo
+// ---------------------------------------------------------------------------
+
+const TEMPLATES_WITH_VEHICLE: Record<number, (nome: string, veiculo: string) => string> = {
+  1: (nome, veiculo) =>
+    `Oi, ${nome}! Tudo bem? Vi que você estava interessado em ${veiculo}. Ainda está buscando?`,
+  2: (nome, veiculo) =>
+    `Oi, ${nome}! Voltando para saber sobre o ${veiculo} que conversamos. Ainda tem interesse? Temos novidades!`,
+  3: (nome, veiculo) =>
+    `Oi, ${nome}! Passando uma última vez — o ${veiculo} ainda está disponível. Se quiser retomar, é só me chamar!`,
+};
+
+const TEMPLATES_NO_VEHICLE: Record<number, (nome: string) => string> = {
   1: (nome) =>
     `Oi, ${nome}! Tudo bem? Você ainda está procurando um veículo ou já conseguiu resolver?`,
   2: (nome) =>
-    `Oi, ${nome}! Passando uma última vez para saber se ainda posso te ajudar a encontrar um veículo. Se quiser, é só me chamar por aqui.`,
+    `Oi, ${nome}! Voltando para saber se ainda posso te ajudar a encontrar o veículo certo. Última tentativa — é só me chamar!`,
+  3: (nome) =>
+    `Oi, ${nome}! Passando uma última vez — se quiser conversar sobre veículos, é só me chamar por aqui.`,
 };
 
 export function buildReactivationText(
   attemptNumber: number,
-  nome: string | null
+  nome: string | null,
+  leadContext?: LeadReactivationContext | null
 ): string {
   const safeName = nome?.trim() || "você";
-  const template = TEMPLATES[attemptNumber] ?? TEMPLATES[1];
+  const veiculo = leadContext?.veiculo_interesse?.trim() || null;
+
+  if (veiculo) {
+    const template = TEMPLATES_WITH_VEHICLE[attemptNumber] ?? TEMPLATES_WITH_VEHICLE[1];
+    return template(safeName, veiculo);
+  }
+
+  const template = TEMPLATES_NO_VEHICLE[attemptNumber] ?? TEMPLATES_NO_VEHICLE[1];
   return template(safeName);
+}
+
+// ---------------------------------------------------------------------------
+// markReactivationResponded — chamado pelo pipeline ao receber msg entrante
+// ---------------------------------------------------------------------------
+
+export async function markReactivationResponded(leadId: string): Promise<void> {
+  try {
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+    const { error } = await supabaseAdmin
+      .from("reactivation_logs")
+      .update({ responded_at: new Date().toISOString() })
+      .eq("lead_id", leadId)
+      .eq("status", "sent")
+      .is("responded_at", null)
+      .gte("logged_at", thirtyDaysAgo);
+
+    if (error) {
+      console.error("[reactivation] markReactivationResponded failed:", error.message);
+    }
+  } catch (e) {
+    console.error("[reactivation] markReactivationResponded exception:", e);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// markReactivationConverted — chamado quando lead_status → FECHADO
+// ---------------------------------------------------------------------------
+
+export async function markReactivationConverted(
+  leadId: string,
+  storeId: string
+): Promise<void> {
+  try {
+    const { error } = await supabaseAdmin
+      .from("reactivation_logs")
+      .update({ converted_at: new Date().toISOString() })
+      .eq("lead_id", leadId)
+      .eq("store_id", storeId)
+      .not("responded_at", "is", null)
+      .is("converted_at", null);
+
+    if (error) {
+      console.error("[reactivation] markReactivationConverted failed:", error.message);
+    }
+  } catch (e) {
+    console.error("[reactivation] markReactivationConverted exception:", e);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -40,6 +116,7 @@ interface EligibleLead {
   nome: string | null;
   phone_normalized: string;
   attempt_count: number;
+  veiculo_interesse: string | null;
 }
 
 export async function runReactivationJob(opts?: {
@@ -70,10 +147,12 @@ export async function runReactivationJob(opts?: {
     result.processed++;
     const attemptNumber = lead.attempt_count + 1;
 
-    // Text computed BEFORE insert so message_text is in scope for the claim row
-    const text = buildReactivationText(attemptNumber, lead.nome);
+    // Texto gerado ANTES do insert para garantir consistência entre log e mensagem
+    const text = buildReactivationText(attemptNumber, lead.nome, {
+      veiculo_interesse: lead.veiculo_interesse,
+    });
 
-    // Atomic claim: insert BEFORE sending — 23505 means another instance claimed it
+    // 1. Claim atômico: 23505 = outra instância já processou
     const { error: insertError } = await supabaseAdmin
       .from("reactivation_logs")
       .insert({
@@ -100,19 +179,29 @@ export async function runReactivationJob(opts?: {
 
     const maskedPhone = `****${lead.phone_normalized.slice(-4)}`;
 
+    // 2. Persistir mensagem ANTES do envio WA — falha de envio nunca perde o histórico
+    const { error: msgInsertError } = await supabaseAdmin.from("messages").insert({
+      conversation_id: lead.conversation_id,
+      store_id: lead.store_id,
+      lead_id: lead.lead_id,
+      mensagem: text,
+      direcao: "saida",
+      autor: "sistema",
+      received_at: new Date().toISOString(),
+    });
+
+    if (msgInsertError) {
+      console.error(
+        `[reactivation] messages insert failed lead=${lead.lead_id}:`,
+        msgInsertError.message ?? msgInsertError
+      );
+      // Non-fatal: texto está em reactivation_logs.message_text, prosseguir com envio
+    }
+
+    // 3. Enviar via WhatsApp
     try {
       const phoneId = await getStoreWhatsAppPhoneId(lead.store_id);
       await sendWhatsAppMessage(lead.phone_normalized, text, phoneId);
-
-      await supabaseAdmin.from("messages").insert({
-        conversation_id: lead.conversation_id,
-        store_id: lead.store_id,
-        lead_id: lead.lead_id,
-        mensagem: text,
-        direcao: "saida",
-        autor: "sistema",
-        received_at: new Date().toISOString(),
-      });
 
       console.log(
         `[reactivation] sent lead=${lead.lead_id} attempt=${attemptNumber} phone=${maskedPhone}`
@@ -124,6 +213,7 @@ export async function runReactivationJob(opts?: {
         err instanceof Error ? err.message : err
       );
 
+      // 4. Marcar como falha no log (idempotente se chamado novamente)
       await supabaseAdmin
         .from("reactivation_logs")
         .update({ status: "failed" })

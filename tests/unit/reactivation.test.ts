@@ -2,8 +2,11 @@
  * Testes unitários para lib/reactivation.ts
  *
  * Coberturas:
- * - buildReactivationText: templates 1 e 2, fallback de nome
+ * - buildReactivationText: templates 1-3, com/sem veículo, fallback de nome
+ * - markReactivationResponded: idempotência, falha silenciosa
+ * - markReactivationConverted: só se respondeu, multi-tenant, falha silenciosa
  * - runReactivationJob: lote vazio, envio bem-sucedido, falha WA, 23505 skip
+ *   Invariante: messages.insert ocorre ANTES de sendWhatsAppMessage
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
@@ -45,7 +48,12 @@ vi.mock("@/lib/whatsapp-credentials", () => ({
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { buildReactivationText, runReactivationJob } from "@/lib/reactivation";
+import {
+  buildReactivationText,
+  markReactivationResponded,
+  markReactivationConverted,
+  runReactivationJob,
+} from "@/lib/reactivation";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -83,6 +91,7 @@ const ELIGIBLE_LEAD = {
   nome: "Carlos",
   phone_normalized: "+5511999990001",
   attempt_count: 0,
+  veiculo_interesse: null,
 };
 
 // ---------------------------------------------------------------------------
@@ -104,10 +113,10 @@ afterEach(() => {
 });
 
 // ---------------------------------------------------------------------------
-// buildReactivationText
+// buildReactivationText — sem veículo (fallback)
 // ---------------------------------------------------------------------------
 
-describe("buildReactivationText — templates", () => {
+describe("buildReactivationText — sem veículo", () => {
   it("attempt 1: nome null usa 'você'", () => {
     const text = buildReactivationText(1, null);
     expect(text).toContain("você");
@@ -134,6 +143,162 @@ describe("buildReactivationText — templates", () => {
   it("attempt 2: menciona última vez ou encerrar", () => {
     const text = buildReactivationText(2, "João");
     expect(text.toLowerCase()).toMatch(/última|ultima|encerrar/);
+  });
+
+  it("attempt 3: existe e difere de 1 e 2", () => {
+    const t1 = buildReactivationText(1, "X");
+    const t2 = buildReactivationText(2, "X");
+    const t3 = buildReactivationText(3, "X");
+    expect(t3).not.toBe(t1);
+    expect(t3).not.toBe(t2);
+  });
+
+  it("attempt 3: menciona última vez", () => {
+    const text = buildReactivationText(3, "Maria");
+    expect(text.toLowerCase()).toMatch(/última|ultima/);
+  });
+
+  it("attempt inválido usa fallback do template 1", () => {
+    const t_invalid = buildReactivationText(99, "X");
+    const t1 = buildReactivationText(1, "X");
+    expect(t_invalid).toBe(t1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildReactivationText — com veículo
+// ---------------------------------------------------------------------------
+
+describe("buildReactivationText — com veículo", () => {
+  it("attempt 1: veículo aparece no texto", () => {
+    const text = buildReactivationText(1, "Carlos", { veiculo_interesse: "Honda Civic 2020" });
+    expect(text).toContain("Honda Civic 2020");
+    expect(text).toContain("Carlos");
+  });
+
+  it("attempt 2: veículo aparece no texto", () => {
+    const text = buildReactivationText(2, "Ana", { veiculo_interesse: "Toyota Corolla" });
+    expect(text).toContain("Toyota Corolla");
+  });
+
+  it("attempt 3: veículo aparece no texto", () => {
+    const text = buildReactivationText(3, "João", { veiculo_interesse: "VW Gol" });
+    expect(text).toContain("VW Gol");
+  });
+
+  it("veiculo_interesse null cai no template sem veículo", () => {
+    const with_null = buildReactivationText(1, "X", { veiculo_interesse: null });
+    const without_ctx = buildReactivationText(1, "X");
+    expect(with_null).toBe(without_ctx);
+  });
+
+  it("veiculo_interesse string vazia cai no template sem veículo", () => {
+    const text = buildReactivationText(1, "X", { veiculo_interesse: "   " });
+    const no_veh = buildReactivationText(1, "X");
+    expect(text).toBe(no_veh);
+  });
+
+  it("template com veículo e template sem veículo são distintos", () => {
+    const with_veh = buildReactivationText(1, "X", { veiculo_interesse: "Fiat Uno" });
+    const no_veh = buildReactivationText(1, "X");
+    expect(with_veh).not.toBe(no_veh);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// markReactivationResponded
+// ---------------------------------------------------------------------------
+
+describe("markReactivationResponded", () => {
+  it("chama update em reactivation_logs com responded_at", async () => {
+    const rlogChain = chain({ gte: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(rlogChain);
+
+    await markReactivationResponded("lead-1");
+
+    expect(mockFrom).toHaveBeenCalledWith("reactivation_logs");
+    expect(rlogChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ responded_at: expect.any(String) })
+    );
+  });
+
+  it("filtra por lead_id e status='sent'", async () => {
+    const rlogChain = chain({ gte: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(rlogChain);
+
+    await markReactivationResponded("lead-abc");
+
+    expect(rlogChain.eq).toHaveBeenCalledWith("lead_id", "lead-abc");
+    expect(rlogChain.eq).toHaveBeenCalledWith("status", "sent");
+  });
+
+  it("filtra responded_at IS NULL — idempotência", async () => {
+    const rlogChain = chain({ gte: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(rlogChain);
+
+    await markReactivationResponded("lead-1");
+
+    expect(rlogChain.is).toHaveBeenCalledWith("responded_at", null);
+  });
+
+  it("falha silenciosa — não propaga erro", async () => {
+    const rlogChain = chain({ gte: { data: null, error: { message: "db error" } } });
+    mockFrom.mockReturnValueOnce(rlogChain);
+
+    await expect(markReactivationResponded("lead-1")).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// markReactivationConverted
+// ---------------------------------------------------------------------------
+
+describe("markReactivationConverted", () => {
+  it("chama update em reactivation_logs com converted_at", async () => {
+    const rlogChain = chain({ is: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(rlogChain);
+
+    await markReactivationConverted("lead-1", "store-1");
+
+    expect(mockFrom).toHaveBeenCalledWith("reactivation_logs");
+    expect(rlogChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ converted_at: expect.any(String) })
+    );
+  });
+
+  it("filtra por lead_id e store_id — multi-tenant", async () => {
+    const rlogChain = chain({ is: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(rlogChain);
+
+    await markReactivationConverted("lead-xyz", "store-xyz");
+
+    expect(rlogChain.eq).toHaveBeenCalledWith("lead_id", "lead-xyz");
+    expect(rlogChain.eq).toHaveBeenCalledWith("store_id", "store-xyz");
+  });
+
+  it("exige responded_at NOT NULL — só converte se respondeu", async () => {
+    const rlogChain = chain({ is: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(rlogChain);
+
+    await markReactivationConverted("lead-1", "store-1");
+
+    expect(rlogChain.not).toHaveBeenCalledWith("responded_at", "is", null);
+  });
+
+  it("filtra converted_at IS NULL — idempotência", async () => {
+    const rlogChain = chain({ is: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(rlogChain);
+
+    await markReactivationConverted("lead-1", "store-1");
+
+    expect(rlogChain.is).toHaveBeenCalledWith("converted_at", null);
+  });
+
+  it("falha silenciosa — não propaga erro", async () => {
+    const rlogChain = chain({ is: { data: null, error: { message: "db error" } } });
+    mockFrom.mockReturnValueOnce(rlogChain);
+
+    await expect(markReactivationConverted("lead-1", "store-1")).resolves.toBeUndefined();
   });
 });
 
@@ -180,32 +345,37 @@ describe("runReactivationJob — sem leads elegíveis", () => {
 describe("runReactivationJob — envio bem-sucedido", () => {
   it("lead elegível recebe reativação: processed=1, sent=1", async () => {
     mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // reactivation_logs claim
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // messages
     mockSend.mockResolvedValueOnce(undefined);
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
 
     const result = await runReactivationJob();
 
     expect(result).toMatchObject({ processed: 1, sent: 1, skipped: 0, failed: 0 });
   });
 
-  it("insere em reactivation_logs com status='sent' antes de chamar WA", async () => {
+  it("insere em reactivation_logs ANTES de messages e WA — invariante", async () => {
     mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // reactivation_logs
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // messages
     mockSend.mockResolvedValueOnce(undefined);
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
 
     await runReactivationJob();
 
+    // Primeira chamada a from() = reactivation_logs
     expect(mockFrom.mock.calls[0][0]).toBe("reactivation_logs");
+    // Segunda chamada a from() = messages (ANTES de WA)
+    expect(mockFrom.mock.calls[1][0]).toBe("messages");
+    // WA send chamado após ambos os inserts
+    expect(mockSend).toHaveBeenCalledTimes(1);
   });
 
   it("attempt_number correto: lead com 0 tentativas usa attempt 1", async () => {
     mockRpc.mockResolvedValueOnce({ data: [{ ...ELIGIBLE_LEAD, attempt_count: 0 }], error: null });
     const logChain = chain({ insert: { data: null, error: null } });
     mockFrom.mockReturnValueOnce(logChain);
-    mockSend.mockResolvedValueOnce(undefined);
     mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockSend.mockResolvedValueOnce(undefined);
 
     await runReactivationJob();
 
@@ -218,8 +388,8 @@ describe("runReactivationJob — envio bem-sucedido", () => {
     mockRpc.mockResolvedValueOnce({ data: [{ ...ELIGIBLE_LEAD, attempt_count: 1 }], error: null });
     const logChain = chain({ insert: { data: null, error: null } });
     mockFrom.mockReturnValueOnce(logChain);
-    mockSend.mockResolvedValueOnce(undefined);
     mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockSend.mockResolvedValueOnce(undefined);
 
     await runReactivationJob();
 
@@ -228,11 +398,25 @@ describe("runReactivationJob — envio bem-sucedido", () => {
     );
   });
 
+  it("attempt_number correto: lead com 2 tentativas usa attempt 3", async () => {
+    mockRpc.mockResolvedValueOnce({ data: [{ ...ELIGIBLE_LEAD, attempt_count: 2 }], error: null });
+    const logChain = chain({ insert: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(logChain);
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockSend.mockResolvedValueOnce(undefined);
+
+    await runReactivationJob();
+
+    expect(logChain.insert).toHaveBeenCalledWith(
+      expect.objectContaining({ attempt_number: 3 })
+    );
+  });
+
   it("lead sem nome usa 'você' no template enviado", async () => {
     mockRpc.mockResolvedValueOnce({ data: [{ ...ELIGIBLE_LEAD, nome: null }], error: null });
     mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
-    mockSend.mockResolvedValueOnce(undefined);
     mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockSend.mockResolvedValueOnce(undefined);
 
     await runReactivationJob();
 
@@ -240,15 +424,31 @@ describe("runReactivationJob — envio bem-sucedido", () => {
     expect(sentText).toContain("você");
   });
 
-  it("insere mensagem em messages com autor='sistema'", async () => {
-    mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
+  it("lead com veiculo_interesse usa template com veículo", async () => {
+    mockRpc.mockResolvedValueOnce({
+      data: [{ ...ELIGIBLE_LEAD, veiculo_interesse: "Honda Civic 2020" }],
+      error: null,
+    });
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
     mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
     mockSend.mockResolvedValueOnce(undefined);
-    const msgChain = chain({ insert: { data: null, error: null } });
-    mockFrom.mockReturnValueOnce(msgChain);
 
     await runReactivationJob();
 
+    const sentText = mockSend.mock.calls[0][1] as string;
+    expect(sentText).toContain("Honda Civic 2020");
+  });
+
+  it("insere mensagem em messages com autor='sistema'", async () => {
+    mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    const msgChain = chain({ insert: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(msgChain);
+    mockSend.mockResolvedValueOnce(undefined);
+
+    await runReactivationJob();
+
+    // Segunda chamada a from() é messages
     expect(mockFrom.mock.calls[1][0]).toBe("messages");
     expect(msgChain.insert).toHaveBeenCalledWith(
       expect.objectContaining({ direcao: "saida", autor: "sistema" })
@@ -259,8 +459,8 @@ describe("runReactivationJob — envio bem-sucedido", () => {
     const logSpy = vi.spyOn(console, "log");
     mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
     mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
-    mockSend.mockResolvedValueOnce(undefined);
     mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockSend.mockResolvedValueOnce(undefined);
 
     await runReactivationJob();
 
@@ -277,9 +477,10 @@ describe("runReactivationJob — envio bem-sucedido", () => {
 describe("runReactivationJob — falha no envio WA", () => {
   it("registra failed e continua o lote sem quebrar", async () => {
     mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // claim
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // messages (antes do WA)
     mockSend.mockRejectedValueOnce(new Error("WA timeout"));
-    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));    // update failed
 
     const result = await runReactivationJob();
 
@@ -288,14 +489,15 @@ describe("runReactivationJob — falha no envio WA", () => {
 
   it("atualiza reactivation_logs para status='failed' quando WA falha", async () => {
     mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // claim
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // messages
     mockSend.mockRejectedValueOnce(new Error("timeout"));
     const updateChain = chain({ match: { data: null, error: null } });
     mockFrom.mockReturnValueOnce(updateChain);
 
     await runReactivationJob();
 
-    expect(mockFrom.mock.calls[1][0]).toBe("reactivation_logs");
+    expect(mockFrom.mock.calls[2][0]).toBe("reactivation_logs");
     expect(updateChain.update).toHaveBeenCalledWith(
       expect.objectContaining({ status: "failed" })
     );
@@ -305,13 +507,16 @@ describe("runReactivationJob — falha no envio WA", () => {
     const lead2 = { ...ELIGIBLE_LEAD, lead_id: "lead-2", conversation_id: "conv-2" };
     mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD, lead2], error: null });
 
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    // Lead 1
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // claim
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // messages
     mockSend.mockRejectedValueOnce(new Error("fail"));
-    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));    // update failed
 
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    // Lead 2
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // claim
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // messages
     mockSend.mockResolvedValueOnce(undefined);
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
 
     const result = await runReactivationJob();
 
@@ -326,14 +531,15 @@ describe("runReactivationJob — falha no envio WA", () => {
 describe("runReactivationJob — falha no getStoreWhatsAppPhoneId", () => {
   it("service_error na credencial → failed=1, WA não chamado", async () => {
     mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // claim
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // messages
     mockGetPhoneId.mockRejectedValueOnce(
       new (class extends Error {
         name = "WhatsAppSendError"; category = "service_error"; isRetryable = true;
         constructor() { super("store_credential_lookup_failed"); }
       })()
     );
-    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));    // update failed
 
     const result = await runReactivationJob();
 
@@ -343,14 +549,15 @@ describe("runReactivationJob — falha no getStoreWhatsAppPhoneId", () => {
 
   it("auth_error na credencial → failed=1, WA não chamado", async () => {
     mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
-    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // claim
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));   // messages
     mockGetPhoneId.mockRejectedValueOnce(
       new (class extends Error {
         name = "WhatsAppSendError"; category = "auth_error"; isRetryable = false;
         constructor() { super("store_whatsapp_not_configured"); }
       })()
     );
-    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ match: { data: null, error: null } }));    // update failed
 
     const result = await runReactivationJob();
 

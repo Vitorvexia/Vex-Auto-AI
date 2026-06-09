@@ -18,6 +18,7 @@ import { transitionConversationStatus } from "@/lib/status";
 import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES, type SendErrorCategory } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
+import { markReactivationResponded } from "@/lib/reactivation";
 
 // ============================================================================
 // Tipos
@@ -249,6 +250,9 @@ export async function runAiPipeline(params: {
         // non-fatal: score é autoritativo, auditoria pode ter gaps no MVP
       }
     }
+
+    // Marcar reativação como respondida se aplicável — non-fatal
+    markReactivationResponded(params.leadId).catch(() => {});
 
     const finalStatus: AgentStatus = !sendFailed
       ? "ok"
