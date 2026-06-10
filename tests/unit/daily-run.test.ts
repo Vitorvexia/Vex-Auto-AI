@@ -41,11 +41,13 @@ vi.mock("@/lib/supabase", () => ({
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { POST } from "@/app/api/internal/daily-run/route";
+import { GET, POST } from "@/app/api/internal/daily-run/route";
 
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
+
+const CRON_SECRET_VAL = "cron-secret-test";
 
 function makeRequest(body?: Record<string, unknown>) {
   return new NextRequest("http://localhost/api/internal/daily-run", {
@@ -55,6 +57,24 @@ function makeRequest(body?: Record<string, unknown>) {
       "content-type": "application/json",
     },
     body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+function makeRequestNoAuth(body?: Record<string, unknown>) {
+  return new NextRequest("http://localhost/api/internal/daily-run", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: body ? JSON.stringify(body) : undefined,
+  });
+}
+
+function makeGetRequest(opts: { bearer?: string; internalKey?: string } = {}) {
+  const headers: Record<string, string> = {};
+  if (opts.bearer) headers["authorization"] = `Bearer ${opts.bearer}`;
+  if (opts.internalKey) headers["x-internal-key"] = opts.internalKey;
+  return new NextRequest("http://localhost/api/internal/daily-run", {
+    method: "GET",
+    headers,
   });
 }
 
@@ -76,6 +96,7 @@ beforeEach(() => {
   vi.spyOn(console, "warn").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   process.env.INTERNAL_API_KEY = "test-key";
+  process.env.CRON_SECRET = CRON_SECRET_VAL;
 
   mockRunFollowUpJob.mockResolvedValue({ sent: 0 });
   mockRunReactivationJob.mockResolvedValue({ sent: 0 });
@@ -86,6 +107,7 @@ afterEach(() => {
   vi.clearAllMocks();
   vi.restoreAllMocks();
   delete process.env.INTERNAL_API_KEY;
+  delete process.env.CRON_SECRET;
 });
 
 // ---------------------------------------------------------------------------
@@ -184,5 +206,93 @@ describe("daily-run multi-store iteration", () => {
     expect(mockRunReactivationJob).not.toHaveBeenCalled();
     expect(mockRunRetryFailedJob).not.toHaveBeenCalled();
     expect(body.ok).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET — autenticação
+// ---------------------------------------------------------------------------
+
+describe("daily-run GET — autenticação", () => {
+  it("G1: 200 com Authorization: Bearer CRON_SECRET correto", async () => {
+    mockStores([{ id: "store-a", nome: "Loja A" }]);
+    const res = await GET(makeGetRequest({ bearer: CRON_SECRET_VAL }));
+    expect(res.status).toBe(200);
+  });
+
+  it("G2: 200 com x-internal-key correto", async () => {
+    mockStores([{ id: "store-a", nome: "Loja A" }]);
+    const res = await GET(makeGetRequest({ internalKey: "test-key" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("G3: 401 sem autenticação", async () => {
+    const res = await GET(makeGetRequest());
+    expect(res.status).toBe(401);
+    expect(mockRunFollowUpJob).not.toHaveBeenCalled();
+    expect(mockRunReactivationJob).not.toHaveBeenCalled();
+  });
+
+  it("G4: 401 com Bearer incorreto", async () => {
+    const res = await GET(makeGetRequest({ bearer: "wrong-secret" }));
+    expect(res.status).toBe(401);
+    expect(mockRunFollowUpJob).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// GET — execução dos jobs
+// ---------------------------------------------------------------------------
+
+describe("daily-run GET — execução", () => {
+  it("G5: GET executa runFollowUpJob, runReactivationJob e runRetryFailedJob", async () => {
+    mockStores([{ id: "store-a", nome: "Loja A" }]);
+    await GET(makeGetRequest({ bearer: CRON_SECRET_VAL }));
+
+    expect(mockRunFollowUpJob).toHaveBeenCalledWith(
+      expect.objectContaining({ storeId: "store-a" })
+    );
+    expect(mockRunReactivationJob).toHaveBeenCalledWith(
+      expect.objectContaining({ storeId: "store-a" })
+    );
+    expect(mockRunRetryFailedJob).toHaveBeenCalledTimes(1);
+  });
+
+  it("G6: GET retorna { ok: true, stores } na resposta", async () => {
+    mockStores([{ id: "store-a", nome: "Loja A" }]);
+    const res = await GET(makeGetRequest({ bearer: CRON_SECRET_VAL }));
+    const body = await res.json() as Record<string, unknown>;
+
+    expect(body.ok).toBe(true);
+    expect(body.stores).toBeDefined();
+  });
+
+  it("G7: GET com múltiplas stores itera todas", async () => {
+    mockStores([
+      { id: "store-a", nome: "Loja A" },
+      { id: "store-b", nome: "Loja B" },
+    ]);
+    await GET(makeGetRequest({ bearer: CRON_SECRET_VAL }));
+
+    expect(mockRunReactivationJob).toHaveBeenCalledTimes(2);
+    expect(mockRunRetryFailedJob).toHaveBeenCalledTimes(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// POST — autenticação (regressão)
+// ---------------------------------------------------------------------------
+
+describe("daily-run POST — autenticação (regressão)", () => {
+  it("P1: 401 sem x-internal-key", async () => {
+    const res = await POST(makeRequestNoAuth());
+    expect(res.status).toBe(401);
+    expect(mockRunFollowUpJob).not.toHaveBeenCalled();
+  });
+
+  it("P2: 200 com x-internal-key correto continua funcionando", async () => {
+    mockStores([{ id: "store-a", nome: "Loja A" }]);
+    const res = await POST(makeRequest());
+    expect(res.status).toBe(200);
   });
 });

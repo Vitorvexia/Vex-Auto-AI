@@ -4,9 +4,13 @@
 // Chamado pelo Vercel Cron (plano Hobby: máx 1 execução/dia).
 // Também pode ser chamado manualmente via POST.
 //
+// GET  /api/internal/daily-run
+//   Header: Authorization: Bearer <CRON_SECRET>   (Vercel Cron padrão)
+//   Header: x-internal-key: <INTERNAL_API_KEY>    (manual / fallback)
+//
 // POST /api/internal/daily-run
-// Header: x-internal-key: <INTERNAL_API_KEY>
-// Body (opcional): { "limit": 20 }
+//   Header: x-internal-key: <INTERNAL_API_KEY>
+//   Body (opcional): { "limit": 20 }
 //
 // Itera todas as stores com active=true sequencialmente.
 // Falha em uma store não bloqueia as demais (try/catch por store).
@@ -32,6 +36,22 @@ function verifyKey(provided: string, expected: string): boolean {
   }
 }
 
+function isAuthorized(req: NextRequest): boolean {
+  const internalKey = process.env.INTERNAL_API_KEY;
+  if (internalKey) {
+    const provided = req.headers.get("x-internal-key") ?? "";
+    if (verifyKey(provided, internalKey)) return true;
+  }
+
+  const cronSecret = process.env.CRON_SECRET;
+  if (cronSecret) {
+    const auth = req.headers.get("authorization") ?? "";
+    if (auth.startsWith("Bearer ") && verifyKey(auth.slice(7), cronSecret)) return true;
+  }
+
+  return false;
+}
+
 type StoreResult = {
   store_id: string;
   store_nome: string;
@@ -40,30 +60,9 @@ type StoreResult = {
   error?: string;
 };
 
-export async function POST(req: NextRequest) {
+async function executeDailyRun(limit?: number): Promise<NextResponse> {
   const startMs = Date.now();
 
-  const expectedKey = process.env.INTERNAL_API_KEY;
-  const providedKey = req.headers.get("x-internal-key") ?? "";
-
-  if (!expectedKey || !verifyKey(providedKey, expectedKey)) {
-    console.warn(JSON.stringify({
-      level: "warn",
-      event: "daily_run_unauthorized",
-      ts: new Date().toISOString(),
-    }));
-    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
-  }
-
-  let limit: number | undefined;
-  try {
-    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
-    if (typeof body.limit === "number") limit = body.limit;
-  } catch {
-    // usa defaults
-  }
-
-  // Busca stores ativas
   const { data: stores, error: storesError } = await supabaseAdmin
     .from("stores")
     .select("id, nome")
@@ -141,4 +140,44 @@ export async function POST(req: NextRequest) {
   }));
 
   return NextResponse.json(response);
+}
+
+export async function GET(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    console.warn(JSON.stringify({
+      level: "warn",
+      event: "daily_run_unauthorized",
+      method: "GET",
+      ts: new Date().toISOString(),
+    }));
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  const url = new URL(req.url);
+  const limitStr = url.searchParams.get("limit");
+  const limit = limitStr ? parseInt(limitStr, 10) : undefined;
+
+  return executeDailyRun(limit);
+}
+
+export async function POST(req: NextRequest) {
+  if (!isAuthorized(req)) {
+    console.warn(JSON.stringify({
+      level: "warn",
+      event: "daily_run_unauthorized",
+      method: "POST",
+      ts: new Date().toISOString(),
+    }));
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  let limit: number | undefined;
+  try {
+    const body = (await req.json().catch(() => ({}))) as Record<string, unknown>;
+    if (typeof body.limit === "number") limit = body.limit;
+  } catch {
+    // usa defaults
+  }
+
+  return executeDailyRun(limit);
 }
