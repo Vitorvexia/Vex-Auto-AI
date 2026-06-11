@@ -5,8 +5,9 @@
 // Também pode ser chamado manualmente via POST.
 //
 // GET  /api/internal/daily-run
-//   Header: Authorization: Bearer <CRON_SECRET>   (Vercel Cron padrão)
+//   Header: Authorization: Bearer <CRON_SECRET>   (Vercel Cron — validado se CRON_SECRET configurado)
 //   Header: x-internal-key: <INTERNAL_API_KEY>    (manual / fallback)
+//   Fallback: se CRON_SECRET ausente, qualquer Bearer é aceito (Vercel envia token inconfirmável)
 //
 // POST /api/internal/daily-run
 //   Header: x-internal-key: <INTERNAL_API_KEY>
@@ -47,6 +48,14 @@ function isAuthorized(req: NextRequest): boolean {
   if (cronSecret) {
     const auth = req.headers.get("authorization") ?? "";
     if (auth.startsWith("Bearer ") && verifyKey(auth.slice(7), cronSecret)) return true;
+    return false;
+  }
+
+  // CRON_SECRET ausente: Vercel Cron envia Bearer que não podemos validar — aceita GET com Bearer presente.
+  // POST continua exigindo x-internal-key.
+  if (req.method === "GET") {
+    const auth = req.headers.get("authorization") ?? "";
+    return auth.startsWith("Bearer ");
   }
 
   return false;

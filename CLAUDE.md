@@ -370,6 +370,8 @@ Todas as actions protegidas por `assertSuperAdmin()`.
 - Query de mensagens sem limite — **pendente**
 - ~~`assigned_to` ainda não utilizado~~ — ✔ feature/assigned-to (leads.assigned_to + atribuição manual + métricas por vendedor)
 - `WHATSAPP_ACCESS_TOKEN` global — por loja é roadmap B2+ — **pendente**
+- **`WHATSAPP_PHONE_NUMBER_ID` aponta para sandbox** — `1150232648165177` (`+1 555-629-2868`). Número real Speed Motos (`1233441783176942`) é `ON_PREMISE`, incompatível com Cloud API. Envios de follow-up e reativação falham em produção. Resolução: registrar número Cloud API real na Meta e atualizar env na Vercel — **BLOQUEIO OPERACIONAL**
+- `error_category` ausente em `reactivation_logs` e `error_message` nunca populado em `follow_up_logs` — falhas de envio WA são silenciosas nos jobs — **pendente** (observabilidade)
 - Masking de PII em logs — `lib/logger.ts` genérico não mascara telefone/email — **pendente** (LGPD)
 - `leads.assigned_to` guarda apenas responsável atual (sem histórico) — **pendente para ROI/comissões**: avaliar `lead_assignment_history` ou event sourcing quando comissão/ROI avançado/auditoria forem implementados
 - **Atribuição sem RBAC** — `assignLeadToUser`/`removeLeadAssignment` só validam `store_id` (modelo de auth atual, consistente com `updateLeadStatus`/`moveLeadStatus`). Qualquer usuário da loja reatribui qualquer lead. RBAC por papel (vendedor só toca os próprios leads) é decisão de produto futura — **pendente** (bloqueia atribuição confiável de comissões)
@@ -455,7 +457,7 @@ npm install   # prepare script roda `husky` automaticamente
 
 ## Estado Atual do Sistema (Produção)
 
-> Última atualização: 2026-06-09
+> Última atualização: 2026-06-10
 
 ### Infraestrutura
 
@@ -468,9 +470,9 @@ npm install   # prepare script roda `husky` automaticamente
 ### WhatsApp
 
 - Webhook Meta configurado e respondendo (`/api/whatsapp/webhook`)
-- Envio e recebimento de mensagens operacional via WhatsApp Cloud API
 - Pipeline de IA integrado ao fluxo de entrada/saída de mensagens
 - Validação HMAC ativa em todos os requests do webhook
+- ⚠️ **BLOQUEIO ATIVO**: `WHATSAPP_PHONE_NUMBER_ID` aponta para sandbox Meta (`1150232648165177`, `+1 555-629-2868`). Envios falham para todos os leads — Meta bloqueia entrega fora de números homologados. Sistema encontra leads, cria mensagens e chama API corretamente; bloqueio é exclusivamente de infraestrutura Meta. Número real da Speed Motos (`1233441783176942`) é plataforma `ON_PREMISE` — incompatível com Cloud API. **Resolução pendente:** registrar número Cloud API real e atualizar `WHATSAPP_PHONE_NUMBER_ID` na Vercel.
 
 ### Pipeline de IA
 
@@ -505,7 +507,7 @@ Garantias operacionais:
 
 - Follow-up automático operacional — cadência 2h → 24h → 72h
 - Reativação de leads operacional (Mina de Ouro) — 3 tentativas, templates enriquecidos, ENCERRADA elegível, métricas responded_at/converted_at
-- Cron consolidado em `/api/internal/daily-run` (compatível com Vercel Hobby — máx 1 execução/dia)
+- Cron consolidado em `/api/internal/daily-run` — PR #24 corrigiu bug crítico: Vercel Cron envia GET, endpoint só tinha POST → 405 em toda execução. GET handler adicionado com dual-auth (`Authorization: Bearer <CRON_SECRET>` + `x-internal-key`). Cron operacional a partir de 2026-06-10.
 - Proteção por `INTERNAL_API_KEY` em todos os endpoints internos
 
 ### Segurança
@@ -550,6 +552,7 @@ Garantias operacionais:
 - `responded_at` e `converted_at` rastreando resultado ponta a ponta
 - 5 leads elegíveis identificados no primeiro run pós-deploy
 - RPC `get_reactivation_eligible_leads` com DISTINCT ON + ENCERRADA + veiculo_interesse
+- ⚠️ Envios WhatsApp falhando por bloqueio de sandbox Meta (ver seção WhatsApp)
 
 ### Frontend
 
