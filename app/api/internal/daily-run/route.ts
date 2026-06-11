@@ -143,7 +143,21 @@ async function executeDailyRun(limit?: number): Promise<NextResponse> {
 }
 
 export async function GET(req: NextRequest) {
+  console.log("[CRON_DIAG]", JSON.stringify({
+    hasCronSecret: !!process.env.CRON_SECRET,
+    hasInternalKey: !!process.env.INTERNAL_API_KEY,
+    authHeader: req.headers.get("authorization") ? "present" : "missing",
+    internalHeader: req.headers.get("x-internal-key") ? "present" : "missing",
+    method: req.method,
+    timestamp: new Date().toISOString(),
+  }));
+
   if (!isAuthorized(req)) {
+    console.warn("[CRON_DIAG_UNAUTHORIZED]", JSON.stringify({
+      hasCronSecret: !!process.env.CRON_SECRET,
+      authHeader: req.headers.get("authorization") ? "present" : "missing",
+      internalHeader: req.headers.get("x-internal-key") ? "present" : "missing",
+    }));
     console.warn(JSON.stringify({
       level: "warn",
       event: "daily_run_unauthorized",
