@@ -126,10 +126,10 @@ Lead → Conversão → Cliente → Reativação → Nova venda → (loop infini
 
 A IA **nunca** pode:
 - assinar contratos
-- fechar venda abaixo da margem mínima sem aprovação humana ⚠️ **INTENÇÃO NÃO IMPLEMENTADA** — ver Dívidas Técnicas
+- fechar venda abaixo da margem mínima sem aprovação humana ✔ **IMPLEMENTADO** — `updateLeadStatus(FECHADO)` valida `valor_final >= custo + margem_minima` (PR #26, migration 020)
 
 Regras críticas:
-- controle de margem obrigatório ⚠️ **PENDENTE** — `vehicles.margem_minima` existe no DB mas não é validado em nenhum guardrail ou server action
+- controle de margem obrigatório ✔ **IMPLEMENTADO** — `updateLeadStatus` bloqueia fechamento abaixo do piso; `moveLeadStatus` bloqueia FECHADO via Kanban; UI exige `vehicle_id` + `valor_final`
 - aprovação humana em decisões financeiras
 - automação com limites definidos
 
@@ -349,6 +349,35 @@ Atribuição manual de leads a vendedores com métricas por usuário.
 
 **Dívidas:** RBAC pendente (qualquer usuário da loja pode reatribuir qualquer lead). Histórico de atribuição pendente (necessário para comissões/ROI futuro).
 
+### Guardrail de Margem — Etapa 2 (`lib/actions.ts`, migration 020)
+
+Fechamento de venda com validação de margem obrigatória. Concluído em PR #26.
+
+**Migration 020:** `leads.vehicle_id` (uuid, nullable, FK → vehicles ON DELETE SET NULL) + `leads.valor_final` (numeric 12,2, nullable, CHECK >= 0). Index em `vehicle_id`.
+
+**`updateLeadStatus(FECHADO)`:**
+1. Exige `vehicle_id` no FormData — erro se ausente
+2. Exige `valor_final > 0` no FormData — erro se ausente ou zero
+3. Busca `vehicles.custo` + `vehicles.margem_minima` com guard de `store_id` (cross-store bloqueado)
+4. Calcula `piso = custo + margem_minima`
+5. Bloqueia se `valor_final < piso` — erro explícito ao vendedor
+6. Persiste `leads.vehicle_id` + `leads.valor_final` antes de chamar `transitionLeadStatus`
+7. Chama `markReactivationConverted` (non-fatal) após fechamento
+
+**`moveLeadStatus`:** rejeita `newStatus === "FECHADO"` com mensagem orientando o vendedor a usar a página da conversa.
+
+**UI (`app/conversations/[id]/page.tsx`):** `select#vehicle_id` + `input#valor_final` aparecem condicionalmente apenas quando `canCloseLead` (transição FECHADO disponível para o status atual do lead).
+
+**Cobertura de testes:** MARGIN-1 (sem vehicle_id), MARGIN-2 (sem valor_final), MARGIN-2b (valor zero), MARGIN-3 (abaixo do piso), MARGIN-4 (no exato piso — permitido), MARGIN-5 (acima do piso), MARGIN-6 (vehicle_id de outra loja), MARGIN-7 (moveLeadStatus bloqueia FECHADO).
+
+### PII Masking (`lib/pii.ts`, `lib/logger.ts`, PR #26)
+
+Masking de dados pessoais nos logs. Concluído em PR #26.
+
+**`lib/pii.ts`:** `maskPhone(phone)` — mantém prefixo E.164 + últimos 4 dígitos (ex: `+5511*****1234`). `maskEmail(email)` — oculta local part. `maskName(name)` — mantém primeiro nome.
+
+**`lib/logger.ts`:** `PHONE_FIELDS = Set(["phone", "phone_normalized", "to", "from", "numero"])`. `sanitizeMeta` itera campos do objeto de log e aplica `maskPhone` nos campos correspondentes. Todos os logs do pipeline de IA passam por `sanitizeMeta`.
+
 ### Onboarding Operacional (`app/admin/actions.ts`)
 
 Fluxo para provisionar nova loja:
@@ -371,13 +400,14 @@ Todas as actions protegidas por `assertSuperAdmin()`.
 - `WHATSAPP_ACCESS_TOKEN` global — por loja é roadmap B2+ — **pendente**
 - **`WHATSAPP_PHONE_NUMBER_ID` aponta para sandbox** — `1150232648165177` (`+1 555-629-2868`). Número real Speed Motos (`1233441783176942`) é `ON_PREMISE`, incompatível com Cloud API. Envios de follow-up e reativação falham em produção. Resolução: registrar número Cloud API real na Meta e atualizar env na Vercel — **BLOQUEIO OPERACIONAL**
 - `error_category` ausente em `reactivation_logs` e `error_message` nunca populado em `follow_up_logs` — falhas de envio WA são silenciosas nos jobs — **pendente** (observabilidade)
-- Masking de PII em logs — `lib/logger.ts` genérico não mascara telefone/email — **pendente** (LGPD)
+- ~~Masking de PII em logs~~ — ✔ `lib/pii.ts` + `lib/logger.ts` mascarando `phone/phone_normalized/to/from/numero` (PR #26)
+- **`CRON_SECRET` não configurado** — `/api/internal/daily-run` GET aceita qualquer Bearer token quando `CRON_SECRET` está ausente no env. Configurar na Vercel — **pendente** (segurança)
 - `leads.assigned_to` guarda apenas responsável atual (sem histórico) — **pendente para ROI/comissões**: avaliar `lead_assignment_history` ou event sourcing quando comissão/ROI avançado/auditoria forem implementados
 - **Atribuição sem RBAC** — `assignLeadToUser`/`removeLeadAssignment` só validam `store_id` (modelo de auth atual, consistente com `updateLeadStatus`/`moveLeadStatus`). Qualquer usuário da loja reatribui qualquer lead. RBAC por papel (vendedor só toca os próprios leads) é decisão de produto futura — **pendente** (bloqueia atribuição confiável de comissões)
 - **Store-move de usuário não revalida `leads.assigned_to`** — trigger `check_lead_assigned_to_store` guarda escrita em `leads`, não `UPDATE users SET store_id`. Sem UI para mover user entre lojas hoje; se criar, revalidar leads atribuídos — **pendente**
 - ~~**Estoque UI é mock hardcoded**~~ — ✔ CRUD real implementado (PR #25, 2026-06-12). `app/estoque/page.tsx` lê/escreve `vehicles` via RLS. Server Actions: `createVehicle`, `updateVehicle`, `archiveVehicle`, `unarchiveVehicle`. Mock `const VEHICLES = [...]` removido.
-- **Margem sem guardrails** — `vehicles.margem_minima` existe no DB e IA agora recebe `custo` e `margem_minima` no contexto (PR #25). Mas `lib/guardrails.ts` ainda não valida proposta contra margem mínima. Proposta abaixo da margem não é bloqueada — **REGRA DE NEGÓCIO CRÍTICA PARCIALMENTE IMPLEMENTADA** (contexto OK, guardrail pendente)
-- **ROI financeiro ausente** — `calculateOperationalMetrics` retorna métricas operacionais (leads, follow-ups, taxas de resposta) mas não faturamento, margem por venda, CAC ou LTV. `lead.status = FECHADO` não persiste valor da venda — **pendente**
+- ~~**Margem sem guardrails**~~ — ✔ Guardrail de Margem Etapa 2 implementado (PR #26): `updateLeadStatus(FECHADO)` valida `valor_final >= custo + margem_minima`; `moveLeadStatus` bloqueia FECHADO no Kanban; `leads.vehicle_id` + `leads.valor_final` persistidos (migration 020)
+- **ROI financeiro ausente** — `calculateOperationalMetrics` retorna métricas operacionais (leads, follow-ups, taxas de resposta) mas não faturamento, margem por venda, CAC ou LTV. `leads.valor_final` agora existe no schema (migration 020) mas `calculateOperationalMetrics` ainda não o usa — **pendente**
 - **Kanban sem drag-and-drop** — mudança de status só via select dropdown; sem biblioteca DnD — **pendente (Fase 3)**
 
 ---
@@ -460,7 +490,7 @@ npm install   # prepare script roda `husky` automaticamente
 
 ## Estado Atual do Sistema (Produção)
 
-> Última atualização: 2026-06-12
+> Última atualização: 2026-06-12 (PR #26)
 
 ### Infraestrutura
 
@@ -468,7 +498,8 @@ npm install   # prepare script roda `husky` automaticamente
 - Domínio configurado e operacional
 - Variáveis de ambiente configuradas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `INTERNAL_API_KEY`, `ADMIN_EMAILS`
 - ~~`DEFAULT_STORE_ID`~~ removido — substituído por `getServerStoreId()` (multi-tenant B1)
-- Banco Supabase com todas as migrations aplicadas em produção (001–019)
+- Banco Supabase com migrations 001–019 aplicadas em produção. **Migration 020 pendente de aplicação** (`leads.vehicle_id` + `leads.valor_final`) — PR #26 mergeado, aplicar via Supabase Dashboard ou CLI
+- ⚠️ `CRON_SECRET` não configurado na Vercel — pendente
 
 ### WhatsApp
 
@@ -516,9 +547,11 @@ Garantias operacionais:
 ### Segurança
 
 - Validação HMAC em todos os requests do webhook Meta
-- Telefones mascarados nos logs — ⚠️ implementação pendente em `lib/logger.ts` (pipeline afirma masking, verificação necessária)
-- Logs sem PII — parcial (tokens Meta não logados; masking de número não universal)
+- ✔ Telefones mascarados nos logs — `lib/pii.ts` + `lib/logger.ts` (PR #26). Campos `phone/phone_normalized/to/from/numero` mascarados em todos os logs do pipeline
+- ✔ `.env.vercel.tmp` adicionado ao `.gitignore` — arquivo de segredos de produção não vaza mais para o repositório (PR #26)
+- Logs sem PII — maioria resolvida; tokens Meta não logados; `lib/logger.ts` cobre campos conhecidos
 - Endpoints internos protegidos por `INTERNAL_API_KEY`
+- ⚠️ `CRON_SECRET` não configurado — `/api/internal/daily-run` GET aceita qualquer Bearer token quando ausente — **pendente configuração na Vercel**
 
 ### Multi-tenant B1
 
@@ -564,7 +597,7 @@ Garantias operacionais:
 - `/estoque` — **CRUD real** (PR #25, 2026-06-12): lista veículos do DB, criar/editar/arquivar/desarquivar. Mock removido.
 - UX em refinamento — fluxos funcionam, design não é versão final
 
-### Auditoria MVP — Estado de Implementação (2026-06-11)
+### Auditoria MVP — Estado de Implementação (2026-06-12, PR #26)
 
 | Feature | Status | Gap principal |
 |---------|--------|---------------|
@@ -575,13 +608,16 @@ Garantias operacionais:
 | **IA** | ✅ Completo (MVP) | — |
 | **Follow-up** | ✅ Completo (MVP) | — |
 | **Reativação** | ✅ Completo (MVP) | — |
-| **Margem** | 🟡 Parcial | IA agora recebe custo+margem_minima (PR #25); guardrail em lib/guardrails.ts pendente |
-| **ROI** | ❌ Financeiro não implementado | Apenas métricas operacionais; sem faturamento/CAC/LTV |
+| **Margem** | ✅ Completo (MVP) | Guardrail Etapa 2 (PR #26): fechamento bloqueia abaixo do piso, persiste vehicle_id + valor_final |
+| **PII Masking** | ✅ Completo (MVP) | lib/pii.ts + lib/logger.ts mascarando campos de telefone (PR #26) |
+| **ROI** | ❌ Financeiro não implementado | leads.valor_final existe (migration 020); calculateOperationalMetrics não usa ainda |
+| **Teste Aceitação MVP** | ⏳ Pendente | Fluxo ponta a ponta com número WhatsApp Cloud API real — ver seção abaixo |
 
 **Evidências-chave:**
 - ~~`app/estoque/page.tsx:3` — `const VEHICLES = [...]` hardcoded~~ — ✔ removido (PR #25)
 - ~~`lib/agent-context.ts:77-85` — query vehicles sem `custo`, `margem_minima`~~ — ✔ corrigido (PR #25)
-- `lib/guardrails.ts` — zero referência a margem, custo ou preço — **pendente**
+- ~~`lib/guardrails.ts` — zero referência a margem~~ — ✔ `updateLeadStatus` valida piso (PR #26)
+- ~~`messages.insert` sem `store_id`/`lead_id`~~ — ✔ corrigido em `assignConversationToHuman` + `returnConversationToAI` (PR #26)
 - `calculateOperationalMetrics()` — sem campos de faturamento ou margem por venda — **pendente**
 
 ---
@@ -610,8 +646,9 @@ Garantias operacionais:
 ### Fase 3 — MVP Completo
 
 - ~~**Estoque real**~~ — ✔ CRUD real implementado (PR #25, 2026-06-12): criar/editar/arquivar/desarquivar, RLS, mock removido
-- **Margem com guardrails** — IA já recebe `custo`/`margem_minima` (PR #25); falta validar proposta em `lib/guardrails.ts` e bloquear/alertar se abaixo de `margem_minima`
-- **ROI financeiro** — persistir valor da venda ao fechar lead; calcular faturamento gerado, margem por transação, CAC por canal
+- ~~**Margem com guardrails**~~ — ✔ Guardrail Etapa 2 (PR #26, 2026-06-12): `updateLeadStatus(FECHADO)` valida piso, `moveLeadStatus` bloqueia FECHADO no Kanban, `leads.vehicle_id` + `leads.valor_final` persistidos (migration 020)
+- ~~**PII Masking**~~ — ✔ `lib/pii.ts` + `lib/logger.ts` (PR #26, 2026-06-12)
+- **ROI financeiro** — `leads.valor_final` existe (migration 020); falta `calculateOperationalMetrics` usar valor_final para calcular faturamento gerado, margem por transação, CAC por canal
 - **Kanban com drag-and-drop** e filtros avançados (score, data, tag, origem)
 - Inbox estilo WhatsApp (conversa em tempo real, histórico completo)
 - Dashboard operacional com métricas em tempo real
@@ -648,6 +685,14 @@ O Vex Auto já está operando em produção com:
 
 O sistema já executa partes reais da operação comercial, reduzindo dependência humana e aumentando velocidade de resposta e conversão.
 
+Adicionado em PR #26 (2026-06-12):
+- guardrail de margem obrigatório no fechamento de venda (vehicle_id + valor_final + validação de piso)
+- `moveLeadStatus` bloqueia FECHADO no Kanban
+- PII masking universal nos logs do pipeline (lib/pii.ts + lib/logger.ts)
+- migration 020: leads.vehicle_id + leads.valor_final
+- correção de messages.insert sem store_id/lead_id (falha silenciosa em cada handoff)
+- .env.vercel.tmp no .gitignore (segredos de produção não vazam mais)
+
 ---
 
 ## Princípio de Execução
@@ -663,3 +708,52 @@ Se não aumentar, não é prioridade.
 ## Objetivo Final
 
 O objetivo final do sistema é se tornar indispensável — a operação comercial da loja deve depender dele para funcionar.
+
+---
+
+## Teste Final de Aceitação do MVP
+
+> ⏳ **PENDENTE** — executar após configuração operacional completa (WhatsApp Cloud API real + token permanente + CRON_SECRET)
+
+Se esse fluxo funcionar ponta a ponta com a Speed Motos, o MVP do Vex Auto está concluído.
+
+### Pré-requisitos operacionais (fora do código)
+
+1. **Meta Business Manager** — registrar número Cloud API real da Speed Motos, obter `Phone Number ID`
+2. **Vercel env vars** — atualizar `WHATSAPP_PHONE_NUMBER_ID` (novo Phone Number ID), `WHATSAPP_ACCESS_TOKEN` (System User token permanente), configurar `CRON_SECRET`
+3. **Supabase produção** — aplicar migration `020_lead_sale_fields.sql` + atualizar `stores.whatsapp_phone_number_id` e `stores.whatsapp_numero` da Speed Motos
+4. **Higiene** — desativar loja demo e webhook de teste no painel Meta
+
+### Fluxo de aceitação
+
+```
+Lead envia mensagem via WhatsApp
+↓
+Webhook recebe — HTTP 200 retornado à Meta
+↓
+Pipeline de IA processa — buildAgentContext → runGuardrails → runAgent
+↓
+Resposta salva em messages (banco) antes do envio
+↓
+Mensagem chega no celular do lead
+↓
+Follow-up automático dispara (2h depois se sem resposta)
+↓
+Mensagem de follow-up chega no celular
+↓
+Lead responde e entra em negociação
+↓
+Vendedor assume conversa (assignConversationToHuman) — message de sistema inserida corretamente
+↓
+Vendedor seleciona veículo + informa valor de venda
+↓
+Valor abaixo da margem mínima → bloqueado com erro explícito
+↓
+Valor acima da margem mínima → lead fechado, vehicle_id + valor_final persistidos
+↓
+Analytics registra lead fechado na janela de 30 dias
+```
+
+### Critério de sucesso
+
+Todos os passos acima executam sem erro, mensagens chegam no celular real do lead, e o fechamento persiste `vehicle_id` + `valor_final` no banco com validação de margem funcionando.
