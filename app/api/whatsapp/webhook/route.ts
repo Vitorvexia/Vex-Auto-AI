@@ -5,6 +5,7 @@ import { verifyMetaSignature } from "@/lib/whatsapp-signature";
 import { ingestMessage } from "@/lib/ingest";
 import { runAiPipeline } from "@/lib/ai-pipeline";
 import { isReplayedMessage } from "@/lib/replay-guard";
+import { maskPhone } from "@/lib/pii";
 
 // Precisamos de Node runtime para node:crypto (HMAC)
 export const runtime = "nodejs";
@@ -127,7 +128,7 @@ export async function POST(req: NextRequest) {
           results.push({
             message_external_id: m?.id ?? "?",
             status: "skipped",
-            error: `store not found for ${destNormalized}`,
+            error: `store not found for ${maskPhone(destNormalized)}`,
           });
         }
         continue;

@@ -6,7 +6,6 @@ import {
   transitionConversationStatus,
   transitionLeadStatus,
 } from "@/lib/status";
-import { simulateFinancing } from "@/lib/financing";
 import type { LeadStatus } from "@/types/domain";
 import { ingestLeadManually, type IngestLeadResult } from "@/lib/lead-ingestion";
 import { getServerStoreId } from "@/lib/auth";
@@ -28,7 +27,7 @@ export async function assignConversationToHuman(
   const storeId = await getServerStoreId();
   const { data: check } = await supabaseAdmin
     .from("conversations")
-    .select("id")
+    .select("id, lead_id")
     .eq("id", conversationId)
     .eq("store_id", storeId)
     .maybeSingle();
@@ -40,6 +39,8 @@ export async function assignConversationToHuman(
   });
   await supabaseAdmin.from("messages").insert({
     conversation_id: conversationId,
+    store_id: storeId,
+    lead_id: check.lead_id,
     direcao: "saida",
     autor: "sistema",
     mensagem: "Conversa assumida por humano",
@@ -53,7 +54,7 @@ export async function returnConversationToAI(
   const storeId = await getServerStoreId();
   const { data: check } = await supabaseAdmin
     .from("conversations")
-    .select("id")
+    .select("id, lead_id")
     .eq("id", conversationId)
     .eq("store_id", storeId)
     .maybeSingle();
@@ -65,6 +66,8 @@ export async function returnConversationToAI(
   });
   await supabaseAdmin.from("messages").insert({
     conversation_id: conversationId,
+    store_id: storeId,
+    lead_id: check.lead_id,
     direcao: "saida",
     autor: "sistema",
     mensagem: "Conversa retornada para IA",
@@ -90,6 +93,43 @@ export async function updateLeadStatus(
   if (!VALID_LEAD_STATUSES.has(newStatus)) {
     throw new Error(`Status inválido: ${newStatus}`);
   }
+
+  if (newStatus === "FECHADO") {
+    const vehicleId     = (formData.get("vehicle_id")   as string | null)?.trim() || null;
+    const valorFinalRaw =  formData.get("valor_final")  as string | null;
+
+    if (!vehicleId) {
+      throw new Error("Selecione o veículo vendido para fechar esta venda.");
+    }
+    const valorFinal = parseFloat(valorFinalRaw ?? "");
+    if (isNaN(valorFinal) || valorFinal <= 0) {
+      throw new Error("Informe o valor de venda para fechar esta negociação.");
+    }
+
+    const { data: vehicle } = await supabaseAdmin
+      .from("vehicles")
+      .select("id, custo, margem_minima")
+      .eq("id", vehicleId)
+      .eq("store_id", storeId)
+      .maybeSingle();
+    if (!vehicle) throw new Error("Veículo não encontrado.");
+
+    const custo        = vehicle.custo        ?? 0;
+    const margemMinima = vehicle.margem_minima ?? 0;
+    const piso         = custo + margemMinima;
+
+    if (valorFinal < piso) {
+      throw new Error("Venda abaixo da margem mínima permitida para este veículo.");
+    }
+
+    const { error: updateError } = await supabaseAdmin
+      .from("leads")
+      .update({ vehicle_id: vehicleId, valor_final: valorFinal })
+      .eq("id", leadId)
+      .eq("store_id", storeId);
+    if (updateError) throw new Error("Erro ao registrar dados da venda.");
+  }
+
   await transitionLeadStatus(leadId, newStatus as LeadStatus);
   if (newStatus === "FECHADO") markReactivationConverted(leadId, storeId).catch(() => {});
   revalidatePath(`/conversations/${conversationId}`);
@@ -132,65 +172,15 @@ export async function moveLeadStatus(
   if (!VALID_LEAD_STATUSES.has(newStatus)) {
     throw new Error(`Status inválido: ${newStatus}`);
   }
+
+  if (newStatus === "FECHADO") {
+    throw new Error(
+      "Para fechar uma venda, use a página da conversa — é necessário informar o veículo e o valor de venda."
+    );
+  }
+
   await transitionLeadStatus(leadId, newStatus as LeadStatus);
-  if (newStatus === "FECHADO") markReactivationConverted(leadId, storeId).catch(() => {});
   revalidatePath("/leads");
-}
-
-export async function saveFinancingSimulation(
-  leadId: string,
-  conversationId: string,
-  formData: FormData
-): Promise<void> {
-  const storeId = await getServerStoreId();
-  const { data: check } = await supabaseAdmin
-    .from("leads")
-    .select("id")
-    .eq("id", leadId)
-    .eq("store_id", storeId)
-    .maybeSingle();
-  if (!check) throw new Error("Lead não encontrado");
-
-  const vehicle_price    = Number(formData.get("vehicle_price"));
-  const entry_value      = Number(formData.get("entry_value") ?? 0);
-  const term_months      = Number(formData.get("term_months"));
-  const ratePctRaw       = formData.get("monthly_rate_pct");
-  const monthly_rate     = ratePctRaw !== null && ratePctRaw !== ""
-    ? Number(ratePctRaw) / 100
-    : undefined;
-
-  if (vehicle_price <= 0) return;
-  if (term_months < 12 || term_months > 72) return;
-  if (entry_value < 0 || entry_value >= vehicle_price) return;
-  if (monthly_rate !== undefined && (isNaN(monthly_rate) || monthly_rate < 0)) return;
-
-  const result = simulateFinancing({ vehicle_price, entry_value, term_months, monthly_rate });
-
-  await supabaseAdmin.from("financing_simulations").insert({
-    store_id:        storeId,
-    lead_id:         leadId,
-    conversation_id: conversationId,
-    vehicle_price,
-    entry_value,
-    financed_amount: result.financed_amount,
-    term_months,
-    monthly_rate:    result.monthly_rate,
-    monthly_payment: result.monthly_payment,
-    total_amount:    result.total_amount,
-    provider:        "internal",
-  });
-
-  const fmtBRL = (n: number) =>
-    n.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  await supabaseAdmin.from("messages").insert({
-    conversation_id: conversationId,
-    direcao:         "saida",
-    autor:           "sistema",
-    mensagem: `Simulação registrada: veículo R$ ${fmtBRL(vehicle_price)}, entrada R$ ${fmtBRL(entry_value)}, ${term_months}x, parcela estimada R$ ${fmtBRL(result.monthly_payment)}.`,
-  });
-
-  revalidatePath(`/conversations/${conversationId}`);
 }
 
 export async function assignLeadToUser(leadId: string, userId: string): Promise<void> {

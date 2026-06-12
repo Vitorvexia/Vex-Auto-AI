@@ -25,21 +25,19 @@ function mins(avg: number): string {
 async function fetchMetrics(supabase: SupabaseServerClient) {
   const since = windowStart();
 
-  const [leadsRes, allLeadsRes, convsRes, msgsRes, followRes, reactRes] = await Promise.all([
-    supabase
-      .from("leads")
-      .select("lead_status, created_at")
-      .gte("created_at", since),
+  const [allLeadsRes, convsRes, msgsRes, followRes, reactRes] = await Promise.all([
     supabase
       .from("leads")
       .select("lead_status, created_at"),
     supabase
       .from("conversations")
-      .select("id, handoff_to, lead_id"),
+      .select("id, handoff_to, lead_id")
+      .limit(500),
     supabase
       .from("messages")
       .select("conversation_id, direcao, autor, received_at, mensagem")
-      .gte("received_at", since),
+      .gte("received_at", since)
+      .limit(2000),
     supabase
       .from("follow_up_logs")
       .select("lead_id, status, logged_at, conversation_id")

@@ -142,7 +142,6 @@ Regras críticas:
 - gestão de equipe
 - comunicação (WhatsApp)
 - funil de vendas (Kanban)
-- simulação de financiamento
 - automação de follow-up
 
 ---
@@ -168,7 +167,7 @@ Regras críticas:
 ## Contexto Técnico que a IA Deve Usar
 
 **Leads:** histórico, interações, origem, intenção  
-**Veículos:** marca, modelo, ano, preço, disponibilidade — `lib/agent-context.ts` consulta `vehicles` mas **NÃO inclui `custo` nem `margem_minima`** — IA não enxerga margem  
+**Veículos:** marca, modelo, ano, preço, disponibilidade, custo, margem_minima — `lib/agent-context.ts` consulta `vehicles` incluindo `custo` e `margem_minima` (PR #25). IA enxerga margem no catálogo.  
 **Transações:** propostas, financiamentos, contratos  
 **Operacional:** mensagens, agendamentos, ações
 
@@ -376,10 +375,9 @@ Todas as actions protegidas por `assertSuperAdmin()`.
 - `leads.assigned_to` guarda apenas responsável atual (sem histórico) — **pendente para ROI/comissões**: avaliar `lead_assignment_history` ou event sourcing quando comissão/ROI avançado/auditoria forem implementados
 - **Atribuição sem RBAC** — `assignLeadToUser`/`removeLeadAssignment` só validam `store_id` (modelo de auth atual, consistente com `updateLeadStatus`/`moveLeadStatus`). Qualquer usuário da loja reatribui qualquer lead. RBAC por papel (vendedor só toca os próprios leads) é decisão de produto futura — **pendente** (bloqueia atribuição confiável de comissões)
 - **Store-move de usuário não revalida `leads.assigned_to`** — trigger `check_lead_assigned_to_store` guarda escrita em `leads`, não `UPDATE users SET store_id`. Sem UI para mover user entre lojas hoje; se criar, revalidar leads atribuídos — **pendente**
-- **Estoque UI é mock hardcoded** — `app/estoque/page.tsx` usa `const VEHICLES = [...]` (array hardcoded, subtitle "dados simulados"). DB `vehicles` existe e é consultado pela IA (`lib/agent-context.ts`) mas nenhuma página/action lê ou escreve veículos reais — **CRUD de veículos não implementado**
-- **Margem sem guardrails** — `vehicles.margem_minima` existe no DB mas `lib/guardrails.ts` não tem referência a margem. IA não recebe `custo` nem `margem_minima` (campos ausentes na query de `agent-context.ts`). Proposta abaixo da margem não é bloqueada — **REGRA DE NEGÓCIO CRÍTICA NÃO IMPLEMENTADA**
+- ~~**Estoque UI é mock hardcoded**~~ — ✔ CRUD real implementado (PR #25, 2026-06-12). `app/estoque/page.tsx` lê/escreve `vehicles` via RLS. Server Actions: `createVehicle`, `updateVehicle`, `archiveVehicle`, `unarchiveVehicle`. Mock `const VEHICLES = [...]` removido.
+- **Margem sem guardrails** — `vehicles.margem_minima` existe no DB e IA agora recebe `custo` e `margem_minima` no contexto (PR #25). Mas `lib/guardrails.ts` ainda não valida proposta contra margem mínima. Proposta abaixo da margem não é bloqueada — **REGRA DE NEGÓCIO CRÍTICA PARCIALMENTE IMPLEMENTADA** (contexto OK, guardrail pendente)
 - **ROI financeiro ausente** — `calculateOperationalMetrics` retorna métricas operacionais (leads, follow-ups, taxas de resposta) mas não faturamento, margem por venda, CAC ou LTV. `lead.status = FECHADO` não persiste valor da venda — **pendente**
-- **Financiamento sem integração** — `financing_simulations.provider` hardcoded `'internal'`. Sem CET, sem scoring de crédito, sem múltiplos providers — **pendente**
 - **Kanban sem drag-and-drop** — mudança de status só via select dropdown; sem biblioteca DnD — **pendente (Fase 3)**
 
 ---
@@ -462,7 +460,7 @@ npm install   # prepare script roda `husky` automaticamente
 
 ## Estado Atual do Sistema (Produção)
 
-> Última atualização: 2026-06-11
+> Última atualização: 2026-06-12
 
 ### Infraestrutura
 
@@ -563,30 +561,28 @@ Garantias operacionais:
 
 - Login funcional (autenticação via Supabase Auth)
 - Páginas operacionais: leads, conversations, kanban, analytics, equipe
-- `/estoque` — **dados mockados** (`const VEHICLES = [...]` hardcoded, sem queries ao banco)
+- `/estoque` — **CRUD real** (PR #25, 2026-06-12): lista veículos do DB, criar/editar/arquivar/desarquivar. Mock removido.
 - UX em refinamento — fluxos funcionam, design não é versão final
 
 ### Auditoria MVP — Estado de Implementação (2026-06-11)
 
 | Feature | Status | Gap principal |
 |---------|--------|---------------|
-| **Estoque** | ❌ UI não implementada | Página mock hardcoded; DB e IA usam vehicles real |
+| **Estoque** | ✅ Completo (MVP) | CRUD real: criar/editar/arquivar/desarquivar. IA recebe custo+margem_minima |
 | **Equipe** | 🟡 Parcial | RBAC sem enforcement de role |
 | **WhatsApp** | 🟡 Parcial | Sandbox blocker produção; sem media/HSM |
 | **Kanban** | 🟡 Parcial | Sem drag-and-drop (select dropdown apenas) |
 | **IA** | ✅ Completo (MVP) | — |
 | **Follow-up** | ✅ Completo (MVP) | — |
 | **Reativação** | ✅ Completo (MVP) | — |
-| **Financiamento** | 🟡 Parcial | Sem financeiras reais, sem CET |
-| **Margem** | ❌ Guardrails não implementados | Campo DB existe; IA não enxerga custo; zero validação |
+| **Margem** | 🟡 Parcial | IA agora recebe custo+margem_minima (PR #25); guardrail em lib/guardrails.ts pendente |
 | **ROI** | ❌ Financeiro não implementado | Apenas métricas operacionais; sem faturamento/CAC/LTV |
 
 **Evidências-chave:**
-- `app/estoque/page.tsx:3` — `const VEHICLES = [...]` hardcoded
-- `lib/agent-context.ts:77-85` — query vehicles sem `custo`, `margem_minima`
-- `lib/guardrails.ts` — zero referência a margem, custo ou preço
-- `financing_simulations.provider` — hardcoded `'internal'`
-- `calculateOperationalMetrics()` — sem campos de faturamento ou margem por venda
+- ~~`app/estoque/page.tsx:3` — `const VEHICLES = [...]` hardcoded~~ — ✔ removido (PR #25)
+- ~~`lib/agent-context.ts:77-85` — query vehicles sem `custo`, `margem_minima`~~ — ✔ corrigido (PR #25)
+- `lib/guardrails.ts` — zero referência a margem, custo ou preço — **pendente**
+- `calculateOperationalMetrics()` — sem campos de faturamento ou margem por venda — **pendente**
 
 ---
 
@@ -613,8 +609,8 @@ Garantias operacionais:
 
 ### Fase 3 — MVP Completo
 
-- **Estoque real** — CRUD de veículos conectado ao DB (`vehicles` table); remover mock hardcoded de `app/estoque/page.tsx`
-- **Margem com guardrails** — incluir `custo`/`margem_minima` no contexto da IA; validar proposta em server action antes de fechar lead; bloquear/alertar se abaixo de `margem_minima`
+- ~~**Estoque real**~~ — ✔ CRUD real implementado (PR #25, 2026-06-12): criar/editar/arquivar/desarquivar, RLS, mock removido
+- **Margem com guardrails** — IA já recebe `custo`/`margem_minima` (PR #25); falta validar proposta em `lib/guardrails.ts` e bloquear/alertar se abaixo de `margem_minima`
 - **ROI financeiro** — persistir valor da venda ao fechar lead; calcular faturamento gerado, margem por transação, CAC por canal
 - **Kanban com drag-and-drop** e filtros avançados (score, data, tag, origem)
 - Inbox estilo WhatsApp (conversa em tempo real, histórico completo)

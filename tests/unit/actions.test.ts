@@ -4,13 +4,14 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — variáveis para factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockTransitionConv, mockTransitionLead, mockRevalidate, mockGetServerStoreId } =
+const { mockFrom, mockTransitionConv, mockTransitionLead, mockRevalidate, mockGetServerStoreId, mockMarkReactivationConverted } =
   vi.hoisted(() => ({
     mockFrom: vi.fn(),
     mockTransitionConv: vi.fn(),
     mockTransitionLead: vi.fn(),
     mockRevalidate: vi.fn(),
     mockGetServerStoreId: vi.fn(),
+    mockMarkReactivationConverted: vi.fn(),
   }));
 
 // ---------------------------------------------------------------------------
@@ -50,6 +51,10 @@ vi.mock("next/cache", () => ({
   revalidatePath: mockRevalidate,
 }));
 
+vi.mock("@/lib/reactivation", () => ({
+  markReactivationConverted: mockMarkReactivationConverted,
+}));
+
 // ---------------------------------------------------------------------------
 // Import após mocks
 // ---------------------------------------------------------------------------
@@ -58,7 +63,7 @@ import {
   assignConversationToHuman,
   returnConversationToAI,
   updateLeadStatus,
-  saveFinancingSimulation,
+  moveLeadStatus,
 } from "@/lib/actions";
 
 // ---------------------------------------------------------------------------
@@ -70,7 +75,7 @@ function chainInsert(result: unknown = { error: null }) {
     insert: vi.fn().mockResolvedValue(result),
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "x" }, error: null }),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "x", lead_id: "lead-x" }, error: null }),
   };
   mockFrom.mockReturnValue(c);
   return c;
@@ -90,12 +95,13 @@ beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   mockGetServerStoreId.mockResolvedValue("store-test");
+  mockMarkReactivationConverted.mockResolvedValue(undefined);
 
   // Default: ownership checks pass. Tests that need specific insert chains call chainInsert().
   const defaultChain = {
     select: vi.fn().mockReturnThis(),
     eq: vi.fn().mockReturnThis(),
-    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "x" }, error: null }),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "x", lead_id: "lead-x" }, error: null }),
     insert: vi.fn().mockResolvedValue({ error: null }),
   };
   mockFrom.mockReturnValue(defaultChain);
@@ -253,129 +259,124 @@ describe("updateLeadStatus", () => {
 });
 
 // ---------------------------------------------------------------------------
-// S1–S5 — saveFinancingSimulation
+// Guardrail de Margem — Helpers
 // ---------------------------------------------------------------------------
 
-describe("saveFinancingSimulation", () => {
-  function makeSimFormData(overrides: Partial<Record<string, string>> = {}): FormData {
-    const fd = new FormData();
-    fd.append("vehicle_price", overrides.vehicle_price ?? "50000");
-    fd.append("entry_value", overrides.entry_value ?? "5000");
-    fd.append("term_months", overrides.term_months ?? "48");
-    if (overrides.monthly_rate_pct !== undefined) {
-      fd.append("monthly_rate_pct", overrides.monthly_rate_pct);
-    }
-    return fd;
-  }
+function makeCloseFormData(opts: {
+  vehicleId?: string;
+  valorFinal?: string | number;
+} = {}): FormData {
+  const fd = new FormData();
+  fd.append("lead_status", "FECHADO");
+  if (opts.vehicleId !== undefined) fd.append("vehicle_id", opts.vehicleId);
+  if (opts.valorFinal !== undefined) fd.append("valor_final", String(opts.valorFinal));
+  return fd;
+}
 
-  function setupTwoTableMocks() {
-    const insertSim = vi.fn().mockResolvedValue({ error: null });
-    const insertMsg = vi.fn().mockResolvedValue({ error: null });
-    const ownershipChain = {
-      select: vi.fn().mockReturnThis(),
-      eq: vi.fn().mockReturnThis(),
-      maybeSingle: vi.fn().mockResolvedValue({ data: { id: "lead-1" }, error: null }),
-    };
-    mockFrom.mockImplementation((table: string) => {
-      if (table === "leads") return ownershipChain;
-      if (table === "financing_simulations") return { insert: insertSim };
-      if (table === "messages") return { insert: insertMsg };
-      return { insert: vi.fn().mockResolvedValue({ error: null }) };
-    });
-    return { insertSim, insertMsg };
-  }
+function setupMultiTableMock(vehicleData: { id: string; custo: number; margem_minima: number } | null) {
+  const leadsChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: { id: "lead-1" }, error: null }),
+    update: vi.fn().mockReturnValue({
+      eq: vi.fn().mockReturnValue({
+        eq: vi.fn().mockResolvedValue({ error: null }),
+      }),
+    }),
+    insert: vi.fn().mockResolvedValue({ error: null }),
+  };
+  const vehiclesChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: vehicleData, error: null }),
+  };
+  mockFrom.mockImplementation((table: string) => {
+    if (table === "vehicles") return vehiclesChain;
+    return leadsChain;
+  });
+}
 
-  it("S1: vehicle_price <= 0 → não insere nenhuma row", async () => {
-    const { insertSim, insertMsg } = setupTwoTableMocks();
+// ---------------------------------------------------------------------------
+// MARGIN — Guardrail de Margem no Fechamento
+// ---------------------------------------------------------------------------
 
-    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData({ vehicle_price: "0" }));
+describe("updateLeadStatus — guardrail de margem no fechamento", () => {
+  it("MARGIN-1: bloqueia fechamento sem vehicle_id", async () => {
+    await expect(
+      updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ valorFinal: 80000 }))
+    ).rejects.toThrow("Selecione o veículo vendido");
 
-    expect(insertSim).not.toHaveBeenCalled();
-    expect(insertMsg).not.toHaveBeenCalled();
+    expect(mockTransitionLead).not.toHaveBeenCalled();
   });
 
-  it("S1b: term_months fora do range (< 12) → não insere", async () => {
-    const { insertSim } = setupTwoTableMocks();
+  it("MARGIN-2: bloqueia fechamento sem valor_final", async () => {
+    await expect(
+      updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ vehicleId: "v-1" }))
+    ).rejects.toThrow("Informe o valor de venda");
 
-    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData({ term_months: "6" }));
-
-    expect(insertSim).not.toHaveBeenCalled();
+    expect(mockTransitionLead).not.toHaveBeenCalled();
   });
 
-  it("S1c: term_months fora do range (> 72) → não insere", async () => {
-    const { insertSim } = setupTwoTableMocks();
-
-    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData({ term_months: "84" }));
-
-    expect(insertSim).not.toHaveBeenCalled();
+  it("MARGIN-2b: bloqueia fechamento com valor_final igual a zero", async () => {
+    await expect(
+      updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ vehicleId: "v-1", valorFinal: 0 }))
+    ).rejects.toThrow("Informe o valor de venda");
   });
 
-  it("S2: entrada válida → insere em financing_simulations com store_id e provider='internal'", async () => {
-    const { insertSim } = setupTwoTableMocks();
+  it("MARGIN-3: bloqueia fechamento abaixo do piso (custo + margem_minima)", async () => {
+    setupMultiTableMock({ id: "v-1", custo: 70000, margem_minima: 8000 });
+    // piso = 70000 + 8000 = 78000; valor = 77999 → bloqueado
 
-    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData());
+    await expect(
+      updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ vehicleId: "v-1", valorFinal: 77999 }))
+    ).rejects.toThrow("margem mínima");
 
-    expect(insertSim).toHaveBeenCalledOnce();
-    expect(insertSim).toHaveBeenCalledWith(
-      expect.objectContaining({
-        store_id: "store-test", // resolvido via getServerStoreId() da sessão
-        lead_id: "lead-1",
-        conversation_id: "conv-1",
-        provider: "internal",
-        vehicle_price: 50000,
-        entry_value: 5000,
-        term_months: 48,
-      })
-    );
+    expect(mockTransitionLead).not.toHaveBeenCalled();
   });
 
-  it("S3: mensagem de sistema inserida contendo 'estimada'", async () => {
-    const { insertMsg } = setupTwoTableMocks();
+  it("MARGIN-4: permite fechamento no exato piso (custo + margem_minima)", async () => {
+    setupMultiTableMock({ id: "v-1", custo: 70000, margem_minima: 8000 });
+    mockTransitionLead.mockResolvedValue({ from: "NEGOCIACAO", to: "FECHADO", changed: true });
+    // piso = 78000; valor = 78000 → exato limite, deve passar
 
-    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData());
+    await expect(
+      updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ vehicleId: "v-1", valorFinal: 78000 }))
+    ).resolves.toBeUndefined();
 
-    expect(insertMsg).toHaveBeenCalledOnce();
-    const call = insertMsg.mock.calls[0][0] as { mensagem: string };
-    expect(call.mensagem).toContain("estimada");
+    expect(mockTransitionLead).toHaveBeenCalledWith("lead-1", "FECHADO");
   });
 
-  it("S4: mensagem de sistema NÃO contém 'aprovado' nem 'aprovação'", async () => {
-    const { insertMsg } = setupTwoTableMocks();
+  it("MARGIN-5: permite fechamento com valor acima do piso", async () => {
+    setupMultiTableMock({ id: "v-1", custo: 70000, margem_minima: 8000 });
+    mockTransitionLead.mockResolvedValue({ from: "NEGOCIACAO", to: "FECHADO", changed: true });
 
-    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData());
+    await expect(
+      updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ vehicleId: "v-1", valorFinal: 90000 }))
+    ).resolves.toBeUndefined();
 
-    const call = insertMsg.mock.calls[0][0] as { mensagem: string };
-    expect(call.mensagem.toLowerCase()).not.toContain("aprovado");
-    expect(call.mensagem.toLowerCase()).not.toContain("aprovação");
+    expect(mockTransitionLead).toHaveBeenCalledWith("lead-1", "FECHADO");
   });
 
-  it("S5: revalidatePath chamado para a conversa após insert", async () => {
-    setupTwoTableMocks();
+  it("MARGIN-6: bloqueia vehicle_id de outra loja (cross-store guard)", async () => {
+    setupMultiTableMock(null); // vehicle not found for this store
+    // storeId guard: .eq("store_id", storeId) on vehicles query returns null
 
-    await saveFinancingSimulation("lead-1", "conv-42", makeSimFormData());
+    await expect(
+      updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ vehicleId: "v-outra-loja", valorFinal: 90000 }))
+    ).rejects.toThrow("Veículo não encontrado");
 
-    expect(mockRevalidate).toHaveBeenCalledWith("/conversations/conv-42");
-  });
-
-  it("S6: taxa customizada (monthly_rate_pct=2.0) é salva como 0.02 no banco", async () => {
-    const { insertSim } = setupTwoTableMocks();
-
-    await saveFinancingSimulation("lead-1", "conv-1",
-      makeSimFormData({ monthly_rate_pct: "2.0" })
-    );
-
-    expect(insertSim).toHaveBeenCalledWith(
-      expect.objectContaining({ monthly_rate: 0.02 })
-    );
-  });
-
-  it("S7: monthly_rate_pct ausente → usa DEFAULT_MONTHLY_RATE (0.018)", async () => {
-    const { insertSim } = setupTwoTableMocks();
-
-    await saveFinancingSimulation("lead-1", "conv-1", makeSimFormData());
-
-    expect(insertSim).toHaveBeenCalledWith(
-      expect.objectContaining({ monthly_rate: 0.018 })
-    );
+    expect(mockTransitionLead).not.toHaveBeenCalled();
   });
 });
+
+describe("moveLeadStatus — bloqueia FECHADO no Kanban", () => {
+  it("MARGIN-7: rejeita tentativa de fechar via moveLeadStatus", async () => {
+    const fd = new FormData();
+    fd.append("lead_status", "FECHADO");
+
+    await expect(moveLeadStatus("lead-1", fd)).rejects.toThrow("página da conversa");
+
+    expect(mockTransitionLead).not.toHaveBeenCalled();
+  });
+});
+

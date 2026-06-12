@@ -133,4 +133,18 @@ describe("buildPrompt", () => {
     const { system } = buildPrompt(ctx, guardrailNormal);
     expect(system).toContain("Nenhum veículo disponível");
   });
+
+  it("regras fixas proíbem preço abaixo da margem mínima", () => {
+    const { system } = buildPrompt(makeCtx(), guardrailNormal);
+    expect(system).toContain("Nunca aceite, confirme ou sugira preço abaixo da margem mínima");
+  });
+
+  it("regras fixas instruem should_handoff=true para desconto que viola margem", () => {
+    const { system } = buildPrompt(makeCtx(), guardrailNormal);
+    const idx = system.indexOf("[REGRAS FIXAS]");
+    expect(idx).toBeGreaterThan(-1);
+    const rules = system.slice(idx);
+    expect(rules).toContain("should_handoff=true");
+    expect(rules).toContain("margem mínima");
+  });
 });

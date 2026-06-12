@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
+import { maskPhone } from "@/lib/pii";
 
 // ---------------------------------------------------------------------------
 // Templates — 3 tentativas com textos distintos
@@ -97,7 +98,7 @@ export async function runFollowUpJob(opts?: {
     }
 
     const text = buildFollowUpText(attemptNumber, conv.nome);
-    const maskedPhone = `****${conv.phone_normalized.slice(-4)}`;
+    const maskedPhone = maskPhone(conv.phone_normalized);
 
     try {
       const phoneId = await getStoreWhatsAppPhoneId(conv.store_id);
