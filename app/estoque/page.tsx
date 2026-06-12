@@ -2,7 +2,7 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthError } from "@/lib/auth";
-import { createVehicle, updateVehicle, archiveVehicle } from "@/lib/vehicle-actions";
+import { createVehicle, updateVehicle, archiveVehicle, unarchiveVehicle } from "@/lib/vehicle-actions";
 
 type Vehicle = {
   id: string;
@@ -54,6 +54,13 @@ async function handleArchive(formData: FormData) {
   "use server";
   const vehicleId = formData.get("__vehicleId") as string;
   await archiveVehicle(vehicleId);
+  redirect("/estoque");
+}
+
+async function handleUnarchive(formData: FormData) {
+  "use server";
+  const vehicleId = formData.get("__vehicleId") as string;
+  await unarchiveVehicle(vehicleId);
   redirect("/estoque");
 }
 
@@ -237,7 +244,7 @@ export default async function EstoquePage({ searchParams }: PageProps) {
                     >
                       Editar
                     </Link>
-                    {v.disponivel && (
+                    {v.disponivel ? (
                       <form action={handleArchive} style={{ display: "inline" }}>
                         <input type="hidden" name="__vehicleId" value={v.id} />
                         <button
@@ -245,6 +252,16 @@ export default async function EstoquePage({ searchParams }: PageProps) {
                           style={{ fontSize: "12px", fontWeight: 600, color: "#C2410C", background: "none", border: "none", cursor: "pointer", padding: 0 }}
                         >
                           Arquivar
+                        </button>
+                      </form>
+                    ) : (
+                      <form action={handleUnarchive} style={{ display: "inline" }}>
+                        <input type="hidden" name="__vehicleId" value={v.id} />
+                        <button
+                          type="submit"
+                          style={{ fontSize: "12px", fontWeight: 600, color: "#15803D", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                        >
+                          Desarquivar
                         </button>
                       </form>
                     )}

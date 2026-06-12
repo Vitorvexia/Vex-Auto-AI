@@ -102,3 +102,25 @@ export async function archiveVehicle(vehicleId: string, _formData?: FormData): P
   if (error) throw error;
   revalidatePath("/estoque");
 }
+
+export async function unarchiveVehicle(vehicleId: string, _formData?: FormData): Promise<void> {
+  const storeId = await getServerStoreId();
+
+  const { data: check } = await supabaseAdmin
+    .from("vehicles")
+    .select("id")
+    .eq("id", vehicleId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+
+  if (!check) throw new Error("Veículo não encontrado");
+
+  const { error } = await supabaseAdmin
+    .from("vehicles")
+    .update({ disponivel: true })
+    .eq("id", vehicleId)
+    .eq("store_id", storeId);
+
+  if (error) throw error;
+  revalidatePath("/estoque");
+}

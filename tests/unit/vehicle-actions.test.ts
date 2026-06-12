@@ -32,7 +32,7 @@ vi.mock("next/cache", () => ({
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { createVehicle, updateVehicle, archiveVehicle } from "@/lib/vehicle-actions";
+import { createVehicle, updateVehicle, archiveVehicle, unarchiveVehicle } from "@/lib/vehicle-actions";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -200,5 +200,30 @@ describe("archiveVehicle", () => {
     chain.maybeSingle.mockResolvedValue({ data: null, error: null });
     await expect(archiveVehicle("v-outro")).rejects.toBeDefined();
     expect(chain.update).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// unarchiveVehicle
+// ---------------------------------------------------------------------------
+
+describe("unarchiveVehicle", () => {
+  it("V11: define disponivel=true no veículo (restaura)", async () => {
+    const chain = makeChain();
+    await unarchiveVehicle("v-1");
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ disponivel: true })
+    );
+  });
+
+  it("V12: revalidatePath('/estoque') chamado após desarquivar", async () => {
+    await unarchiveVehicle("v-1");
+    expect(mockRevalidate).toHaveBeenCalledWith("/estoque");
+  });
+
+  it("V13: lança erro se veículo não pertence à store", async () => {
+    const chain = makeChain();
+    chain.maybeSingle.mockResolvedValue({ data: null, error: null });
+    await expect(unarchiveVehicle("v-outro")).rejects.toThrow("Veículo não encontrado");
   });
 });
