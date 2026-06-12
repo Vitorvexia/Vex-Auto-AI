@@ -1,117 +1,358 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
+import { createSupabaseServerClient } from "@/lib/supabase-server";
+import { AuthError } from "@/lib/auth";
+import { createVehicle, updateVehicle, archiveVehicle } from "@/lib/vehicle-actions";
 
-const VEHICLES = [
-  { id: 1, name: "Honda Civic EXL",        detail: "2022 · 28.000 km · Flex",  price: 89000,  cost: 75000,  status: "disponivel", leads: 3, diasEstoque: 5  },
-  { id: 2, name: "Toyota Corolla XEi",     detail: "2021 · 41.000 km · Flex",  price: 95000,  cost: 82000,  status: "reservado",  leads: 1, diasEstoque: 12 },
-  { id: 3, name: "Jeep Compass Limited",   detail: "2023 · 12.000 km · Diesel",price: 155000, cost: 128000, status: "disponivel", leads: 2, diasEstoque: 28 },
-  { id: 4, name: "Volkswagen Polo Highline",detail: "2022 · 19.500 km · Flex", price: 72000,  cost: 62000,  status: "disponivel", leads: 4, diasEstoque: 8  },
-  { id: 5, name: "Hyundai HB20 Diamond",   detail: "2023 · 8.200 km · Flex",   price: 65000,  cost: 58000,  status: "disponivel", leads: 1, diasEstoque: 3  },
-  { id: 6, name: "Fiat Pulse Impetus",     detail: "2023 · 15.000 km · Turbo", price: 108000, cost: 92000,  status: "vendido",    leads: 0, diasEstoque: 18 },
-];
-
-const STATUS_LABEL: Record<string, string> = {
-  disponivel: "Disponível", reservado: "Reservado", vendido: "Vendido",
+type Vehicle = {
+  id: string;
+  marca: string;
+  modelo: string;
+  ano: number;
+  preco: number;
+  custo: number;
+  margem_minima: number;
+  disponivel: boolean;
+  created_at: string;
 };
 
-function margin(price: number, cost: number) {
-  return (((price - cost) / price) * 100).toFixed(1);
+function margin(preco: number, custo: number) {
+  if (custo <= 0) return 0;
+  return ((preco - custo) / preco) * 100;
 }
+
+function diasEstoque(createdAt: string): number {
+  return Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
+}
+
 function giroClass(dias: number) {
   return dias <= 10 ? "ok" : dias <= 20 ? "mid" : "slow";
 }
 
-export default function EstoquePage() {
-  const available  = VEHICLES.filter((v) => v.status === "disponivel").length;
-  const withLeads  = VEHICLES.filter((v) => v.leads > 0).length;
-  const slowMovers = VEHICLES.filter((v) => v.diasEstoque > 20 && v.status !== "vendido").length;
+type PageProps = {
+  searchParams?: { novo?: string; edit?: string };
+};
+
+// ---------------------------------------------------------------------------
+// Inline Server Actions com redirect
+// ---------------------------------------------------------------------------
+
+async function handleCreate(formData: FormData) {
+  "use server";
+  await createVehicle(formData);
+  redirect("/estoque");
+}
+
+async function handleUpdate(formData: FormData) {
+  "use server";
+  const vehicleId = formData.get("__vehicleId") as string;
+  await updateVehicle(vehicleId, formData);
+  redirect("/estoque");
+}
+
+async function handleArchive(formData: FormData) {
+  "use server";
+  const vehicleId = formData.get("__vehicleId") as string;
+  await archiveVehicle(vehicleId);
+  redirect("/estoque");
+}
+
+// ---------------------------------------------------------------------------
+// Page
+// ---------------------------------------------------------------------------
+
+export default async function EstoquePage({ searchParams }: PageProps) {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) throw new AuthError();
+
+  const { data: vehicles, error } = await supabase
+    .from("vehicles")
+    .select("id, marca, modelo, ano, preco, custo, margem_minima, disponivel, created_at")
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return (
+      <main className="container">
+        <div className="error">Erro ao carregar estoque: {error.message}</div>
+      </main>
+    );
+  }
+
+  const all = (vehicles ?? []) as Vehicle[];
+  const available = all.filter((v) => v.disponivel);
+  const archived = all.filter((v) => !v.disponivel);
+  const slowMovers = available.filter((v) => diasEstoque(v.created_at) > 20);
+
+  const showNovo = searchParams?.novo === "1";
+  const editId = searchParams?.edit;
+  const vehicleToEdit = editId ? all.find((v) => v.id === editId) : undefined;
 
   return (
     <main className="container">
       <div className="page-header">
         <div>
           <h1>Estoque</h1>
-          <div className="subtitle">Foco em venda · dados simulados</div>
+          <div className="subtitle">
+            {available.length} disponíve{available.length === 1 ? "l" : "is"}
+            {archived.length > 0 && ` · ${archived.length} arquivado${archived.length > 1 ? "s" : ""}`}
+          </div>
         </div>
+        {!showNovo && !editId && (
+          <Link href="/estoque?novo=1" className="btn-primary" style={{ alignSelf: "center" }}>
+            + Novo Veículo
+          </Link>
+        )}
       </div>
 
-      <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
-        <div className="kpi-card">
-          <div className="kpi-label">Disponíveis para Venda</div>
-          <div className="kpi-value" style={{ color: "#15803D" }}>{available}</div>
-          <div className="kpi-delta">prontos agora</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-label">Com Leads Interessados</div>
-          <div className="kpi-value" style={{ color: "#0369A1" }}>{withLeads}</div>
-          <div className="kpi-delta">oportunidade ativa</div>
-        </div>
-        <div className="kpi-card">
-          <div className="kpi-label">Giro Lento (&gt;20 dias)</div>
-          <div className="kpi-value" style={{ color: slowMovers > 0 ? "#C2410C" : "#15803D" }}>{slowMovers}</div>
-          <div className="kpi-delta">{slowMovers > 0 ? "atenção necessária" : "tudo ok"}</div>
-        </div>
-      </div>
-
-      {slowMovers > 0 && (
-        <div className="alert-item warn" style={{ marginBottom: "16px" }}>
-          <span className="alert-icon">⚠</span>
-          <span>
-            <strong>{slowMovers} veículo{slowMovers > 1 ? "s" : ""} com giro lento</strong> — acima de 20 dias no estoque.
-            Considere ajuste de preço ou promoção ativa para destravar.{" "}
-            <Link href="/analytics" style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}>
-              Ver análise →
-            </Link>
-          </span>
+      {/* ── Create form ── */}
+      {showNovo && (
+        <div className="vehicle-form-card" style={{ marginBottom: "24px" }}>
+          <h2 style={{ marginBottom: "16px", fontSize: "16px", fontWeight: 700 }}>
+            Cadastrar Veículo
+          </h2>
+          <form action={handleCreate}>
+            <VehicleFormFields />
+            <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+              <button type="submit" className="btn-primary">Salvar</button>
+              <Link href="/estoque" className="btn-secondary">Cancelar</Link>
+            </div>
+          </form>
         </div>
       )}
 
-      <div className="vehicle-grid">
-        {VEHICLES.map((v) => {
-          const mg = parseFloat(margin(v.price, v.cost));
-          const mgClass = mg < 8 ? "warn" : "ok";
-          const gc = giroClass(v.diasEstoque);
-          return (
-            <div key={v.id} className="vehicle-card">
-              <div className="vehicle-thumb">
-                <span className={`giro-badge ${gc}`}>{v.diasEstoque}d</span>
-                Foto do veículo
-              </div>
-              <div className="vehicle-info">
-                <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px", marginBottom: "2px" }}>
-                  <div className="vehicle-name">{v.name}</div>
-                  <span className={`vehicle-status-pill ${v.status}`}>{STATUS_LABEL[v.status]}</span>
-                </div>
-                <div className="vehicle-detail">{v.detail}</div>
-
-                <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginBottom: "4px" }}>
-                  <div className="vehicle-price">
-                    {v.price.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
-                  </div>
-                  <span className={`vehicle-margin ${mgClass}`}>↑ {mg}% margem</span>
-                </div>
-                <div className="vehicle-cost">
-                  Custo: {v.cost.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
-                </div>
-
-                {v.leads > 0 && (
-                  <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-                    <span style={{ fontSize: "12px", color: "#0369A1", fontWeight: 600 }}>
-                      {v.leads} lead{v.leads > 1 ? "s" : ""} interessado{v.leads > 1 ? "s" : ""}
-                    </span>
-                    <Link href="/leads" className="card-cta">Conectar →</Link>
-                  </div>
-                )}
-
-                {v.leads === 0 && v.status === "disponivel" && (
-                  <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid var(--border)" }}>
-                    <span style={{ fontSize: "11.5px", color: "var(--muted)" }}>Sem leads ativos — considere divulgar</span>
-                  </div>
-                )}
-              </div>
+      {/* ── Edit form ── */}
+      {editId && vehicleToEdit && (
+        <div className="vehicle-form-card" style={{ marginBottom: "24px" }}>
+          <h2 style={{ marginBottom: "16px", fontSize: "16px", fontWeight: 700 }}>
+            Editar Veículo
+          </h2>
+          <form action={handleUpdate}>
+            <input type="hidden" name="__vehicleId" value={editId} />
+            <VehicleFormFields vehicle={vehicleToEdit} />
+            <div style={{ display: "flex", gap: "8px", marginTop: "16px" }}>
+              <button type="submit" className="btn-primary">Salvar alterações</button>
+              <Link href="/estoque" className="btn-secondary">Cancelar</Link>
             </div>
-          );
-        })}
-      </div>
+          </form>
+        </div>
+      )}
+
+      {/* ── KPIs ── */}
+      {!showNovo && !editId && (
+        <>
+          <div className="kpi-grid" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
+            <div className="kpi-card">
+              <div className="kpi-label">Disponíveis para Venda</div>
+              <div className="kpi-value" style={{ color: "#15803D" }}>{available.length}</div>
+              <div className="kpi-delta">prontos agora</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">Arquivados</div>
+              <div className="kpi-value" style={{ color: "#6B7280" }}>{archived.length}</div>
+              <div className="kpi-delta">fora de linha</div>
+            </div>
+            <div className="kpi-card">
+              <div className="kpi-label">Giro Lento (&gt;20 dias)</div>
+              <div className="kpi-value" style={{ color: slowMovers.length > 0 ? "#C2410C" : "#15803D" }}>
+                {slowMovers.length}
+              </div>
+              <div className="kpi-delta">{slowMovers.length > 0 ? "atenção necessária" : "tudo ok"}</div>
+            </div>
+          </div>
+
+          {slowMovers.length > 0 && (
+            <div className="alert-item warn" style={{ marginBottom: "16px" }}>
+              <span className="alert-icon">⚠</span>
+              <span>
+                <strong>{slowMovers.length} veículo{slowMovers.length > 1 ? "s" : ""} com giro lento</strong>
+                {" "}— acima de 20 dias no estoque. Considere ajuste de preço ou promoção.{" "}
+                <Link href="/analytics" style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}>
+                  Ver análise →
+                </Link>
+              </span>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── Empty state ── */}
+      {all.length === 0 && !showNovo && (
+        <div style={{ textAlign: "center", padding: "48px 0", color: "var(--muted)" }}>
+          <div style={{ fontSize: "32px", marginBottom: "12px" }}>🚗</div>
+          <div style={{ fontWeight: 600, marginBottom: "8px" }}>Nenhum veículo cadastrado</div>
+          <div style={{ fontSize: "13px", marginBottom: "16px" }}>
+            Cadastre veículos para que a IA possa apresentá-los aos leads.
+          </div>
+          <Link href="/estoque?novo=1" className="btn-primary">+ Cadastrar primeiro veículo</Link>
+        </div>
+      )}
+
+      {/* ── Vehicle grid ── */}
+      {all.length > 0 && !showNovo && !editId && (
+        <div className="vehicle-grid">
+          {all.map((v) => {
+            const mg = margin(v.preco, v.custo);
+            const mgClass = mg < 8 ? "warn" : "ok";
+            const dias = diasEstoque(v.created_at);
+            const gc = giroClass(dias);
+            return (
+              <div key={v.id} className={`vehicle-card${!v.disponivel ? " vehicle-card-archived" : ""}`}>
+                <div className="vehicle-thumb">
+                  {v.disponivel ? (
+                    <span className={`giro-badge ${gc}`}>{dias}d</span>
+                  ) : (
+                    <span className="giro-badge slow">arquivado</span>
+                  )}
+                  <span style={{ color: "var(--muted)", fontSize: "12px" }}>Sem foto</span>
+                </div>
+                <div className="vehicle-info">
+                  <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px", marginBottom: "2px" }}>
+                    <div className="vehicle-name">{v.marca} {v.modelo}</div>
+                    <span className={`vehicle-status-pill ${v.disponivel ? "disponivel" : "arquivado"}`}>
+                      {v.disponivel ? "Disponível" : "Arquivado"}
+                    </span>
+                  </div>
+                  <div className="vehicle-detail">{v.ano}</div>
+
+                  <div style={{ display: "flex", alignItems: "baseline", gap: "8px", marginBottom: "4px" }}>
+                    <div className="vehicle-price">
+                      {v.preco.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+                    </div>
+                    <span className={`vehicle-margin ${mgClass}`}>↑ {mg.toFixed(1)}% margem</span>
+                  </div>
+                  <div className="vehicle-cost">
+                    Custo: {v.custo.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+                  </div>
+                  {v.margem_minima > 0 && (
+                    <div style={{ fontSize: "11.5px", color: "var(--muted)", marginTop: "2px" }}>
+                      Margem mín: {v.margem_minima.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 })}
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid var(--border)", display: "flex", gap: "8px" }}>
+                    <Link
+                      href={`/estoque?edit=${v.id}`}
+                      style={{ fontSize: "12px", fontWeight: 600, color: "#0369A1" }}
+                    >
+                      Editar
+                    </Link>
+                    {v.disponivel && (
+                      <form action={handleArchive} style={{ display: "inline" }}>
+                        <input type="hidden" name="__vehicleId" value={v.id} />
+                        <button
+                          type="submit"
+                          style={{ fontSize: "12px", fontWeight: 600, color: "#C2410C", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                        >
+                          Arquivar
+                        </button>
+                      </form>
+                    )}
+                    <Link href="/leads" style={{ fontSize: "12px", fontWeight: 600, color: "#15803D", marginLeft: "auto" }}>
+                      Ver leads →
+                    </Link>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
     </main>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Form fields component
+// ---------------------------------------------------------------------------
+
+function VehicleFormFields({ vehicle }: { vehicle?: Vehicle }) {
+  return (
+    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+      <div>
+        <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+          Marca *
+        </label>
+        <input
+          type="text"
+          name="marca"
+          required
+          defaultValue={vehicle?.marca ?? ""}
+          className="input"
+          placeholder="Ex: Honda"
+        />
+      </div>
+      <div>
+        <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+          Modelo *
+        </label>
+        <input
+          type="text"
+          name="modelo"
+          required
+          defaultValue={vehicle?.modelo ?? ""}
+          className="input"
+          placeholder="Ex: Civic"
+        />
+      </div>
+      <div>
+        <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+          Ano *
+        </label>
+        <input
+          type="number"
+          name="ano"
+          required
+          min={1900}
+          max={2100}
+          defaultValue={vehicle?.ano ?? new Date().getFullYear()}
+          className="input"
+        />
+      </div>
+      <div>
+        <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+          Preço de Venda (R$) *
+        </label>
+        <input
+          type="number"
+          name="preco"
+          required
+          min={0}
+          step="0.01"
+          defaultValue={vehicle?.preco ?? ""}
+          className="input"
+          placeholder="Ex: 89000"
+        />
+      </div>
+      <div>
+        <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+          Custo (R$) *
+        </label>
+        <input
+          type="number"
+          name="custo"
+          required
+          min={0}
+          step="0.01"
+          defaultValue={vehicle?.custo ?? ""}
+          className="input"
+          placeholder="Ex: 75000"
+        />
+      </div>
+      <div>
+        <label style={{ fontSize: "12px", fontWeight: 600, display: "block", marginBottom: "4px" }}>
+          Margem Mínima (R$)
+        </label>
+        <input
+          type="number"
+          name="margem_minima"
+          min={0}
+          step="0.01"
+          defaultValue={vehicle?.margem_minima ?? 0}
+          className="input"
+          placeholder="Ex: 3000"
+        />
+      </div>
+    </div>
   );
 }

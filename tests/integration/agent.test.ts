@@ -31,7 +31,7 @@ function makeCtx(): AgentContext {
     },
     last_messages: [],
     vehicles: [
-      { id: "v1", marca: "Hyundai", modelo: "HB20", ano: 2022, preco: 74900 },
+      { id: "v1", marca: "Hyundai", modelo: "HB20", ano: 2022, preco: 74900, custo: 65000, margem_minima: 3000 },
     ],
     incoming_text: "Olá, quero saber sobre carros disponíveis",
   };

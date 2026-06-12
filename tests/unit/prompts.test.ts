@@ -27,8 +27,8 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       { direcao: "saida", autor: "ia", mensagem: "Olá! Como posso ajudar?", received_at: new Date().toISOString() },
     ],
     vehicles: [
-      { id: "v1", marca: "Hyundai", modelo: "HB20", ano: 2022, preco: 74900 },
-      { id: "v2", marca: "Jeep", modelo: "Renegade", ano: 2022, preco: 99900 },
+      { id: "v1", marca: "Hyundai", modelo: "HB20", ano: 2022, preco: 74900, custo: 65000, margem_minima: 3000 },
+      { id: "v2", marca: "Jeep", modelo: "Renegade", ano: 2022, preco: 99900, custo: 88000, margem_minima: 4000 },
     ],
     incoming_text: "Quero ver SUVs disponíveis",
     ...overrides,
@@ -81,6 +81,8 @@ describe("buildPrompt", () => {
       modelo: `Modelo${i}`,
       ano: 2022,
       preco: 50000 + i * 1000,
+      custo: 43000 + i * 800,
+      margem_minima: 2000,
     }));
     const { system } = buildPrompt(makeCtx({ vehicles }), guardrailNormal);
     const matches = system.match(/Marca Modelo\d+ 2022/g) ?? [];

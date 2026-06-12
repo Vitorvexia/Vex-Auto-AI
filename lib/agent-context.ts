@@ -38,6 +38,8 @@ export interface AgentContext {
     modelo: string;
     ano: number;
     preco: number;
+    custo: number;
+    margem_minima: number;
   }[];
   incoming_text: string;
 }
@@ -75,7 +77,7 @@ export async function buildAgentContext(params: {
       .limit(10),
     supabaseAdmin
       .from("vehicles")
-      .select("id, marca, modelo, ano, preco")
+      .select("id, marca, modelo, ano, preco, custo, margem_minima")
       .eq("store_id", storeId)
       .eq("disponivel", true)
       .limit(6),

@@ -24,7 +24,7 @@ function formatVehicles(vehicles: AgentContext["vehicles"]): string {
     .slice(0, 6)
     .map(
       (v) =>
-        `${v.marca} ${v.modelo} ${v.ano} — R$ ${v.preco.toLocaleString("pt-BR")}`
+        `${v.marca} ${v.modelo} ${v.ano} — R$ ${v.preco.toLocaleString("pt-BR")} (margem mín: R$ ${v.margem_minima.toLocaleString("pt-BR")})`
     )
     .join("\n");
 }
