@@ -238,6 +238,31 @@ describe("daily-run GET — autenticação", () => {
     expect(res.status).toBe(401);
     expect(mockRunFollowUpJob).not.toHaveBeenCalled();
   });
+
+  it("G5_cron: 200 — Vercel Cron sem CRON_SECRET configurado (fallback Bearer)", async () => {
+    delete process.env.CRON_SECRET;
+    mockStores([{ id: "store-a", nome: "Loja A" }]);
+    const res = await GET(makeGetRequest({ bearer: "vercel-auto-generated-value" }));
+    expect(res.status).toBe(200);
+  });
+
+  it("G6_cron: 401 — sem CRON_SECRET e sem Bearer (cron sem header algum)", async () => {
+    delete process.env.CRON_SECRET;
+    const res = await GET(makeGetRequest());
+    expect(res.status).toBe(401);
+    expect(mockRunFollowUpJob).not.toHaveBeenCalled();
+  });
+
+  it("G7_cron: 401 — POST sem CRON_SECRET e sem x-internal-key (fallback NÃO se aplica a POST)", async () => {
+    delete process.env.CRON_SECRET;
+    const req = new NextRequest("http://localhost/api/internal/daily-run", {
+      method: "POST",
+      headers: { "authorization": "Bearer qualquer-valor", "content-type": "application/json" },
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(401);
+    expect(mockRunFollowUpJob).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------

@@ -126,10 +126,10 @@ Lead → Conversão → Cliente → Reativação → Nova venda → (loop infini
 
 A IA **nunca** pode:
 - assinar contratos
-- fechar venda abaixo da margem mínima sem aprovação humana
+- fechar venda abaixo da margem mínima sem aprovação humana ⚠️ **INTENÇÃO NÃO IMPLEMENTADA** — ver Dívidas Técnicas
 
 Regras críticas:
-- controle de margem obrigatório
+- controle de margem obrigatório ⚠️ **PENDENTE** — `vehicles.margem_minima` existe no DB mas não é validado em nenhum guardrail ou server action
 - aprovação humana em decisões financeiras
 - automação com limites definidos
 
@@ -168,7 +168,7 @@ Regras críticas:
 ## Contexto Técnico que a IA Deve Usar
 
 **Leads:** histórico, interações, origem, intenção  
-**Veículos:** custo, margem, tempo de estoque  
+**Veículos:** marca, modelo, ano, preço, disponibilidade — `lib/agent-context.ts` consulta `vehicles` mas **NÃO inclui `custo` nem `margem_minima`** — IA não enxerga margem  
 **Transações:** propostas, financiamentos, contratos  
 **Operacional:** mensagens, agendamentos, ações
 
@@ -370,10 +370,17 @@ Todas as actions protegidas por `assertSuperAdmin()`.
 - Query de mensagens sem limite — **pendente**
 - ~~`assigned_to` ainda não utilizado~~ — ✔ feature/assigned-to (leads.assigned_to + atribuição manual + métricas por vendedor)
 - `WHATSAPP_ACCESS_TOKEN` global — por loja é roadmap B2+ — **pendente**
+- **`WHATSAPP_PHONE_NUMBER_ID` aponta para sandbox** — `1150232648165177` (`+1 555-629-2868`). Número real Speed Motos (`1233441783176942`) é `ON_PREMISE`, incompatível com Cloud API. Envios de follow-up e reativação falham em produção. Resolução: registrar número Cloud API real na Meta e atualizar env na Vercel — **BLOQUEIO OPERACIONAL**
+- `error_category` ausente em `reactivation_logs` e `error_message` nunca populado em `follow_up_logs` — falhas de envio WA são silenciosas nos jobs — **pendente** (observabilidade)
 - Masking de PII em logs — `lib/logger.ts` genérico não mascara telefone/email — **pendente** (LGPD)
 - `leads.assigned_to` guarda apenas responsável atual (sem histórico) — **pendente para ROI/comissões**: avaliar `lead_assignment_history` ou event sourcing quando comissão/ROI avançado/auditoria forem implementados
 - **Atribuição sem RBAC** — `assignLeadToUser`/`removeLeadAssignment` só validam `store_id` (modelo de auth atual, consistente com `updateLeadStatus`/`moveLeadStatus`). Qualquer usuário da loja reatribui qualquer lead. RBAC por papel (vendedor só toca os próprios leads) é decisão de produto futura — **pendente** (bloqueia atribuição confiável de comissões)
 - **Store-move de usuário não revalida `leads.assigned_to`** — trigger `check_lead_assigned_to_store` guarda escrita em `leads`, não `UPDATE users SET store_id`. Sem UI para mover user entre lojas hoje; se criar, revalidar leads atribuídos — **pendente**
+- **Estoque UI é mock hardcoded** — `app/estoque/page.tsx` usa `const VEHICLES = [...]` (array hardcoded, subtitle "dados simulados"). DB `vehicles` existe e é consultado pela IA (`lib/agent-context.ts`) mas nenhuma página/action lê ou escreve veículos reais — **CRUD de veículos não implementado**
+- **Margem sem guardrails** — `vehicles.margem_minima` existe no DB mas `lib/guardrails.ts` não tem referência a margem. IA não recebe `custo` nem `margem_minima` (campos ausentes na query de `agent-context.ts`). Proposta abaixo da margem não é bloqueada — **REGRA DE NEGÓCIO CRÍTICA NÃO IMPLEMENTADA**
+- **ROI financeiro ausente** — `calculateOperationalMetrics` retorna métricas operacionais (leads, follow-ups, taxas de resposta) mas não faturamento, margem por venda, CAC ou LTV. `lead.status = FECHADO` não persiste valor da venda — **pendente**
+- **Financiamento sem integração** — `financing_simulations.provider` hardcoded `'internal'`. Sem CET, sem scoring de crédito, sem múltiplos providers — **pendente**
+- **Kanban sem drag-and-drop** — mudança de status só via select dropdown; sem biblioteca DnD — **pendente (Fase 3)**
 
 ---
 
@@ -455,7 +462,7 @@ npm install   # prepare script roda `husky` automaticamente
 
 ## Estado Atual do Sistema (Produção)
 
-> Última atualização: 2026-06-09
+> Última atualização: 2026-06-11
 
 ### Infraestrutura
 
@@ -468,9 +475,9 @@ npm install   # prepare script roda `husky` automaticamente
 ### WhatsApp
 
 - Webhook Meta configurado e respondendo (`/api/whatsapp/webhook`)
-- Envio e recebimento de mensagens operacional via WhatsApp Cloud API
 - Pipeline de IA integrado ao fluxo de entrada/saída de mensagens
 - Validação HMAC ativa em todos os requests do webhook
+- ⚠️ **BLOQUEIO ATIVO**: `WHATSAPP_PHONE_NUMBER_ID` aponta para sandbox Meta (`1150232648165177`, `+1 555-629-2868`). Envios falham para todos os leads — Meta bloqueia entrega fora de números homologados. Sistema encontra leads, cria mensagens e chama API corretamente; bloqueio é exclusivamente de infraestrutura Meta. Número real da Speed Motos (`1233441783176942`) é plataforma `ON_PREMISE` — incompatível com Cloud API. **Resolução pendente:** registrar número Cloud API real e atualizar `WHATSAPP_PHONE_NUMBER_ID` na Vercel.
 
 ### Pipeline de IA
 
@@ -505,7 +512,7 @@ Garantias operacionais:
 
 - Follow-up automático operacional — cadência 2h → 24h → 72h
 - Reativação de leads operacional (Mina de Ouro) — 3 tentativas, templates enriquecidos, ENCERRADA elegível, métricas responded_at/converted_at
-- Cron consolidado em `/api/internal/daily-run` (compatível com Vercel Hobby — máx 1 execução/dia)
+- Cron consolidado em `/api/internal/daily-run` — PR #24 corrigiu bug crítico: Vercel Cron envia GET, endpoint só tinha POST → 405 em toda execução. GET handler adicionado com dual-auth (`Authorization: Bearer <CRON_SECRET>` + `x-internal-key`). Cron operacional a partir de 2026-06-10.
 - Proteção por `INTERNAL_API_KEY` em todos os endpoints internos
 
 ### Segurança
@@ -550,12 +557,36 @@ Garantias operacionais:
 - `responded_at` e `converted_at` rastreando resultado ponta a ponta
 - 5 leads elegíveis identificados no primeiro run pós-deploy
 - RPC `get_reactivation_eligible_leads` com DISTINCT ON + ENCERRADA + veiculo_interesse
+- ⚠️ Envios WhatsApp falhando por bloqueio de sandbox Meta (ver seção WhatsApp)
 
 ### Frontend
 
 - Login funcional (autenticação via Supabase Auth)
 - Páginas operacionais: leads, conversations, kanban, analytics, equipe
-- Observação: UX ainda não está em versão final — fluxos funcionam, design em refinamento
+- `/estoque` — **dados mockados** (`const VEHICLES = [...]` hardcoded, sem queries ao banco)
+- UX em refinamento — fluxos funcionam, design não é versão final
+
+### Auditoria MVP — Estado de Implementação (2026-06-11)
+
+| Feature | Status | Gap principal |
+|---------|--------|---------------|
+| **Estoque** | ❌ UI não implementada | Página mock hardcoded; DB e IA usam vehicles real |
+| **Equipe** | 🟡 Parcial | RBAC sem enforcement de role |
+| **WhatsApp** | 🟡 Parcial | Sandbox blocker produção; sem media/HSM |
+| **Kanban** | 🟡 Parcial | Sem drag-and-drop (select dropdown apenas) |
+| **IA** | ✅ Completo (MVP) | — |
+| **Follow-up** | ✅ Completo (MVP) | — |
+| **Reativação** | ✅ Completo (MVP) | — |
+| **Financiamento** | 🟡 Parcial | Sem financeiras reais, sem CET |
+| **Margem** | ❌ Guardrails não implementados | Campo DB existe; IA não enxerga custo; zero validação |
+| **ROI** | ❌ Financeiro não implementado | Apenas métricas operacionais; sem faturamento/CAC/LTV |
+
+**Evidências-chave:**
+- `app/estoque/page.tsx:3` — `const VEHICLES = [...]` hardcoded
+- `lib/agent-context.ts:77-85` — query vehicles sem `custo`, `margem_minima`
+- `lib/guardrails.ts` — zero referência a margem, custo ou preço
+- `financing_simulations.provider` — hardcoded `'internal'`
+- `calculateOperationalMetrics()` — sem campos de faturamento ou margem por venda
 
 ---
 
@@ -580,10 +611,13 @@ Garantias operacionais:
 - Masking PII universal em logs — **pendente** (LGPD)
 - `WHATSAPP_ACCESS_TOKEN` per-loja (B2+) — **pendente**
 
-### Fase 3 — UX Operacional
+### Fase 3 — MVP Completo
 
+- **Estoque real** — CRUD de veículos conectado ao DB (`vehicles` table); remover mock hardcoded de `app/estoque/page.tsx`
+- **Margem com guardrails** — incluir `custo`/`margem_minima` no contexto da IA; validar proposta em server action antes de fechar lead; bloquear/alertar se abaixo de `margem_minima`
+- **ROI financeiro** — persistir valor da venda ao fechar lead; calcular faturamento gerado, margem por transação, CAC por canal
+- **Kanban com drag-and-drop** e filtros avançados (score, data, tag, origem)
 - Inbox estilo WhatsApp (conversa em tempo real, histórico completo)
-- Kanban com drag-and-drop e filtros avançados
 - Dashboard operacional com métricas em tempo real
 
 ### Fase 4 — Escala

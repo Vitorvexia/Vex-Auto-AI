@@ -48,9 +48,9 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
     },
     last_messages: [],
     vehicles: [
-      { id: "v1", marca: "Hyundai", modelo: "HB20",     ano: 2023, preco: 74900 },
-      { id: "v2", marca: "Jeep",    modelo: "Renegade",  ano: 2023, preco: 99900 },
-      { id: "v3", marca: "Toyota",  modelo: "Corolla",   ano: 2023, preco: 129900 },
+      { id: "v1", marca: "Hyundai", modelo: "HB20",     ano: 2023, preco: 74900,  custo: 65000,  margem_minima: 3000 },
+      { id: "v2", marca: "Jeep",    modelo: "Renegade",  ano: 2023, preco: 99900,  custo: 88000,  margem_minima: 4000 },
+      { id: "v3", marca: "Toyota",  modelo: "Corolla",   ano: 2023, preco: 129900, custo: 114000, margem_minima: 5000 },
     ],
     incoming_text: "Olá",
     ...overrides,
