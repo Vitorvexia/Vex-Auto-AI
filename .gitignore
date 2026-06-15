@@ -20,3 +20,4 @@ gstack/
 # Supabase local state
 supabase/.temp/
 .vercel
+.env.vercel.tmp

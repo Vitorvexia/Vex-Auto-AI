@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
+import { maskPhone } from "@/lib/pii";
 
 // ---------------------------------------------------------------------------
 // Context de reativação — dados do lead usados para enriquecer templates
@@ -177,7 +178,7 @@ export async function runReactivationJob(opts?: {
       continue;
     }
 
-    const maskedPhone = `****${lead.phone_normalized.slice(-4)}`;
+    const maskedPhone = maskPhone(lead.phone_normalized);
 
     // 2. Persistir mensagem ANTES do envio WA — falha de envio nunca perde o histórico
     const { error: msgInsertError } = await supabaseAdmin.from("messages").insert({

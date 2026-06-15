@@ -7,7 +7,6 @@ import type { Autor, ConversationStatus, LeadStatus } from "@/types/domain";
 import { MessageBubble } from "@/app/components/MessageBubble";
 import { buildLeadDossier } from "@/lib/lead-dossier";
 import { DossieCard } from "@/app/components/DossieCard";
-import { FinancingSimulator } from "@/app/components/FinancingSimulator";
 import {
   assignConversationToHuman,
   returnConversationToAI,
@@ -44,6 +43,8 @@ export default async function ConversationPage({
        messages ( id, direcao, autor, mensagem, created_at )`
     )
     .eq("id", params.id)
+    .order("created_at", { foreignTable: "messages", ascending: false })
+    .limit(100, { foreignTable: "messages" })
     .maybeSingle();
 
   if (error) {
@@ -58,12 +59,14 @@ export default async function ConversationPage({
 
   const lead = Array.isArray(conv.leads) ? conv.leads[0] : (conv.leads as any);
 
+  const canCloseLead = (LEAD_TRANSITIONS[lead?.lead_status as LeadStatus] ?? []).includes("FECHADO");
+
   const [
     { data: sidebarConvs },
     { data: scoreEventsRaw },
     { data: followUpLogsRaw },
     { data: reactivationLogsRaw },
-    { data: lastSimulationData },
+    { data: vehiclesForStore },
   ] = await Promise.all([
     supabase
       .from("conversations")
@@ -89,13 +92,13 @@ export default async function ConversationPage({
       .eq("lead_id", lead?.id ?? "")
       .order("attempt_number", { ascending: false })
       .limit(10),
-    supabase
-      .from("financing_simulations")
-      .select("id, vehicle_price, entry_value, financed_amount, term_months, monthly_rate, monthly_payment, total_amount, provider, created_at")
-      .eq("conversation_id", params.id)
-      .order("created_at", { ascending: false })
-      .limit(1)
-      .maybeSingle(),
+    canCloseLead
+      ? supabase
+          .from("vehicles")
+          .select("id, marca, modelo, ano, preco")
+          .eq("disponivel", true)
+          .order("marca")
+      : Promise.resolve({ data: [] as { id: string; marca: string; modelo: string; ano: number; preco: number }[], error: null }),
   ]);
 
   const dossier = buildLeadDossier({
@@ -204,17 +207,31 @@ export default async function ConversationPage({
               <option key={s} value={s}>{LEAD_STATUS_LABELS[s] ?? s}</option>
             ))}
           </select>
+          {canCloseLead && (
+            <>
+              <select name="vehicle_id">
+                <option value="">— Veículo vendido (obrigatório ao fechar) —</option>
+                {(vehiclesForStore ?? []).map((v) => (
+                  <option key={v.id} value={v.id}>
+                    {v.marca} {v.modelo} {v.ano} — R${" "}
+                    {v.preco.toLocaleString("pt-BR")}
+                  </option>
+                ))}
+              </select>
+              <input
+                name="valor_final"
+                type="number"
+                min="0.01"
+                step="0.01"
+                placeholder="Valor final de venda (R$) — obrigatório ao fechar"
+              />
+            </>
+          )}
           <button type="submit">›</button>
         </form>
       </div>
 
       <DossieCard dossier={dossier} score={lead?.score} />
-
-      <FinancingSimulator
-        leadId={lead?.id ?? ""}
-        conversationId={conv.id}
-        lastSimulation={lastSimulationData ?? null}
-      />
 
       <div className="chat">
         {messages.length === 0 && (

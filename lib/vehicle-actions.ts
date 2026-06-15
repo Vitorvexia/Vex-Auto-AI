@@ -27,6 +27,13 @@ export async function createVehicle(formData: FormData): Promise<void> {
     throw new Error("Valores numéricos inválidos");
   }
 
+  if (preco <= custo) {
+    throw new Error("Preço deve ser maior que o custo");
+  }
+  if (margem_minima > preco - custo) {
+    throw new Error("Margem mínima não pode ser maior que o lucro bruto (preço − custo)");
+  }
+
   const { error } = await supabaseAdmin.from("vehicles").insert({
     store_id: storeId,
     marca,
@@ -64,15 +71,28 @@ export async function updateVehicle(vehicleId: string, formData: FormData): Prom
     throw new Error("Campos obrigatórios ausentes");
   }
 
+  const preco = parseFloat(precoStr);
+  const custo = parseFloat(custoStr);
+  const margem_minima = parseFloat(margemStr) || 0;
+  const ano = parseInt(anoStr, 10);
+
+  if (isNaN(ano) || isNaN(preco) || isNaN(custo)) throw new Error("Valores numéricos inválidos");
+  if (preco <= custo) {
+    throw new Error("Preço deve ser maior que o custo");
+  }
+  if (margem_minima > preco - custo) {
+    throw new Error("Margem mínima não pode ser maior que o lucro bruto (preço − custo)");
+  }
+
   const { error } = await supabaseAdmin
     .from("vehicles")
     .update({
       marca,
       modelo,
-      ano: parseInt(anoStr, 10),
-      preco: parseFloat(precoStr),
-      custo: parseFloat(custoStr),
-      margem_minima: parseFloat(margemStr) || 0,
+      ano,
+      preco,
+      custo,
+      margem_minima,
     })
     .eq("id", vehicleId)
     .eq("store_id", storeId);

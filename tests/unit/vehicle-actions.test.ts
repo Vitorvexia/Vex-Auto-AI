@@ -227,3 +227,70 @@ describe("unarchiveVehicle", () => {
     await expect(unarchiveVehicle("v-outro")).rejects.toThrow("Veículo não encontrado");
   });
 });
+
+// ---------------------------------------------------------------------------
+// Validação de margem (createVehicle + updateVehicle)
+// ---------------------------------------------------------------------------
+
+describe("validação de margem", () => {
+  it("V-M1: createVehicle lança erro se preco igual ao custo", async () => {
+    await expect(
+      createVehicle(fd({ ...validFields, preco: "75000", custo: "75000" }))
+    ).rejects.toThrow("Preço deve ser maior que o custo");
+  });
+
+  it("V-M2: createVehicle lança erro se preco menor que custo", async () => {
+    await expect(
+      createVehicle(fd({ ...validFields, preco: "70000", custo: "75000" }))
+    ).rejects.toThrow("Preço deve ser maior que o custo");
+  });
+
+  it("V-M3: createVehicle lança erro se margem_minima maior que lucro bruto (preco - custo)", async () => {
+    await expect(
+      createVehicle(fd({ ...validFields, margem_minima: "20000" }))
+    ).rejects.toThrow("Margem mínima não pode ser maior que o lucro bruto");
+  });
+
+  it("V-M4: createVehicle não chama insert quando validação de margem falha", async () => {
+    const chain = makeChain();
+    await expect(
+      createVehicle(fd({ ...validFields, preco: "70000", custo: "75000" }))
+    ).rejects.toBeDefined();
+    expect(chain.insert).not.toHaveBeenCalled();
+  });
+
+  it("V-M5: updateVehicle lança erro se preco igual ao custo", async () => {
+    await expect(
+      updateVehicle("v-1", fd({ ...validFields, preco: "75000", custo: "75000" }))
+    ).rejects.toThrow("Preço deve ser maior que o custo");
+  });
+
+  it("V-M6: updateVehicle lança erro se margem_minima maior que lucro bruto (preco - custo)", async () => {
+    await expect(
+      updateVehicle("v-1", fd({ ...validFields, margem_minima: "20000" }))
+    ).rejects.toThrow("Margem mínima não pode ser maior que o lucro bruto");
+  });
+
+  it("V-M7: updateVehicle não chama update quando validação de margem falha", async () => {
+    const chain = makeChain();
+    await expect(
+      updateVehicle("v-1", fd({ ...validFields, preco: "70000", custo: "75000" }))
+    ).rejects.toBeDefined();
+    expect(chain.update).not.toHaveBeenCalled();
+  });
+
+  // Regression: V-M8/V-M9 — updateVehicle missing isNaN guards for preco/custo
+  // Found by /qa on 2026-06-15
+  // Report: PR #26 review — createVehicle validates all 3 numerics, updateVehicle was missing preco/custo guards
+  it("V-M8: updateVehicle lança erro se preco for NaN (string inválida)", async () => {
+    await expect(
+      updateVehicle("v-1", fd({ ...validFields, preco: "nao-e-numero" }))
+    ).rejects.toThrow("Valores numéricos inválidos");
+  });
+
+  it("V-M9: updateVehicle lança erro se custo for NaN (string inválida)", async () => {
+    await expect(
+      updateVehicle("v-1", fd({ ...validFields, custo: "nao-e-numero" }))
+    ).rejects.toThrow("Valores numéricos inválidos");
+  });
+});

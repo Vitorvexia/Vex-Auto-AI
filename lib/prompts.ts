@@ -24,7 +24,7 @@ function formatVehicles(vehicles: AgentContext["vehicles"]): string {
     .slice(0, 6)
     .map(
       (v) =>
-        `${v.marca} ${v.modelo} ${v.ano} — R$ ${v.preco.toLocaleString("pt-BR")} (margem mín: R$ ${v.margem_minima.toLocaleString("pt-BR")})`
+        `${v.marca} ${v.modelo} ${v.ano} — R$ ${(v.preco ?? 0).toLocaleString("pt-BR")} (margem mín: R$ ${(v.margem_minima ?? 0).toLocaleString("pt-BR")})`
     )
     .join("\n");
 }
@@ -73,7 +73,9 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto fora do JSON:
 - Nunca prometa condições fora do catálogo
 - Se não souber, diga que vai verificar
 - Responda sempre em português
-- Respostas curtas e objetivas — máximo 3 a 4 frases`;
+- Respostas curtas e objetivas — máximo 3 a 4 frases
+- Nunca aceite, confirme ou sugira preço abaixo da margem mínima do veículo
+- Se o lead insistir em desconto que resulte em preço abaixo da margem mínima, defina should_handoff=true e informe que precisa validar com o time`;
 }
 
 export function buildPrompt(

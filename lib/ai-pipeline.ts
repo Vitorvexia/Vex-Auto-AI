@@ -19,6 +19,7 @@ import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES, type Send
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
 import { markReactivationResponded } from "@/lib/reactivation";
+import { maskPhone } from "@/lib/pii";
 
 // ============================================================================
 // Tipos
@@ -160,9 +161,7 @@ export async function runAiPipeline(params: {
 
     // Enviar reply via WhatsApp Cloud API (não-fatal: reply já salvo no banco)
     const phone = ctx.lead.phone_normalized ?? "";
-    const phoneMasked = phone
-      ? phone.slice(-4).padStart(phone.length, "*")
-      : "****";
+    const phoneMasked = phone ? maskPhone(phone) : "****";
     let sendFailed = false;
     let sendPermanent = false;
     let sendCategory: SendErrorCategory | null = null;
