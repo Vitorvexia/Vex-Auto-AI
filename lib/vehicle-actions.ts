@@ -76,7 +76,7 @@ export async function updateVehicle(vehicleId: string, formData: FormData): Prom
   const margem_minima = parseFloat(margemStr) || 0;
   const ano = parseInt(anoStr, 10);
 
-  if (isNaN(ano)) throw new Error("Ano inválido");
+  if (isNaN(ano) || isNaN(preco) || isNaN(custo)) throw new Error("Valores numéricos inválidos");
   if (preco <= custo) {
     throw new Error("Preço deve ser maior que o custo");
   }

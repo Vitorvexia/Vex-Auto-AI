@@ -278,4 +278,19 @@ describe("validação de margem", () => {
     ).rejects.toBeDefined();
     expect(chain.update).not.toHaveBeenCalled();
   });
+
+  // Regression: V-M8/V-M9 — updateVehicle missing isNaN guards for preco/custo
+  // Found by /qa on 2026-06-15
+  // Report: PR #26 review — createVehicle validates all 3 numerics, updateVehicle was missing preco/custo guards
+  it("V-M8: updateVehicle lança erro se preco for NaN (string inválida)", async () => {
+    await expect(
+      updateVehicle("v-1", fd({ ...validFields, preco: "nao-e-numero" }))
+    ).rejects.toThrow("Valores numéricos inválidos");
+  });
+
+  it("V-M9: updateVehicle lança erro se custo for NaN (string inválida)", async () => {
+    await expect(
+      updateVehicle("v-1", fd({ ...validFields, custo: "nao-e-numero" }))
+    ).rejects.toThrow("Valores numéricos inválidos");
+  });
 });
