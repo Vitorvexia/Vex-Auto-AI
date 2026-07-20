@@ -757,3 +757,26 @@ Analytics registra lead fechado na janela de 30 dias
 ### Critério de sucesso
 
 Todos os passos acima executam sem erro, mensagens chegam no celular real do lead, e o fechamento persiste `vehicle_id` + `valor_final` no banco com validação de margem funcionando.
+
+---
+
+## Roteamento Automático (Framework + Plugins)
+
+Ao receber qualquer pedido, ir automaticamente ao lugar certo — sem esperar o usuário apontar onde procurar.
+
+**Ordem de decisão:**
+
+1. **Contexto de negócio/produto** → já está neste arquivo. Não precisa ir a lugar nenhum.
+2. **Estado atual do projeto** (o que tá pendente, bug conhecido, decisão recente) → checar `docs/vex/27_PROJECT_STATUS.md`, `28_BACKLOG.md`, `30_KNOWN_ISSUES.md`, `34_AI_MEMORY.md` automaticamente antes de propor algo que já foi decidido ou já é conhecido.
+3. **Mecânica de execução** (planejar, TDD, debugar, revisar código, deploy, incident, changelog) → usar skill `superpowers`/`gstack` equivalente direto, sem perguntar. Mapa:
+   - Feature nova / plano → `superpowers:brainstorming` → `superpowers:writing-plans`
+   - Implementação → `superpowers:test-driven-development`
+   - Bug → `superpowers:systematic-debugging` (ou `gstack:investigate`)
+   - Review → `superpowers:requesting-code-review` / `gstack:review`
+   - Antes de declarar "pronto" → `superpowers:verification-before-completion`
+   - Deploy → `gstack:land-and-deploy`
+   - Ship (versão+changelog+PR) → `gstack:ship`
+   - Monitorar pós-deploy → `gstack:canary`
+4. **Regra/padrão específico VEX que a skill genérica não cobre** (nomenclatura, guardrails de margem, LGPD/masking, fluxo WhatsApp) → aí sim consultar o capítulo certo em `docs/vex/` via `docs/vex/AI_NAVIGATION_GUIDE.md` (tabela de roteamento por tipo de tarefa).
+
+Não ler o framework inteiro toda vez. Ir direto ao capítulo relevante pelo tipo de tarefa — a leitura completa README→NAV→INDEX antes de cada ação foi removida por ser custo alto sem retorno (ver `docs/vex/26_INDEX.md`, nota de tooling precedence).
