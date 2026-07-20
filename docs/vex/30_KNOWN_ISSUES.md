@@ -437,11 +437,89 @@ Every resolved bug strengthens the project.
 
 # CURRENT KNOWN ISSUES
 
-This section contains active issues only.
+This section contains active issues only. Populated 2026-07-20 from CLAUDE.md audit — see 27_PROJECT_STATUS.md ACTIVE BLOCKERS (B001-B005) for the operational-config items; this section covers the underlying technical issues.
 
-Move resolved issues to the historical archive below.
+---
 
-No active issues documented.
+Issue ID
+
+KI-0002
+
+Title
+
+WhatsApp Sends Fail in Production — Phone Number ID Points at Meta Sandbox
+
+Category
+
+WhatsApp
+
+Severity
+
+Critical
+
+Status
+
+Open
+
+Description
+
+`WHATSAPP_PHONE_NUMBER_ID` env var is set to the Meta sandbox number (`1150232648165177`), not the real Speed Motos number (`1233441783176942`, which is `ON_PREMISE` and incompatible with Cloud API as-is).
+
+Impact
+
+Follow-up automation and lead reactivation sends fail in production.
+
+Workaround
+
+None — reads/writes to DB still work, only outbound WhatsApp send fails (non-fatal per pipeline design, `ok_send_failed` status).
+
+Permanent Fix
+
+Register a Cloud API-compatible number for Speed Motos in Meta Business Manager, update `WHATSAPP_PHONE_NUMBER_ID` on Vercel.
+
+Related
+
+27_PROJECT_STATUS.md B001
+
+---
+
+Issue ID
+
+KI-0003
+
+Title
+
+CRON_SECRET Absent in Production — daily-run Accepts Any Bearer Token
+
+Category
+
+Security
+
+Severity
+
+High
+
+Status
+
+Open (compat fallback shipped, root cause not fixed)
+
+Description
+
+`/api/internal/daily-run` GET handler accepts any Bearer token when `CRON_SECRET` is unset in the environment (commit a06035c). This was a deliberate compatibility fallback for Vercel Cron GET requests, not a fix for the missing secret itself.
+
+Impact
+
+Endpoint has no real authentication until the secret is set.
+
+Permanent Fix
+
+Set `CRON_SECRET` in Vercel production env.
+
+Related
+
+27_PROJECT_STATUS.md B003
+
+---
 
 (Update continuously.)
 

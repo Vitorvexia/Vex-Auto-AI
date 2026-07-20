@@ -201,9 +201,23 @@ Status
 
 # ACTIVE BLOCKERS
 
-Critical blockers should always remain here.
+Critical blockers should always remain here. Source: CLAUDE.md (2026-07-20 audit), all operational/config — no code work pending.
 
-B003
+B001
+
+`WHATSAPP_PHONE_NUMBER_ID` points at sandbox (`1150232648165177`). Real Speed Motos number (`1233441783176942`) is `ON_PREMISE`, incompatible with Cloud API. Follow-up and reactivation sends fail in production as a result.
+
+Owner
+
+Business Owner
+
+Status
+
+Pending — register real Cloud API number in Meta Business Manager, update env on Vercel.
+
+---
+
+B002
 
 Permanent WhatsApp Token pending. Temporary token in prod; System User Token to be generated via business.facebook.com.
 
@@ -217,7 +231,45 @@ Pending
 
 ---
 
-Note: CRON_SECRET-absent-in-production issue (formerly B004) was addressed in commit a06035c (fix(cron): aceitar Vercel Cron GET quando CRON_SECRET ausente) and again on branch fix/cron-no-secret-fallback. Verify still needed before removing.
+B003
+
+`CRON_SECRET` not configured on Vercel. `/api/internal/daily-run` GET accepts any Bearer token when the env var is absent (compat fallback shipped in a06035c) — that's a stopgap, not the fix. The actual fix is setting the secret in Vercel.
+
+Owner
+
+Business Owner
+
+Status
+
+Pending
+
+---
+
+B004
+
+Migration 020 (`leads.vehicle_id` + `leads.valor_final`) not yet applied in production. Code (PR #26) is merged; migration itself needs to run via Supabase Dashboard or CLI.
+
+Owner
+
+Engineering
+
+Status
+
+Pending
+
+---
+
+B005
+
+MVP end-to-end acceptance test (real WhatsApp number → AI pipeline → close with margin guardrail) blocked until B001-B004 clear.
+
+Owner
+
+Engineering
+
+Status
+
+Blocked by B001, B002, B003, B004
 
 ---
 
@@ -263,15 +315,17 @@ Every active risk belongs here.
 
 # CURRENT TECHNICAL DEBT
 
-Only active debt.
+Only active debt. Source: CLAUDE.md 2026-07-20 audit.
 
-Example
+RBAC absent — any store user can reassign any lead (`assignLeadToUser`/`removeLeadAssignment` only check `store_id`). Blocks reliable commission attribution.
 
-Unlimited context loading.
+Message query has no limit.
 
-ROI calculation pending.
+`error_category`/`error_message` missing in `reactivation_logs`/`follow_up_logs` — WhatsApp send failures in cron jobs are silent (observability gap).
 
-Retry cleanup pending.
+Lead assignment has no history — only current `assigned_to` is stored. Needed before commission/ROI auditing.
+
+`calculateOperationalMetrics()` does not use `leads.valor_final` (exists since migration 020) — no revenue, margin-per-sale, or CAC in analytics yet.
 
 Document every intentional debt.
 
