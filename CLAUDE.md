@@ -401,7 +401,7 @@ Todas as actions protegidas por `assertSuperAdmin()`.
 - **`WHATSAPP_PHONE_NUMBER_ID` aponta para sandbox** — `1150232648165177` (`+1 555-629-2868`). Número real Speed Motos (`1233441783176942`) é `ON_PREMISE`, incompatível com Cloud API. Envios de follow-up e reativação falham em produção. Resolução: registrar número Cloud API real na Meta e atualizar env na Vercel — **BLOQUEIO OPERACIONAL**
 - `error_category` ausente em `reactivation_logs` e `error_message` nunca populado em `follow_up_logs` — falhas de envio WA são silenciosas nos jobs — **pendente** (observabilidade)
 - ~~Masking de PII em logs~~ — ✔ `lib/pii.ts` + `lib/logger.ts` mascarando `phone/phone_normalized/to/from/numero` (PR #26)
-- **`CRON_SECRET` não configurado** — `/api/internal/daily-run` GET aceita qualquer Bearer token quando `CRON_SECRET` está ausente no env. Configurar na Vercel — **pendente** (segurança)
+- ~~`CRON_SECRET` não configurado~~ — ✔ configurado na Vercel (produção + preview, verificado 2026-07-21). Fallback inseguro em `route.ts` só ativa se a var estiver ausente — não é o caso hoje.
 - `leads.assigned_to` guarda apenas responsável atual (sem histórico) — **pendente para ROI/comissões**: avaliar `lead_assignment_history` ou event sourcing quando comissão/ROI avançado/auditoria forem implementados
 - **Atribuição sem RBAC** — `assignLeadToUser`/`removeLeadAssignment` só validam `store_id` (modelo de auth atual, consistente com `updateLeadStatus`/`moveLeadStatus`). Qualquer usuário da loja reatribui qualquer lead. RBAC por papel (vendedor só toca os próprios leads) é decisão de produto futura — **pendente** (bloqueia atribuição confiável de comissões)
 - **Store-move de usuário não revalida `leads.assigned_to`** — trigger `check_lead_assigned_to_store` guarda escrita em `leads`, não `UPDATE users SET store_id`. Sem UI para mover user entre lojas hoje; se criar, revalidar leads atribuídos — **pendente**
@@ -498,8 +498,8 @@ npm install   # prepare script roda `husky` automaticamente
 - Domínio configurado e operacional
 - Variáveis de ambiente configuradas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `INTERNAL_API_KEY`, `ADMIN_EMAILS`
 - ~~`DEFAULT_STORE_ID`~~ removido — substituído por `getServerStoreId()` (multi-tenant B1)
-- Banco Supabase com migrations 001–019 aplicadas em produção. **Migration 020 pendente de aplicação** (`leads.vehicle_id` + `leads.valor_final`) — PR #26 mergeado, aplicar via Supabase Dashboard ou CLI
-- ⚠️ `CRON_SECRET` não configurado na Vercel — pendente
+- Banco Supabase com migrations 001–020 aplicadas em produção. ✔ Migration 020 (`leads.vehicle_id` + `leads.valor_final`) confirmada em produção (verificado 2026-07-21 via query direta — colunas presentes)
+- ✔ `CRON_SECRET` configurado na Vercel (produção + preview, verificado 2026-07-21)
 
 ### WhatsApp
 
@@ -551,7 +551,7 @@ Garantias operacionais:
 - ✔ `.env.vercel.tmp` adicionado ao `.gitignore` — arquivo de segredos de produção não vaza mais para o repositório (PR #26)
 - Logs sem PII — maioria resolvida; tokens Meta não logados; `lib/logger.ts` cobre campos conhecidos
 - Endpoints internos protegidos por `INTERNAL_API_KEY`
-- ⚠️ `CRON_SECRET` não configurado — `/api/internal/daily-run` GET aceita qualquer Bearer token quando ausente — **pendente configuração na Vercel**
+- ✔ `CRON_SECRET` configurado na Vercel (verificado 2026-07-21) — fallback inseguro do GET não se aplica em produção
 
 ### Multi-tenant B1
 
@@ -713,15 +713,15 @@ O objetivo final do sistema é se tornar indispensável — a operação comerci
 
 ## Teste Final de Aceitação do MVP
 
-> ⏳ **PENDENTE** — executar após configuração operacional completa (WhatsApp Cloud API real + token permanente + CRON_SECRET)
+> ⏳ **PENDENTE** — executar após configuração operacional completa (WhatsApp Cloud API real + token permanente). `CRON_SECRET` e migration 020 já confirmados em produção (2026-07-21).
 
 Se esse fluxo funcionar ponta a ponta com a Speed Motos, o MVP do Vex Auto está concluído.
 
 ### Pré-requisitos operacionais (fora do código)
 
 1. **Meta Business Manager** — registrar número Cloud API real da Speed Motos, obter `Phone Number ID`
-2. **Vercel env vars** — atualizar `WHATSAPP_PHONE_NUMBER_ID` (novo Phone Number ID), `WHATSAPP_ACCESS_TOKEN` (System User token permanente), configurar `CRON_SECRET`
-3. **Supabase produção** — aplicar migration `020_lead_sale_fields.sql` + atualizar `stores.whatsapp_phone_number_id` e `stores.whatsapp_numero` da Speed Motos
+2. **Vercel env vars** — atualizar `WHATSAPP_PHONE_NUMBER_ID` (novo Phone Number ID), `WHATSAPP_ACCESS_TOKEN` (System User token permanente). `CRON_SECRET` já configurado — nada a fazer aqui.
+3. **Supabase produção** — atualizar `stores.whatsapp_phone_number_id` e `stores.whatsapp_numero` da Speed Motos. Migration `020_lead_sale_fields.sql` já aplicada — nada a fazer aqui.
 4. **Higiene** — desativar loja demo e webhook de teste no painel Meta
 
 ### Fluxo de aceitação

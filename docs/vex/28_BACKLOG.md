@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Product & Engineering
 
-Last Updated: 2026-07-20
+Last Updated: 2026-07-21
 
 ---
 
@@ -254,6 +254,142 @@ Feature expansion.
 Integrations.
 
 Automation improvements.
+
+---
+
+# ACTIVE BACKLOG ITEMS
+
+ID
+
+BL-0001
+
+Title
+
+WhatsApp Embedded Signup (self-serve tenant onboarding)
+
+Problem
+
+Every new store customer currently requires a fully manual Meta setup per tenant: create/verify Business Manager account, create System User, generate permanent token, manually migrate or register phone number. Validated directly during the Speed Motos pilot (2026-07-21) — took multiple days end-to-end (business verification alone: ~2 days), required an engineer walking a non-technical business owner through Meta's dashboards step by step. Does not scale past a handful of manual pilot customers.
+
+Business Value
+
+Removes engineering/founder time from every new customer's onboarding. Unlocks self-serve sales — a customer can go from "bought a plan" to "WhatsApp connected" without a human on the Vex side doing the Meta setup for them.
+
+Customer Value
+
+Store owner clicks "Conectar WhatsApp" inside Vex Auto, completes a Meta popup (login + business + phone confirmation), and is done — no Business Manager, System User, or token concepts exposed to them.
+
+Priority
+
+P3 (Fase 4 — Escala). Not blocking current single-tenant pilot; becomes blocking before onboarding a 2nd paying customer without manual engineering support.
+
+Status
+
+IDEA — on hold, blocked on founder opening MEI/CNPJ for Vex (not doing now, 2026-07-21)
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Medium-High — requires registering Vex as a Meta Tech Provider/Business Partner, implementing Embedded Signup (Facebook Login for Business) flow, and handling the resulting WABA/phone_number_id/token via API instead of manual Business Manager entry. `stores.whatsapp_phone_number_id` (migration 017) already supports per-store phone IDs — this is the acquisition flow, not the storage model.
+
+Dependencies
+
+Meta Tech Provider approval. Existing multi-tenant WhatsApp-per-store architecture (already in place, migration 017). Requires Vex's own CNPJ or MEI to complete Vex's own Meta Business Verification (separate from Speed Motos' account) before Tech Provider application can even start — founder decided 2026-07-21 not to open a MEI yet, so this whole item is on hold until that changes.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+None yet
+
+Target Version
+
+Fase 4 (Escala)
+
+Success Metrics
+
+Time from "plan purchased" to "WhatsApp connected" — target: minutes, not days. Zero engineering hours per new tenant's WhatsApp setup.
+
+Notes
+
+Surfaced during Speed Motos manual onboarding (2026-07-21) when the founder asked whether every future customer would need to manually create a Meta Business account — they should not. Standard pattern used by other WhatsApp-integrated SaaS CRMs (e.g., Zenvia, Take Blip). See also the broader self-serve onboarding experience being scoped in the same session (purchase → auto-provisioned login → first-run setup wizard) — Embedded Signup for WhatsApp is one step inside that wizard, not a separate flow.
+
+Interim decision (2026-07-21): while this is on hold, the onboarding wizard's WhatsApp step ships as manual guided entry instead (written instructions inside the wizard + a form field to paste the Phone Number ID + token the customer generates themselves in their own Meta account — same manual process used for Speed Motos, just turned into in-app copy instead of a human walking them through it). Swap this step's content for the real Embedded Signup button once Tech Provider approval lands — no other part of the wizard needs to change.
+
+---
+
+ID
+
+BL-0002
+
+Title
+
+Mascote / personagem visual da Vex Auto
+
+Problem
+
+Vex Auto has no visual brand personality yet — no mascot or character representing the product to end users (store owners, sellers).
+
+Business Value
+
+Brand recognition and differentiation. A mascot can anchor the product's tone across onboarding, empty states, error messages, and marketing — makes the product feel less like a generic dashboard.
+
+Customer Value
+
+Warmer, more memorable first impression — especially relevant for the onboarding wizard (BL discussed 2026-07-21) where a mascot could narrate the guided tour/spotlight steps.
+
+Priority
+
+P4 (future consideration) — brand/design work, not blocking any current engineering item.
+
+Status
+
+IDEA
+
+Owner
+
+Product (founder)
+
+Estimated Complexity
+
+Unknown — depends on whether it's illustrated, animated, AI-generated, or commissioned. Not scoped yet.
+
+Dependencies
+
+None technical. Could plug into the onboarding wizard's tour (Phase 2, spotlight/tooltips) once both exist.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+None
+
+Target Version
+
+Unscheduled
+
+Success Metrics
+
+Not yet defined — would need to be tied to a qualitative goal (brand recall, onboarding completion rate, etc.) once scoped.
+
+Notes
+
+Requested by founder 2026-07-21 during the onboarding wizard brainstorm session, as a "someday" item — explicitly not to be worked on now, just not to be forgotten.
 
 ---
 

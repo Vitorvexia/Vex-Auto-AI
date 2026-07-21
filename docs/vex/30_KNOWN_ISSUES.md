@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-07-20
+Last Updated: 2026-07-21
 
 ---
 
@@ -501,7 +501,7 @@ High
 
 Status
 
-Open (compat fallback shipped, root cause not fixed)
+Resolved (2026-07-21)
 
 Description
 
@@ -509,11 +509,15 @@ Description
 
 Impact
 
-Endpoint has no real authentication until the secret is set.
+Endpoint had no real authentication until the secret was set.
 
 Permanent Fix
 
-Set `CRON_SECRET` in Vercel production env.
+`CRON_SECRET` confirmed set in Vercel production + preview env (verified via `vercel env ls production`, present ~40 days prior to verification). Fallback path in `route.ts:47-52` only triggers when the var is absent — no longer reachable in production.
+
+Validation
+
+Verified 2026-07-21: `vercel env ls production` shows `CRON_SECRET` as Encrypted / Production, Preview.
 
 Related
 

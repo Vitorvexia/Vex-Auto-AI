@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-07-20
+Last Updated: 2026-07-21
 
 ---
 
@@ -233,21 +233,21 @@ Pending
 
 B003
 
-`CRON_SECRET` not configured on Vercel. `/api/internal/daily-run` GET accepts any Bearer token when the env var is absent (compat fallback shipped in a06035c) — that's a stopgap, not the fix. The actual fix is setting the secret in Vercel.
+~~`CRON_SECRET` not configured on Vercel.~~ RESOLVED — verified 2026-07-21: `vercel env ls production` shows `CRON_SECRET` set (Preview + Production, since ~40 days prior). Code (`route.ts:47-52`) only falls back to the insecure any-Bearer path when the var is absent — not the case in production.
 
 Owner
 
-Business Owner
+Engineering
 
 Status
 
-Pending
+Resolved (2026-07-21)
 
 ---
 
 B004
 
-Migration 020 (`leads.vehicle_id` + `leads.valor_final`) not yet applied in production. Code (PR #26) is merged; migration itself needs to run via Supabase Dashboard or CLI.
+~~Migration 020 not yet applied in production.~~ RESOLVED — verified 2026-07-21 via direct read-only query against production Supabase (`leads` table returns `vehicle_id`/`valor_final` columns, no PGRST error).
 
 Owner
 
@@ -255,13 +255,13 @@ Engineering
 
 Status
 
-Pending
+Resolved (2026-07-21)
 
 ---
 
 B005
 
-MVP end-to-end acceptance test (real WhatsApp number → AI pipeline → close with margin guardrail) blocked until B001-B004 clear.
+MVP end-to-end acceptance test (real WhatsApp number → AI pipeline → close with margin guardrail) blocked until B001-B002 clear.
 
 Owner
 
@@ -269,7 +269,7 @@ Engineering
 
 Status
 
-Blocked by B001, B002, B003, B004
+Blocked by B001, B002
 
 ---
 
