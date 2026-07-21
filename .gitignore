@@ -21,3 +21,6 @@ gstack/
 supabase/.temp/
 .vercel
 .env.vercel.tmp
+
+# Git worktrees (isolated workspaces for subagent-driven implementation)
+.worktrees/
