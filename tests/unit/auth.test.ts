@@ -27,7 +27,14 @@ vi.mock("@/lib/admin-auth", () => ({
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { getServerStoreId, getServerUserRole, AuthError, StoreNotFoundError } from "@/lib/auth";
+import {
+  getServerStoreId,
+  getServerUserRole,
+  assertStoreAdmin,
+  AuthError,
+  StoreNotFoundError,
+  ForbiddenError,
+} from "@/lib/auth";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -41,6 +48,15 @@ function mockUsersQuery(storeId: string | null) {
     data: storeId ? { store_id: storeId } : null,
     error: null,
   });
+  mockFrom.mockReturnValue(chain);
+  return chain;
+}
+
+function mockUsersQueryWithRole(row: { store_id: string; role: string } | null) {
+  const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+  const methods = ["select", "eq", "single"];
+  for (const m of methods) chain[m] = vi.fn().mockReturnValue(chain);
+  chain.single = vi.fn().mockResolvedValue({ data: row, error: null });
   mockFrom.mockReturnValue(chain);
   return chain;
 }
@@ -257,5 +273,72 @@ describe("getServerUserRole", () => {
     mockUsersRoleQuery(null);
 
     await expect(getServerUserRole()).rejects.toThrow(StoreNotFoundError);
+  });
+});
+
+describe("assertStoreAdmin", () => {
+  it("B1: usuário dono_loja da loja → retorna store_id", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+      error: null,
+    });
+    mockUsersQueryWithRole({ store_id: "store-abc", role: "dono_loja" });
+
+    const result = await assertStoreAdmin();
+
+    expect(result).toBe("store-abc");
+  });
+
+  it("B2: sem sessão → throw AuthError", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+
+    await expect(assertStoreAdmin()).rejects.toThrow(AuthError);
+  });
+
+  it("B3: usuário sem linha em public.users → throw StoreNotFoundError", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-orphan" } },
+      error: null,
+    });
+    mockUsersQueryWithRole(null);
+
+    await expect(assertStoreAdmin()).rejects.toThrow(StoreNotFoundError);
+  });
+
+  it("B4: usuário é vendedor, não admin → throw ForbiddenError", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-2" } },
+      error: null,
+    });
+    mockUsersQueryWithRole({ store_id: "store-abc", role: "vendedor" });
+
+    await expect(assertStoreAdmin()).rejects.toThrow(ForbiddenError);
+  });
+
+  it("B5: ForbiddenError é instância de Error", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-2" } },
+      error: null,
+    });
+    mockUsersQueryWithRole({ store_id: "store-abc", role: "vendedor" });
+
+    const err = await assertStoreAdmin().catch((e: unknown) => e);
+
+    expect(err).toBeInstanceOf(Error);
+    expect(err).toBeInstanceOf(ForbiddenError);
+  });
+
+  it("B6: consulta a tabela 'users' via getServerUserRole (role) + getServerStoreId (store_id)", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1" } },
+      error: null,
+    });
+    const chain = mockUsersQueryWithRole({ store_id: "store-abc", role: "dono_loja" });
+
+    await assertStoreAdmin();
+
+    expect(mockFrom).toHaveBeenCalledWith("users");
+    expect(chain.select).toHaveBeenCalledWith("role");
+    expect(chain.select).toHaveBeenCalledWith("store_id");
   });
 });

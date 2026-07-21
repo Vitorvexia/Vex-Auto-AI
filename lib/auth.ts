@@ -53,3 +53,16 @@ export async function getServerUserRole(): Promise<UserRole> {
 
   return data.role as UserRole;
 }
+
+export class ForbiddenError extends Error {
+  constructor(message = "forbidden") {
+    super(message);
+    this.name = "ForbiddenError";
+  }
+}
+
+export async function assertStoreAdmin(): Promise<string> {
+  const role = await getServerUserRole();
+  if (role !== "dono_loja") throw new ForbiddenError();
+  return getServerStoreId();
+}
