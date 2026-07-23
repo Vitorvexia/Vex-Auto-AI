@@ -207,19 +207,23 @@ B001
 
 `WHATSAPP_PHONE_NUMBER_ID` points at sandbox (`1150232648165177`). Real Speed Motos number (`1233441783176942`) is `ON_PREMISE`, incompatible with Cloud API. Follow-up and reactivation sends fail in production as a result.
 
+Progress (2026-07-23): Business Verification confirmed (CMOV MOBILIDADE URBANA LTDA). WABA "#1 Isadora" identified, payment method added, System User created with permanent token, app "Vex Auto" (`731158340085674`) published (Live mode — required adding public `/privacidade` page, PR #28). Webhook confirmed reachable (test event received in Vercel logs). Template `follow_up` (Marketing category) submitted for approval.
+
+New blocker found: the WABA's existing phone number (`+55 32 3541-3127`, phone_number_id `2365906556789250`) turned out to be Speed Motos' actively-used personal/business WhatsApp line (daily manual conversations with customers, despachante, etc) — NOT available for Cloud API migration (would disconnect the regular WhatsApp app on that number permanently). Confirmed via Graph API `/deregister` call that the number was never actually Cloud-API-linked despite the wizard showing "Registrado" — no harm done, regular app still works normally.
+
 Owner
 
 Business Owner
 
 Status
 
-Pending — register real Cloud API number in Meta Business Manager, update env on Vercel.
+Pending — needs a NEW dedicated phone number/SIM (not currently in daily manual use) added to the same WABA. All other setup (WABA, payment, template, System User, token, app Live) is reusable once the new number arrives. See `project_whatsapp_migration_b001.md` memory for full resume-here detail.
 
 ---
 
 B002
 
-Permanent WhatsApp Token pending. Temporary token in prod; System User Token to be generated via business.facebook.com.
+~~Permanent WhatsApp Token pending.~~ RESOLVED (2026-07-23) — System User `vex-auto-api` created with full access to app + WABA, permanent (never-expires) token generated and in use.
 
 Owner
 
@@ -227,7 +231,7 @@ Business Owner
 
 Status
 
-Pending
+Resolved (2026-07-23)
 
 ---
 
@@ -269,13 +273,29 @@ Engineering
 
 Status
 
-Blocked by B001, B002
+Blocked by B001 (B002 resolved)
+
+---
+
+B006
+
+`lib/follow-up.ts` and `lib/reactivation.ts` send free-form text via `sendWhatsAppMessage`, not approved WhatsApp templates. Business-initiated messages (follow-up, reactivation) outside the 24h customer-service window require pre-approved templates with `{{1}}`-style placeholders — free text will be rejected by Meta in production once real business-initiated sends are attempted. Discovered 2026-07-23 while creating the first template (`follow_up`, Marketing category) for B001. Only 1 of ~9 needed templates (3 follow-up + 6 reactivation with/without vehicle) exists so far, and it's still in review.
+
+Owner
+
+Engineering
+
+Status
+
+Open — needs template-based send path in `sendWhatsAppMessage`/`follow-up.ts`/`reactivation.ts`, plus the remaining ~8 templates created and approved in Meta.
 
 ---
 
 # RECENT COMPLETED WORK
 
 Most recent accomplishments (source: git log, most recent first).
+
+✅ Public `/privacidade` page for Meta app publish requirement (PR #28, 2026-07-23)
 
 ✅ isNaN guards for preco/custo in updateVehicle (4505933)
 
