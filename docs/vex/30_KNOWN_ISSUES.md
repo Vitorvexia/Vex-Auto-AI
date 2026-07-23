@@ -475,7 +475,7 @@ None — reads/writes to DB still work, only outbound WhatsApp send fails (non-f
 
 Permanent Fix
 
-Register a Cloud API-compatible number for Speed Motos in Meta Business Manager, update `WHATSAPP_PHONE_NUMBER_ID` on Vercel.
+Register a Cloud API-compatible number for Speed Motos in Meta Business Manager, update `WHATSAPP_PHONE_NUMBER_ID` on Vercel. Progress 2026-07-23: WABA, payment, System User/token, and app-Live setup all completed and reusable — only the phone number itself is still pending, since the WABA's current number is Speed Motos' actively-used personal/business line and cannot be migrated without cutting off daily manual WhatsApp use. Needs a dedicated new number/SIM.
 
 Related
 
