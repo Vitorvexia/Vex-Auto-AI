@@ -42,11 +42,43 @@ export type AgentStatus =
 // Redação de PII antes de logar
 // ============================================================================
 
+// CPF: 11 dígitos, tipicamente XXX.XXX.XXX-XX mas pode aparecer com pontuação
+// parcial ou ausente. Escaneia qualquer string do objeto logado — a estrutura
+// (collected_data.financiamento.cpf) não é o único lugar onde pode vazar: a
+// LLM pode ecoar o CPF em texto livre (summary, reply_text).
+const CPF_PATTERN = /\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g;
+const CPF_PLACEHOLDER = "[CPF removido]";
+
+function scrubCpfDeep<T>(value: T): T {
+  if (typeof value === "string") {
+    return value.replace(CPF_PATTERN, CPF_PLACEHOLDER) as unknown as T;
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => scrubCpfDeep(item)) as unknown as T;
+  }
+  if (value && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      out[k] = scrubCpfDeep(v);
+    }
+    return out as unknown as T;
+  }
+  return value;
+}
+
 function redactCpfFromLog(result: AgentResult): unknown {
+  // Belt and suspenders: remove o campo estruturado explicitamente...
   const fin = result.collected_data?.financiamento;
-  if (!fin || fin.cpf === null || fin.cpf === undefined) return result;
-  const { cpf: _cpf, ...finRest } = fin;
-  return { ...result, collected_data: { ...result.collected_data, financiamento: finRest } };
+  const withoutStructuredCpf =
+    !fin || fin.cpf === null || fin.cpf === undefined
+      ? result
+      : (() => {
+          const { cpf: _cpf, ...finRest } = fin;
+          return { ...result, collected_data: { ...result.collected_data, financiamento: finRest } };
+        })();
+  // ...e depois escaneia todo o objeto (inclusive summary/reply_text, texto
+  // livre autorado pela LLM) por qualquer substring com formato de CPF.
+  return scrubCpfDeep(withoutStructuredCpf);
 }
 
 // ============================================================================
@@ -167,8 +199,9 @@ export async function runAiPipeline(params: {
               : {}),
           })
           .eq("id", params.leadId);
-      } catch {
+      } catch (collectionErr) {
         // non-fatal: reply já foi gerado, persistência de coleta não bloqueia resposta
+        console.error("[collection] falha ao persistir contexto/agendamento:", collectionErr);
       }
       if (update.forceHandoff) {
         result.should_handoff = true;

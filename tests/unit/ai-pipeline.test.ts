@@ -641,6 +641,32 @@ describe("runAiPipeline — coleta de financiamento/troca", () => {
     expect(loggedOutput).not.toContain("111.222.333-44");
   });
 
+  it("CPF ecoado em summary/reply_text pela LLM nunca aparece no objeto passado a ai_logs.llm_output", async () => {
+    vi.mocked(runGuardrails).mockReturnValue({
+      mode: "normal", reason: "normal",
+      collection: { ask: [], collect: ["financiamento"], missingTrocaFields: [] },
+    } as any);
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      reply_text: "Obrigado! Confirmando seu CPF 111.222.333-44 para o financiamento.",
+      summary: "João, CPF 111.222.333-44, quer financiar uma moto.",
+      collected_data: { financiamento: { nome_completo: "João", cpf: "111.222.333-44", renda_aproximada: "3000", entrada_disposta: "2000" } },
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    const aiLogsInsertCall = vi.mocked(supabaseAdmin.from).mock.calls
+      .map((call, i) => ({ table: call[0], result: vi.mocked(supabaseAdmin.from).mock.results[i].value }))
+      .find((c) => c.table === "ai_logs");
+    expect(aiLogsInsertCall).toBeDefined();
+    const insertedPayload = aiLogsInsertCall!.result.insert.mock.calls[0][0];
+    const loggedOutput = JSON.stringify(insertedPayload.llm_output);
+    expect(loggedOutput).not.toContain("111.222.333-44");
+    // Placeholder deve substituir o CPF nos campos de texto livre
+    expect((insertedPayload.llm_output as any).reply_text).toContain("[CPF removido]");
+    expect((insertedPayload.llm_output as any).summary).toContain("[CPF removido]");
+  });
+
   it("fase collect troca incompleta: não força should_handoff", async () => {
     vi.mocked(runGuardrails).mockReturnValue({
       mode: "normal", reason: "normal",
