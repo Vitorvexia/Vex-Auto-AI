@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-07-21
+Last Updated: 2026-07-24
 
 ---
 
@@ -294,6 +294,8 @@ Open — needs template-based send path in `sendWhatsAppMessage`/`follow-up.ts`/
 # RECENT COMPLETED WORK
 
 Most recent accomplishments (source: git log, most recent first).
+
+✅ Coleta de financiamento/troca + agenda interna — IA coleta dados (nome/CPF/renda/entrada em pergunta única; modelo/ano/km/serviço/agendamento em fluxo incremental) via guardrail determinístico (`lib/guardrails.ts` + `lib/collection.ts`), nunca calcula financiamento nem avalia valor de troca, força handoff por código (não confia na LLM), CPF nunca aparece em `ai_logs` (removido, não só mascarado). Página `/agenda` nova pro vendedor ver agendamentos por dia. Migration 022 (`147f1ef`, 2026-07-24). Spec: `docs/superpowers/specs/2026-07-24-financiamento-troca-collection-design.md`. Fora de escopo (backlog): recebimento de imagem/áudio via WhatsApp, integração Google Agenda.
 
 ✅ Public `/privacidade` page for Meta app publish requirement (PR #28, 2026-07-23)
 

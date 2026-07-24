@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Product & Engineering
 
-Last Updated: 2026-07-21
+Last Updated: 2026-07-24
 
 ---
 
@@ -390,6 +390,204 @@ Not yet defined — would need to be tied to a qualitative goal (brand recall, o
 Notes
 
 Requested by founder 2026-07-21 during the onboarding wizard brainstorm session, as a "someday" item — explicitly not to be worked on now, just not to be forgotten.
+
+---
+
+ID
+
+BL-0003
+
+Title
+
+Recebimento de imagem via WhatsApp (fotos de moto na troca)
+
+Problem
+
+Webhook (`app/api/whatsapp/webhook/route.ts`) só processa `msg.type === "text"` — mensagens de imagem são descartadas sem download nem persistência. Surgiu durante o brainstorm da coleta de financiamento/troca (2026-07-24): o dono do produto queria que a IA recebesse fotos da moto de troca, mas isso foi conscientemente decomposto pra fora do escopo daquele spec por ser infraestrutura nova (download de mídia via Graph API, storage, link ao lead) sem overlap com o fluxo de coleta em texto.
+
+Business Value
+
+Vendedor avalia moto de troca com mais informação antes do lead chegar na loja — reduz visita perdida por moto fora do padrão esperado.
+
+Customer Value
+
+Lead manda foto direto no WhatsApp em vez de esperar até ir pessoalmente até a loja.
+
+Priority
+
+P3 — depende do fluxo de coleta de troca (já implementado, `147f1ef`) estar em produção primeiro.
+
+Status
+
+IDEA — spec própria ainda não escrita
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Medium-High — tratar `type=image` no webhook, baixar mídia via Meta Graph API (media id → URL → download autenticado), persistir em Supabase Storage, linkar ao `lead_id`/`conversation_id`.
+
+Dependencies
+
+Fluxo de coleta de troca em texto (`lib/collection.ts`, `lib/guardrails.ts`) já implementado e em produção — este item estende o mesmo fluxo, não substitui.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+None yet
+
+Target Version
+
+Fase 4 (Escala)
+
+Success Metrics
+
+Não definido ainda — depende de decisão sobre onde/como a foto é exibida pro vendedor (dossiê do lead? `/agenda`?).
+
+Notes
+
+Ver `docs/superpowers/specs/2026-07-24-financiamento-troca-collection-design.md`, seção "Explicitly Out of Scope".
+
+---
+
+ID
+
+BL-0004
+
+Title
+
+Recebimento e transcrição de áudio via WhatsApp
+
+Problem
+
+Webhook não trata `type=audio` — mensagens de voz são descartadas. Alguns leads preferem mandar áudio em vez de texto; hoje a IA simplesmente ignora essas mensagens.
+
+Business Value
+
+Reduz atrito no atendimento — lead não precisa reescrever o que já falou em áudio.
+
+Customer Value
+
+Lead manda áudio normalmente e a IA entende, com fallback pedindo texto ou novo áudio se não conseguir transcrever.
+
+Priority
+
+P3 — mesma dependência de infraestrutura de mídia do BL-0003, mas exige também um serviço externo de speech-to-text (não decidido ainda: Whisper API, outro provedor).
+
+Status
+
+IDEA — spec própria ainda não escrita
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Medium-High — tratar `type=audio` no webhook, baixar mídia, chamar serviço de transcrição externo, tratar falha de transcrição (pedir novo áudio ou texto ao lead).
+
+Dependencies
+
+Infraestrutura de recebimento de mídia (compartilhada com BL-0003 — mesmo ponto de entrada no webhook). Escolha de provedor de speech-to-text ainda em aberto.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+None yet
+
+Target Version
+
+Fase 4 (Escala)
+
+Success Metrics
+
+Taxa de transcrição bem-sucedida na primeira tentativa; não definido formalmente ainda.
+
+Notes
+
+Requisito explícito do dono do produto durante o brainstorm de 2026-07-24 ("quero que a IA identifique o áudio"), decomposto pra spec futura junto com BL-0003 por ser infraestrutura nova e não ter overlap com a coleta em texto.
+
+---
+
+ID
+
+BL-0005
+
+Title
+
+Integração com Google Agenda pro `/agenda`
+
+Problem
+
+A página `/agenda` (implementada em `147f1ef`) hoje é uma lista interna simples filtrada por dia — sem sincronização com nenhum app de calendário externo. O dono do produto considerou integrar com Google Agenda durante o brainstorm, mas isso foi conscientemente adiado por exigir OAuth por loja, armazenamento de credencial e chamadas à Google Calendar API — projeto à parte do fluxo de coleta de dados.
+
+Business Value
+
+Vendedor vê agendamentos de troca dentro do app de calendário que já usa no dia a dia (celular, notificações nativas), sem precisar abrir o Vex Auto pra conferir.
+
+Customer Value
+
+Menos fricção operacional — não depende de lembrar de checar `/agenda` manualmente.
+
+Priority
+
+P4 — API do Google Calendar é gratuita pro volume esperado e não é tecnicamente difícil, mas não é urgente com a página interna já cobrindo a necessidade imediata.
+
+Status
+
+IDEA — spec própria ainda não escrita
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Medium — cada loja precisa autorizar acesso (fluxo OAuth tipo "permitir"), armazenar token com segurança, criar/atualizar eventos via API, tratar revogação de acesso.
+
+Dependencies
+
+Página `/agenda` interna já implementada e em produção (`147f1ef`) — este item substitui/complementa a visualização, não é pré-requisito de nada.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+None yet
+
+Target Version
+
+Fase 5 (Monetização) ou posterior
+
+Success Metrics
+
+Não definido ainda.
+
+Notes
+
+Ver `docs/superpowers/specs/2026-07-24-financiamento-troca-collection-design.md`, seção "Explicitly Out of Scope".
 
 ---
 
