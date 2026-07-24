@@ -38,6 +38,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       lead_status: "NOVO",
       score: 10,
       origem: "whatsapp",
+      contexto: {},
     },
     conversation: {
       id: "e2e-conv",
@@ -212,6 +213,7 @@ describe("E2E — Pipeline de IA (cenários reais)", () => {
           lead_status: "QUENTE",
           score: 75,
           origem: "whatsapp",
+          contexto: {},
         },
         conversation: {
           id: "e2e-conv",

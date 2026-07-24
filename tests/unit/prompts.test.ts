@@ -14,6 +14,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       lead_status: "ENGAJADO",
       score: 30,
       origem: "whatsapp",
+      contexto: {},
     },
     conversation: {
       id: "conv-1",

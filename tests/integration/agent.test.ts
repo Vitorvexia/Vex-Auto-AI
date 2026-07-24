@@ -21,6 +21,7 @@ function makeCtx(): AgentContext {
       lead_status: "NOVO",
       score: 0,
       origem: "whatsapp",
+      contexto: {},
     },
     conversation: {
       id: "test-conv",
