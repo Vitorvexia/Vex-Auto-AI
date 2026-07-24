@@ -13,6 +13,7 @@ import {
   AgentTimeoutError,
   AgentParseError,
   AgentOutputError,
+  type AgentResult,
 } from "@/lib/ai";
 import { transitionConversationStatus } from "@/lib/status";
 import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES, type SendErrorCategory } from "@/lib/whatsapp-send";
@@ -20,6 +21,7 @@ import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
 import { markReactivationResponded } from "@/lib/reactivation";
 import { maskPhone } from "@/lib/pii";
+import { applyCollectionUpdate } from "@/lib/collection";
 
 // ============================================================================
 // Tipos
@@ -35,6 +37,17 @@ export type AgentStatus =
   | "parse_error"
   | "output_error"
   | "error";
+
+// ============================================================================
+// Redação de PII antes de logar
+// ============================================================================
+
+function redactCpfFromLog(result: AgentResult): unknown {
+  const fin = result.collected_data?.financiamento;
+  if (!fin || fin.cpf === null || fin.cpf === undefined) return result;
+  const { cpf: _cpf, ...finRest } = fin;
+  return { ...result, collected_data: { ...result.collected_data, financiamento: finRest } };
+}
 
 // ============================================================================
 // ai_logs helper
@@ -112,11 +125,13 @@ export async function runAiPipeline(params: {
         .eq("lead_id", params.leadId),
     ]);
 
+    const now = new Date();
     const parsedStart = parseInt(process.env.BUSINESS_HOURS_START ?? "8", 10);
     const parsedEnd = parseInt(process.env.BUSINESS_HOURS_END ?? "18", 10);
     const guardrail = runGuardrails(ctx, {
       businessHoursStart: Number.isFinite(parsedStart) ? parsedStart : 8,
       businessHoursEnd: Number.isFinite(parsedEnd) ? parsedEnd : 18,
+      now,
     });
 
     // Handoff ativo: logar skipped_handoff e retornar sem resposta de IA
@@ -132,8 +147,33 @@ export async function runAiPipeline(params: {
       return { agent_status: "skipped_handoff" };
     }
 
-    const payload = buildPrompt(ctx, guardrail);
+    const payload = buildPrompt(ctx, guardrail, now);
     const result = await runAgent(payload, ctx);
+
+    // --- Coleta determinística de financiamento/troca ---
+    const collection = guardrail.collection ?? null;
+    if (collection && (collection.ask.length > 0 || collection.collect.length > 0)) {
+      const update = applyCollectionUpdate(ctx.lead.contexto ?? {}, collection, result.collected_data);
+      try {
+        await supabaseAdmin
+          .from("leads")
+          .update({
+            contexto: update.contexto,
+            ...(update.agendamento
+              ? {
+                  agendamento_data: update.agendamento.data,
+                  agendamento_horario: update.agendamento.horario,
+                }
+              : {}),
+          })
+          .eq("id", params.leadId);
+      } catch {
+        // non-fatal: reply já foi gerado, persistência de coleta não bloqueia resposta
+      }
+      if (update.forceHandoff) {
+        result.should_handoff = true;
+      }
+    }
 
     // Truncar reply ao limite da WA Cloud API antes de qualquer persistência
     const WA_TEXT_LIMIT = 4096;
@@ -266,7 +306,7 @@ export async function runAiPipeline(params: {
       status: finalStatus,
       latencyMs: Date.now() - start,
       model,
-      output: result,
+      output: redactCpfFromLog(result),
       messageId,
       sendCategory,
     });
