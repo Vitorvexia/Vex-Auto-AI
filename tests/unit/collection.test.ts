@@ -92,6 +92,7 @@ describe("applyCollectionUpdate — troca (incremental)", () => {
     };
     const result = applyCollectionUpdate(contexto, collectionState({ collect: ["troca"] }), undefined);
     expect(result.contexto.troca).not.toBeNull();
+    expect(result.contexto.troca?.agendamento_data).toBeNull();
     expect(result.agendamento).toEqual({ data: null, horario: "sábado de manhã" });
   });
 });

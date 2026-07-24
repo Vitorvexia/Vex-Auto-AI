@@ -68,7 +68,14 @@ export function applyCollectionUpdate(
   if (collection.collect.includes("troca")) {
     const merged = mergeTrocaDraft(next.troca_draft, collectedData?.troca);
     if (trocaComplete(merged)) {
-      next.troca = merged as TrocaData;
+      next.troca = {
+        modelo: merged.modelo ?? null,
+        ano: merged.ano ?? null,
+        km: merged.km ?? null,
+        servico_recente: merged.servico_recente ?? null,
+        agendamento_data: merged.agendamento_data ?? null,
+        agendamento_horario: merged.agendamento_horario ?? null,
+      };
       next.troca_draft = null;
       pendingTopics.delete("troca");
       forceHandoff = true;
