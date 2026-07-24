@@ -101,6 +101,10 @@ const SIGNAL_DEFS: SignalDef[] = [
     ],
   },
   {
+    id: "troca",
+    phrases: [["troca"], ["moto", "troca"], ["dar", "moto"], ["moto", "usada"], ["aceita", "troca"]],
+  },
+  {
     id: "visita",
     phrases: [
       ["endereco"],
@@ -182,6 +186,10 @@ export function calculateLeadScore(input: ScoreInput): ScoreResult {
   if (signals.includes("veiculo_especifico")) {
     rawDelta += 10;
     reasons.push("veiculo_especifico");
+  }
+  if (signals.includes("troca")) {
+    rawDelta += 15;
+    reasons.push("troca");
   }
   if (signals.includes("visita")) {
     rawDelta += 25;

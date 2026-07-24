@@ -306,10 +306,37 @@ describe("clamp com múltiplos sinais", () => {
 });
 
 // ---------------------------------------------------------------------------
-// Test 14 — Normalização: case insensitive + sem acento
+// Test 14 — Sinal: troca
 // ---------------------------------------------------------------------------
 
-describe("normalização de texto (test 14)", () => {
+describe("sinal: troca", () => {
+  it("+15 para 'quero dar minha moto na troca'", () => {
+    const r = calculateLeadScore(input({ messageText: "quero dar minha moto na troca" }));
+    expect(r.delta).toBeGreaterThanOrEqual(15);
+    expect(r.reasons).toContain("troca");
+  });
+
+  it("+15 para 'vocês aceitam troca?'", () => {
+    const r = calculateLeadScore(input({ messageText: "vocês aceitam troca?" }));
+    expect(r.reasons).toContain("troca");
+  });
+
+  it("+15 para 'tenho uma moto usada'", () => {
+    const r = calculateLeadScore(input({ messageText: "tenho uma moto usada pra dar" }));
+    expect(r.reasons).toContain("troca");
+  });
+
+  it("negação: 'não quero dar troca' não aciona o sinal", () => {
+    const signals = detectSignals("não quero dar troca");
+    expect(signals).not.toContain("troca");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Test 15 — Normalização: case insensitive + sem acento
+// ---------------------------------------------------------------------------
+
+describe("normalização de texto (test 15)", () => {
   it("'FINANCIAMENTO' pontua igual a 'financiamento'", () => {
     const upper = calculateLeadScore(input({ messageText: "FINANCIAMENTO" }));
     const lower = calculateLeadScore(input({ messageText: "financiamento" }));
