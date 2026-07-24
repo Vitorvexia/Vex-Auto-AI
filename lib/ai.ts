@@ -1,10 +1,15 @@
 import Anthropic, { APIConnectionTimeoutError } from "@anthropic-ai/sdk";
-import type { AgentContext } from "@/lib/agent-context";
+import type { AgentContext, FinanciamentoData, TrocaData } from "@/lib/agent-context";
 import type { PromptPayload } from "@/lib/prompts";
 
 // ============================================================================
 // Types
 // ============================================================================
+
+export interface CollectedData {
+  financiamento?: FinanciamentoData | null;
+  troca?: TrocaData | null;
+}
 
 export interface AgentResult {
   reply_text: string;
@@ -12,6 +17,7 @@ export interface AgentResult {
   score: number;
   intent_tags: string[];
   summary: string;
+  collected_data?: CollectedData;
 }
 
 // ============================================================================
@@ -111,6 +117,47 @@ function truncate(s: string, max: number): string {
   return s.length <= max ? s : s.slice(0, max - 3) + "...";
 }
 
+function coerceStringOrNull(v: unknown): string | null {
+  return typeof v === "string" && v.trim() ? v.trim() : null;
+}
+
+function coerceNumberOrNull(v: unknown): number | null {
+  return typeof v === "number" && Number.isFinite(v) ? v : null;
+}
+
+function validateFinanciamento(raw: unknown): FinanciamentoData | null {
+  if (raw === null || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  return {
+    nome_completo: coerceStringOrNull(o.nome_completo),
+    cpf: coerceStringOrNull(o.cpf),
+    renda_aproximada: coerceStringOrNull(o.renda_aproximada),
+    entrada_disposta: coerceStringOrNull(o.entrada_disposta),
+  };
+}
+
+function validateTroca(raw: unknown): TrocaData | null {
+  if (raw === null || typeof raw !== "object") return null;
+  const o = raw as Record<string, unknown>;
+  return {
+    modelo: coerceStringOrNull(o.modelo),
+    ano: coerceNumberOrNull(o.ano),
+    km: coerceNumberOrNull(o.km),
+    servico_recente: coerceStringOrNull(o.servico_recente),
+    agendamento_data: coerceStringOrNull(o.agendamento_data),
+    agendamento_horario: coerceStringOrNull(o.agendamento_horario),
+  };
+}
+
+function validateCollectedData(raw: unknown): CollectedData | undefined {
+  if (raw === null || raw === undefined || typeof raw !== "object") return undefined;
+  const o = raw as Record<string, unknown>;
+  const financiamento = validateFinanciamento(o.financiamento);
+  const troca = validateTroca(o.troca);
+  if (!financiamento && !troca) return undefined;
+  return { financiamento, troca };
+}
+
 export function validateOutput(raw: unknown, leadScore: number): AgentResult {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     throw new AgentOutputError("resposta não é um objeto JSON válido");
@@ -145,7 +192,16 @@ export function validateOutput(raw: unknown, leadScore: number): AgentResult {
     ? truncate(strip(obj.summary), 1000)
     : "";
 
-  return { reply_text, should_handoff, score, intent_tags, summary };
+  const collected_data = validateCollectedData(obj?.collected_data);
+
+  return {
+    reply_text,
+    should_handoff,
+    score,
+    intent_tags,
+    summary,
+    ...(collected_data ? { collected_data } : {}),
+  };
 }
 
 // ============================================================================
