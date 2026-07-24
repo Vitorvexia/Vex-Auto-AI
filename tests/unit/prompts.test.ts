@@ -36,7 +36,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   };
 }
 
-const guardrailNormal: GuardrailResult = { mode: "normal", reason: "padrão" };
+const guardrailNormal: GuardrailResult = { mode: "normal", reason: "padrão", collection: null };
 
 describe("buildPrompt", () => {
   it("system contém nome da store", () => {
@@ -96,7 +96,7 @@ describe("buildPrompt", () => {
   });
 
   it("modo off_hours refletido no system", () => {
-    const { system } = buildPrompt(makeCtx(), { mode: "off_hours", reason: "tarde" });
+    const { system } = buildPrompt(makeCtx(), { mode: "off_hours", reason: "tarde", collection: null });
     expect(system).toContain("[MODO ATUAL: off_hours]");
   });
 
