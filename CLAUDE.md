@@ -370,6 +370,31 @@ Fechamento de venda com validação de margem obrigatória. Concluído em PR #26
 
 **Cobertura de testes:** MARGIN-1 (sem vehicle_id), MARGIN-2 (sem valor_final), MARGIN-2b (valor zero), MARGIN-3 (abaixo do piso), MARGIN-4 (no exato piso — permitido), MARGIN-5 (acima do piso), MARGIN-6 (vehicle_id de outra loja), MARGIN-7 (moveLeadStatus bloqueia FECHADO).
 
+### Coleta de Financiamento e Troca (`lib/guardrails.ts`, `lib/collection.ts`, `lib/ai-pipeline.ts`, migration 022)
+
+IA coleta dados de financiamento e troca de moto por texto (nunca calcula taxas nem avalia veículo — só coleta e aciona vendedor humano). Spec completo: `docs/superpowers/specs/2026-07-24-financiamento-troca-collection-design.md`.
+
+**Sinal determinístico `troca`** (`lib/lead-scoring.ts`) — mesmo padrão do sinal `financiamento` já existente. Soma `+15` no score determinístico.
+
+**Estado de coleta em `leads.contexto` (jsonb, sem migration nova pra isso):**
+- `pending_topics: string[]` — tópicos (`"financiamento"`/`"troca"`) ativos aguardando ou continuando coleta; os dois podem estar pendentes ao mesmo tempo (ex: lead dá a moto como entrada de financiamento)
+- `financiamento` — coletado single-shot (nome completo, CPF, renda aproximada, entrada disposta)
+- `troca_draft` — coleta incremental (campo por vez); `troca` — populado só quando os 5 campos obrigatórios (`modelo`, `ano`, `km`, `servico_recente`, `agendamento_horario`) estão completos (`lib/collection.ts`, `trocaComplete`)
+
+**Migration 022 (`supabase/migrations/022_troca_agendamento.sql`):** `leads.agendamento_data` (date, nullable) + `leads.agendamento_horario` (text, nullable) + índice parcial `leads_store_agendamento_idx` por `store_id, agendamento_data`. Únicos dados deste fluxo que viram coluna própria — são os únicos filtrados/indexados (consulta da página `/agenda` por dia); financiamento e troca completos ficam em `contexto` jsonb (só exibidos, nunca filtrados).
+
+**Guardrail (`lib/guardrails.ts`):** `GuardrailResult.collection: { ask, collect, missingTrocaFields } | null` — computado sempre que `mode !== "human_handoff"` (sinal ortogonal, não interfere nos modos existentes). `ask` = sinais novos detectados na mensagem atual ainda não pendentes nem já coletados; `collect` = tópicos já em `pending_topics`. `missingTrocaFields` lista os campos que faltam a partir do `troca_draft`, injetados no prompt pra IA saber exatamente o que perguntar em seguida.
+
+**Prompt (`lib/prompts.ts`):** bloco condicional quando `guardrail.collection` não é `null` — pergunta única reunindo os 4 campos de financiamento; coleta incremental de troca (um campo por vez, nunca a lista inteira); regra de domínio pra reconhecer variações relevantes de modelo+ano (ex: Honda Titan 2010 partida elétrica vs. pedal) antes de considerar `modelo` completo. Prompt ganha a **data atual** (necessário pra IA converter "sábado"/"amanhã" em data absoluta). Resposta da LLM ganha campo opcional `collected_data: { financiamento, troca }`.
+
+**Pipeline (`lib/ai-pipeline.ts`, `applyCollectionUpdate` em `lib/collection.ts`):**
+- Fase **ask**: persiste `pending_topics` com o(s) tópico(s) novo(s) — deterministicamente, independente da resposta da LLM
+- Fase **collect financiamento**: persiste `contexto.financiamento`, remove `"financiamento"` de `pending_topics`, **força `should_handoff = true` no código** — mesma filosofia do guardrail de margem: regra inegociável garantida por código, não confia só na instrução do prompt
+- Fase **collect troca**: merge parcial de `collected_data.troca` no `troca_draft` (só sobrescreve campo se a LLM devolveu valor não-nulo nesse turno). Completo → move pra `contexto.troca`, grava `leads.agendamento_data`/`agendamento_horario`, força `should_handoff = true`. Incompleto → mantém `"troca"` em `pending_topics`, sem forçar handoff
+- **Redação de CPF nos logs**: `redactCpfFromLog()` remove (não mascara) a chave `cpf` do objeto passado a `logAi(...)` antes de gravar em `ai_logs.llm_output`. CPF nunca aparece em log — fica só em `leads.contexto` no banco, protegido por RLS/`store_id`
+
+**Página `/agenda` (`app/agenda/page.tsx`):** Server Component RSC-first, segue padrão de `/equipe`/`/estoque`. Isolamento via `createSupabaseServerClient()` (sessão do usuário autenticado, `supabase.auth.getUser()`) + RLS `my_store_id()` — não chama `getServerStoreId()` explicitamente, mesmo padrão de `/equipe`/`/estoque`. Query `leads` filtrada por `agendamento_data = <dia da URL, default hoje>`, ordenada por `agendamento_horario`. Lista nome, telefone, modelo/ano da moto de troca, horário. Navegação simples de dia anterior/próximo (sem calendário visual, sem integração externa). Link "Agenda" no Header entre `/equipe` e `/analytics`.
+
 ### PII Masking (`lib/pii.ts`, `lib/logger.ts`, PR #26)
 
 Masking de dados pessoais nos logs. Concluído em PR #26.
@@ -409,6 +434,9 @@ Todas as actions protegidas por `assertSuperAdmin()`.
 - ~~**Margem sem guardrails**~~ — ✔ Guardrail de Margem Etapa 2 implementado (PR #26): `updateLeadStatus(FECHADO)` valida `valor_final >= custo + margem_minima`; `moveLeadStatus` bloqueia FECHADO no Kanban; `leads.vehicle_id` + `leads.valor_final` persistidos (migration 020)
 - **ROI financeiro ausente** — `calculateOperationalMetrics` retorna métricas operacionais (leads, follow-ups, taxas de resposta) mas não faturamento, margem por venda, CAC ou LTV. `leads.valor_final` agora existe no schema (migration 020) mas `calculateOperationalMetrics` ainda não o usa — **pendente**
 - **Kanban sem drag-and-drop** — mudança de status só via select dropdown; sem biblioteca DnD — **pendente (Fase 3)**
+- **Recebimento de imagem via WhatsApp** — webhook (`app/api/whatsapp/webhook/route.ts`) só processa `msg.type === "text"`; mensagens `type=image` são descartadas. Necessário antes de a IA poder receber fotos da moto de troca. Fora de escopo do spec de coleta financiamento/troca (`docs/superpowers/specs/2026-07-24-financiamento-troca-collection-design.md`) — **pendente**, spec própria
+- **Recebimento e transcrição de áudio via WhatsApp** — mesma limitação do webhook (`type=audio` descartado). Exige integração com serviço de speech-to-text externo e fallback quando a transcrição falha. Fora de escopo do spec de coleta financiamento/troca — **pendente**, spec própria
+- **Integração com Google Agenda** — página `/agenda` interna (implementada) cobre a necessidade imediata de listar agendamentos por dia; sincronização com Google Calendar (OAuth por loja, armazenamento de credencial, chamadas à API) fica pra spec futuro — **pendente**
 
 ---
 

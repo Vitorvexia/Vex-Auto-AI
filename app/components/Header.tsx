@@ -105,6 +105,12 @@ export function Header({ isAdmin = false }: { isAdmin?: boolean }) {
             Equipe
           </Link>
           <Link
+            href="/agenda"
+            className={`header-nav-link${pathname.startsWith("/agenda") ? " active" : ""}`}
+          >
+            Agenda
+          </Link>
+          <Link
             href="/analytics"
             className={`header-nav-link${pathname.startsWith("/analytics") ? " active" : ""}`}
           >

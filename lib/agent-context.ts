@@ -8,6 +8,30 @@ import type {
   Origem,
 } from "@/types/domain";
 
+export interface FinanciamentoData {
+  nome_completo: string | null;
+  cpf: string | null;
+  renda_aproximada: string | null;
+  entrada_disposta: string | null;
+}
+
+export interface TrocaData {
+  modelo: string | null;
+  ano: number | null;
+  km: number | null;
+  servico_recente: string | null;
+  agendamento_data: string | null; // "YYYY-MM-DD" ou null se não resolvido
+  agendamento_horario: string | null; // texto livre ("tarde", "sábado de manhã") ou null
+}
+
+export interface LeadContexto {
+  pending_topics?: string[];
+  financiamento?: FinanciamentoData | null;
+  troca?: TrocaData | null;
+  troca_draft?: Partial<TrocaData> | null;
+  [key: string]: unknown; // outras chaves já usadas no jsonb (ex: veiculo_interesse) não devem quebrar o tipo
+}
+
 export interface AgentContext {
   store_id: string;
   store_name: string;
@@ -18,6 +42,7 @@ export interface AgentContext {
     lead_status: LeadStatus;
     score: number;
     origem: Origem;
+    contexto: LeadContexto;
   };
   conversation: {
     id: string;
@@ -61,7 +86,7 @@ export async function buildAgentContext(params: {
     supabaseAdmin.from("stores").select("nome").eq("id", storeId).single(),
     supabaseAdmin
       .from("leads")
-      .select("id, nome, phone_normalized, lead_status, score, origem")
+      .select("id, nome, phone_normalized, lead_status, score, origem, contexto")
       .eq("id", leadId)
       .single(),
     supabaseAdmin
@@ -92,7 +117,10 @@ export async function buildAgentContext(params: {
   return {
     store_id: storeId,
     store_name: storeRes.data.nome,
-    lead: leadRes.data as AgentContext["lead"],
+    lead: {
+      ...(leadRes.data as AgentContext["lead"]),
+      contexto: (leadRes.data?.contexto ?? {}) as LeadContexto,
+    },
     conversation: convRes.data as AgentContext["conversation"],
     last_messages: ((msgsRes.data ?? []).reverse()) as AgentContext["last_messages"],
     vehicles: (vehiclesRes.data ?? []) as AgentContext["vehicles"],

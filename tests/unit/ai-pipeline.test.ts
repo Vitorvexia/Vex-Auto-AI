@@ -162,6 +162,37 @@ const DEFAULT_SCORE_RESULT = { newScore: 15, delta: 5, reasons: ["mensagem"] };
 // Setup / teardown
 // ---------------------------------------------------------------------------
 
+// Default chain factory — mirrors the one inside the `@/lib/supabase` mock
+// factory above. Several tests (test 15, PR 15 block) replace
+// `supabaseAdmin.from`'s implementation via `mockImplementation` to assert on
+// specific tables; `vi.clearAllMocks()` in afterEach clears call history but
+// does NOT restore the original implementation, so without this reset here
+// that override leaks into every test that runs afterwards. Re-applying the
+// default chain in beforeEach keeps each test isolated regardless of run order.
+function defaultSupabaseChain() {
+  const c: any = {};
+  const insertResult: any = {
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: null, error: null }),
+      maybeSingle: vi.fn().mockResolvedValue({ data: null, error: null }),
+    }),
+    then: (resolve: any, reject?: any) =>
+      Promise.resolve({ data: null, error: null }).then(resolve, reject),
+  };
+  c.insert = vi.fn().mockReturnValue(insertResult);
+  c.update = vi.fn().mockReturnValue({
+    eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+  });
+  c.select = vi.fn().mockReturnValue(c);
+  c.eq = vi.fn().mockReturnValue(c);
+  c.order = vi.fn().mockReturnValue(c);
+  c.limit = vi.fn().mockReturnValue(c);
+  c.maybeSingle = vi.fn().mockResolvedValue({ data: null, error: null });
+  c.then = (resolve: any, reject?: any) =>
+    Promise.resolve({ data: null, error: null, count: 0 }).then(resolve, reject);
+  return c;
+}
+
 beforeEach(() => {
   vi.mocked(buildAgentContext).mockResolvedValue(BASE_CTX as any);
   vi.mocked(runGuardrails).mockReturnValue({ mode: "normal", reason: "normal" } as any);
@@ -170,6 +201,7 @@ beforeEach(() => {
   vi.mocked(sendWhatsAppMessage).mockResolvedValue(undefined);
   vi.mocked(getStoreWhatsAppPhoneId).mockResolvedValue("test-phone-id");
   vi.mocked(calculateLeadScore).mockReturnValue(DEFAULT_SCORE_RESULT as any);
+  vi.mocked(supabaseAdmin.from).mockImplementation(defaultSupabaseChain as any);
   process.env.ANTHROPIC_MODEL = "claude-haiku-4-5";
 });
 
@@ -540,5 +572,127 @@ describe("runAiPipeline — PR 15: message_id e sendCategory", () => {
     expect(aiLogsInsertMock).toHaveBeenCalledOnce();
     const aiLogPayload = aiLogsInsertMock.mock.calls[0][0];
     expect(aiLogPayload.last_send_error).toBe("invalid_recipient");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Task 8 — coleta de financiamento/troca: persistência, handoff forçado, redação de CPF
+// ---------------------------------------------------------------------------
+
+describe("runAiPipeline — coleta de financiamento/troca", () => {
+  it("fase ask: persiste pending_topics em leads.contexto", async () => {
+    vi.mocked(runGuardrails).mockReturnValue({
+      mode: "normal", reason: "normal",
+      collection: { ask: ["financiamento"], collect: [], missingTrocaFields: [] },
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    // "leads" também recebe update de score no fluxo base — não basta checar
+    // que .from("leads") foi chamado, tem que achar a chamada de update que
+    // carrega especificamente o pending_topics novo.
+    const leadsChains = vi.mocked(supabaseAdmin.from).mock.calls
+      .map((call, i) => ({ table: call[0], chain: vi.mocked(supabaseAdmin.from).mock.results[i].value }))
+      .filter((c) => c.table === "leads");
+    const contextoUpdateCall = leadsChains
+      .flatMap((c) => c.chain.update.mock.calls)
+      .find((args: any[]) => args[0]?.contexto?.pending_topics?.includes("financiamento"));
+    expect(contextoUpdateCall).toBeDefined();
+  });
+
+  it("fase collect financiamento: força should_handoff=true mesmo que a LLM tenha retornado false", async () => {
+    vi.mocked(runGuardrails).mockReturnValue({
+      mode: "normal", reason: "normal",
+      collection: { ask: [], collect: ["financiamento"], missingTrocaFields: [] },
+    } as any);
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      should_handoff: false,
+      collected_data: { financiamento: { nome_completo: "João", cpf: "111.222.333-44", renda_aproximada: "3000", entrada_disposta: "2000" } },
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    expect(transitionConversationStatus).toHaveBeenCalledWith(
+      BASE_PARAMS.conversationId,
+      "AGUARDANDO_HUMANO",
+      { handoff_to: "HUMANO" }
+    );
+  });
+
+  it("CPF nunca aparece no objeto passado a ai_logs.llm_output", async () => {
+    vi.mocked(runGuardrails).mockReturnValue({
+      mode: "normal", reason: "normal",
+      collection: { ask: [], collect: ["financiamento"], missingTrocaFields: [] },
+    } as any);
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      collected_data: { financiamento: { nome_completo: "João", cpf: "111.222.333-44", renda_aproximada: "3000", entrada_disposta: "2000" } },
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    const aiLogsInsertCall = vi.mocked(supabaseAdmin.from).mock.calls
+      .map((call, i) => ({ table: call[0], result: vi.mocked(supabaseAdmin.from).mock.results[i].value }))
+      .find((c) => c.table === "ai_logs");
+    expect(aiLogsInsertCall).toBeDefined();
+    const insertedPayload = aiLogsInsertCall!.result.insert.mock.calls[0][0];
+    const loggedOutput = JSON.stringify(insertedPayload.llm_output);
+    expect(loggedOutput).not.toContain("111.222.333-44");
+  });
+
+  it("CPF ecoado em summary/reply_text pela LLM nunca aparece no objeto passado a ai_logs.llm_output", async () => {
+    vi.mocked(runGuardrails).mockReturnValue({
+      mode: "normal", reason: "normal",
+      collection: { ask: [], collect: ["financiamento"], missingTrocaFields: [] },
+    } as any);
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      reply_text: "Obrigado! Confirmando seu CPF 111.222.333-44 para o financiamento.",
+      summary: "João, CPF 111.222.333-44, quer financiar uma moto.",
+      collected_data: { financiamento: { nome_completo: "João", cpf: "111.222.333-44", renda_aproximada: "3000", entrada_disposta: "2000" } },
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    const aiLogsInsertCall = vi.mocked(supabaseAdmin.from).mock.calls
+      .map((call, i) => ({ table: call[0], result: vi.mocked(supabaseAdmin.from).mock.results[i].value }))
+      .find((c) => c.table === "ai_logs");
+    expect(aiLogsInsertCall).toBeDefined();
+    const insertedPayload = aiLogsInsertCall!.result.insert.mock.calls[0][0];
+    const loggedOutput = JSON.stringify(insertedPayload.llm_output);
+    expect(loggedOutput).not.toContain("111.222.333-44");
+    // Placeholder deve substituir o CPF nos campos de texto livre
+    expect((insertedPayload.llm_output as any).reply_text).toContain("[CPF removido]");
+    expect((insertedPayload.llm_output as any).summary).toContain("[CPF removido]");
+  });
+
+  it("fase collect troca incompleta: não força should_handoff", async () => {
+    vi.mocked(runGuardrails).mockReturnValue({
+      mode: "normal", reason: "normal",
+      collection: { ask: [], collect: ["troca"], missingTrocaFields: ["quantos km rodados"] },
+    } as any);
+    vi.mocked(buildAgentContext).mockResolvedValue({
+      ...BASE_CTX,
+      lead: { ...BASE_CTX.lead, contexto: { pending_topics: ["troca"], troca_draft: { modelo: "Bros 160", ano: 2019 } } },
+    } as any);
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      should_handoff: false,
+      collected_data: { troca: { modelo: null, ano: null, km: 32000, servico_recente: null, agendamento_data: null, agendamento_horario: null } },
+    } as any);
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("ok");
+    expect(transitionConversationStatus).not.toHaveBeenCalled();
+  });
+
+  it("sem collection (guardrail.collection null): comportamento idêntico ao caso normal, sem updates extras de contexto", async () => {
+    vi.mocked(runGuardrails).mockReturnValue({ mode: "normal", reason: "normal", collection: null } as any);
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("ok");
   });
 });

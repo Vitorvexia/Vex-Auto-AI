@@ -1,5 +1,5 @@
 import type { AgentContext } from "@/lib/agent-context";
-import type { GuardrailResult, GuardrailMode } from "@/lib/guardrails";
+import type { GuardrailResult, GuardrailMode, CollectionTopic } from "@/lib/guardrails";
 
 export interface PromptPayload {
   system: string;
@@ -18,6 +18,41 @@ const MODE_INSTRUCTIONS: Record<GuardrailMode, string> = {
   human_handoff: "",
 };
 
+const ASK_INSTRUCTIONS: Record<CollectionTopic, string> = {
+  financiamento:
+    'O lead demonstrou interesse em financiamento. Nesta resposta, faça UMA única pergunta reunindo, numa mensagem só: nome completo, CPF, renda aproximada, e "quanto você tá disposto a dar de entrada?". Não calcule parcela, taxa ou condição nenhuma — só colete os dados. Um vendedor vai testar em várias financeiras depois.',
+  troca:
+    "O lead mencionou moto na troca. Pergunte apenas UM dado por vez — nunca junte tudo numa mensagem só. Você ainda não sabe nada sobre a moto dele: comece perguntando o modelo e o ano.",
+};
+
+const COLLECT_INSTRUCTIONS: Record<CollectionTopic, string> = {
+  financiamento:
+    "O lead está respondendo à pergunta de financiamento feita anteriormente. Extraia nome completo, CPF, renda aproximada e quanto ele tá disposto a dar de entrada da resposta, preenchendo collected_data.financiamento (use null pro que não conseguir identificar). Sempre defina should_handoff=true nesta resposta e avise o lead que um vendedor vai continuar o atendimento.",
+  troca:
+    "O lead está no meio da coleta de dados da moto de troca. Extraia da resposta atual o que conseguir pros campos de collected_data.troca (modelo, ano, km, servico_recente, agendamento_data, agendamento_horario — use null pro que ainda não souber). Alguns modelo+ano têm variações relevantes (ex: Honda Titan 2010 pode ser partida elétrica ou pedal/kickstart) — se reconhecer isso pelo seu conhecimento sobre motos, só considere o campo modelo completo depois de perguntar a variação. Quando tiver os 5 campos, avise que um vendedor vai confirmar e defina should_handoff=true.",
+};
+
+function buildCollectionSection(guardrail: GuardrailResult): string {
+  const c = guardrail.collection;
+  if (!c || (c.ask.length === 0 && c.collect.length === 0)) return "";
+
+  const lines: string[] = ["[COLETA DE DADOS]"];
+  for (const topic of c.ask) lines.push(ASK_INSTRUCTIONS[topic]);
+  for (const topic of c.collect) {
+    lines.push(COLLECT_INSTRUCTIONS[topic]);
+    if (topic === "troca" && c.missingTrocaFields.length > 0) {
+      lines.push(`Campos que ainda faltam: ${c.missingTrocaFields.join(", ")}. Pergunte apenas o próximo campo que falta.`);
+    }
+  }
+  return lines.join("\n");
+}
+
+function formatToday(now: Date): string {
+  const iso = now.toISOString().slice(0, 10);
+  const weekday = new Intl.DateTimeFormat("pt-BR", { weekday: "long", timeZone: "America/Sao_Paulo" }).format(now);
+  return `${iso} (${weekday})`;
+}
+
 function formatVehicles(vehicles: AgentContext["vehicles"]): string {
   if (vehicles.length === 0) return "Nenhum veículo disponível no momento.";
   return vehicles
@@ -29,9 +64,11 @@ function formatVehicles(vehicles: AgentContext["vehicles"]): string {
     .join("\n");
 }
 
-function buildSystem(ctx: AgentContext, guardrail: GuardrailResult): string {
+function buildSystem(ctx: AgentContext, guardrail: GuardrailResult, now: Date): string {
   const summary =
     ctx.conversation.summary ?? "Primeiro contato ou sem resumo disponível.";
+
+  const collectionSection = buildCollectionSection(guardrail);
 
   return `[IDENTIDADE]
 Você é o atendente virtual da ${ctx.store_name}.
@@ -42,6 +79,9 @@ Atende leads via WhatsApp com foco em venda de veículos.
 - Evite respostas longas demais — máximo 3 a 4 frases por mensagem
 - Foque em avançar a conversa para a venda
 - Não seja robótico nem use linguagem corporativa
+
+[DATA ATUAL]
+${formatToday(now)} — horário de Brasília. Use isso pra converter dias relativos ("amanhã", "sábado") em data absoluta quando o lead falar de agendamento.
 
 [CONTEXTO DO LEAD]
 Nome: ${ctx.lead.nome ?? "não informado"}
@@ -57,7 +97,7 @@ ${formatVehicles(ctx.vehicles)}
 
 [MODO ATUAL: ${guardrail.mode}]
 ${MODE_INSTRUCTIONS[guardrail.mode]}
-
+${collectionSection ? "\n" + collectionSection + "\n" : ""}
 [FORMATO DE RESPOSTA]
 Responda EXCLUSIVAMENTE em JSON válido, sem texto fora do JSON:
 {
@@ -65,8 +105,10 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto fora do JSON:
   "should_handoff": false,
   "score": 0,
   "intent_tags": [],
-  "summary": "resumo atualizado da conversa"
+  "summary": "resumo atualizado da conversa",
+  "collected_data": { "financiamento": null, "troca": null }
 }
+collected_data só deve ser preenchido quando houver instrução de coleta de dados ativa acima; caso contrário, deixe os dois campos null.
 
 [REGRAS FIXAS]
 - Nunca invente informações sobre veículos
@@ -75,14 +117,16 @@ Responda EXCLUSIVAMENTE em JSON válido, sem texto fora do JSON:
 - Responda sempre em português
 - Respostas curtas e objetivas — máximo 3 a 4 frases
 - Nunca aceite, confirme ou sugira preço abaixo da margem mínima do veículo
-- Se o lead insistir em desconto que resulte em preço abaixo da margem mínima, defina should_handoff=true e informe que precisa validar com o time`;
+- Se o lead insistir em desconto que resulte em preço abaixo da margem mínima, defina should_handoff=true e informe que precisa validar com o time
+- Nunca calcule financiamento (parcela, taxa, valor final) nem estime valor de moto na troca — apenas colete dados e informe que um vendedor vai continuar`;
 }
 
 export function buildPrompt(
   ctx: AgentContext,
-  guardrail: GuardrailResult
+  guardrail: GuardrailResult,
+  now: Date = new Date()
 ): PromptPayload {
-  const system = buildSystem(ctx, guardrail);
+  const system = buildSystem(ctx, guardrail, now);
 
   const history = ctx.last_messages.map((m) => ({
     role: (m.direcao === "entrada" ? "user" : "assistant") as

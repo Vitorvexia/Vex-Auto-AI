@@ -13,6 +13,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       lead_status: "NOVO",
       score: 0,
       origem: "whatsapp",
+      contexto: {},
     },
     conversation: {
       id: "conv-1",
@@ -128,5 +129,82 @@ describe("runGuardrails", () => {
   it("reason nunca é vazio", () => {
     const r = runGuardrails(makeCtx(), { now: BUSINESS_NOW });
     expect(r.reason.length).toBeGreaterThan(0);
+  });
+});
+
+describe("collection — detecção de financiamento/troca", () => {
+  it("mensagem nova sobre financiamento => collection.ask contém 'financiamento'", () => {
+    const ctx = makeCtx({ incoming_text: "vocês têm financiamento?" });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.collection?.ask).toContain("financiamento");
+    expect(r.collection?.collect).toEqual([]);
+  });
+
+  it("mensagem nova sobre troca => collection.ask contém 'troca'", () => {
+    const ctx = makeCtx({ incoming_text: "aceita moto na troca?" });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.collection?.ask).toContain("troca");
+  });
+
+  it("pending_topics já contém 'financiamento' => collection.collect contém 'financiamento', ask vazio pro mesmo tópico", () => {
+    const ctx = makeCtx({
+      incoming_text: "meu nome é João, CPF 123, renda 3000, entrada 2000",
+      lead: { ...makeCtx().lead, contexto: { pending_topics: ["financiamento"] } },
+    });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.collection?.collect).toContain("financiamento");
+    expect(r.collection?.ask).not.toContain("financiamento");
+  });
+
+  it("sem sinal e sem pending_topics => collection é null", () => {
+    const ctx = makeCtx({ incoming_text: "quero saber mais sobre o carro" });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.collection).toBeNull();
+  });
+
+  it("modo human_handoff => collection sempre null", () => {
+    const ctx = makeCtx({
+      incoming_text: "vocês têm financiamento?",
+      conversation: {
+        id: "conv-1",
+        conversation_status: "AGUARDANDO_HUMANO",
+        handoff_to: "HUMANO",
+        summary: null,
+        ultima_mensagem_em: new Date().toISOString(),
+      },
+    });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.mode).toBe("human_handoff");
+    expect(r.collection).toBeNull();
+  });
+
+  it("troca já coletada (contexto.troca preenchido) não reabre ask mesmo com sinal na mensagem", () => {
+    const ctx = makeCtx({
+      incoming_text: "e aquela troca que eu falei?",
+      lead: {
+        ...makeCtx().lead,
+        contexto: {
+          troca: {
+            modelo: "Bros 160", ano: 2019, km: 20000,
+            servico_recente: "não", agendamento_data: null, agendamento_horario: "sábado de manhã",
+          },
+        },
+      },
+    });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.collection?.ask ?? []).not.toContain("troca");
+  });
+
+  it("collect de troca calcula missingTrocaFields a partir do draft parcial", () => {
+    const ctx = makeCtx({
+      incoming_text: "é uma Bros 160 2019",
+      lead: {
+        ...makeCtx().lead,
+        contexto: { pending_topics: ["troca"], troca_draft: { modelo: null, ano: null } },
+      },
+    });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.collection?.collect).toContain("troca");
+    expect(r.collection?.missingTrocaFields.length).toBeGreaterThan(0);
   });
 });

@@ -14,6 +14,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       lead_status: "ENGAJADO",
       score: 30,
       origem: "whatsapp",
+      contexto: {},
     },
     conversation: {
       id: "conv-1",
@@ -35,7 +36,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   };
 }
 
-const guardrailNormal: GuardrailResult = { mode: "normal", reason: "padrão" };
+const guardrailNormal: GuardrailResult = { mode: "normal", reason: "padrão", collection: null };
 
 describe("buildPrompt", () => {
   it("system contém nome da store", () => {
@@ -95,7 +96,7 @@ describe("buildPrompt", () => {
   });
 
   it("modo off_hours refletido no system", () => {
-    const { system } = buildPrompt(makeCtx(), { mode: "off_hours", reason: "tarde" });
+    const { system } = buildPrompt(makeCtx(), { mode: "off_hours", reason: "tarde", collection: null });
     expect(system).toContain("[MODO ATUAL: off_hours]");
   });
 
@@ -146,5 +147,63 @@ describe("buildPrompt", () => {
     const rules = system.slice(idx);
     expect(rules).toContain("should_handoff=true");
     expect(rules).toContain("margem mínima");
+  });
+});
+
+describe("buildPrompt — coleta de financiamento/troca", () => {
+  it("sem collection: bloco [COLETA DE DADOS] não aparece", () => {
+    const { system } = buildPrompt(makeCtx(), guardrailNormal);
+    expect(system).not.toContain("[COLETA DE DADOS]");
+  });
+
+  it("ask financiamento: instrui pergunta única com nome/CPF/renda/entrada", () => {
+    const guardrail: GuardrailResult = {
+      mode: "normal", reason: "padrão",
+      collection: { ask: ["financiamento"], collect: [], missingTrocaFields: [] },
+    };
+    const { system } = buildPrompt(makeCtx(), guardrail);
+    expect(system).toContain("[COLETA DE DADOS]");
+    expect(system).toContain("CPF");
+    expect(system).toContain("entrada");
+  });
+
+  it("collect financiamento: instrui should_handoff=true e menciona collected_data", () => {
+    const guardrail: GuardrailResult = {
+      mode: "normal", reason: "padrão",
+      collection: { ask: [], collect: ["financiamento"], missingTrocaFields: [] },
+    };
+    const { system } = buildPrompt(makeCtx(), guardrail);
+    expect(system).toContain("should_handoff=true");
+    expect(system).toContain("collected_data");
+  });
+
+  it("ask troca: instrui pergunta única por vez, começando por modelo/ano", () => {
+    const guardrail: GuardrailResult = {
+      mode: "normal", reason: "padrão",
+      collection: { ask: ["troca"], collect: [], missingTrocaFields: [] },
+    };
+    const { system } = buildPrompt(makeCtx(), guardrail);
+    expect(system).toContain("modelo");
+  });
+
+  it("collect troca: lista campos faltantes quando presentes", () => {
+    const guardrail: GuardrailResult = {
+      mode: "normal", reason: "padrão",
+      collection: { ask: [], collect: ["troca"], missingTrocaFields: ["quantos km rodados"] },
+    };
+    const { system } = buildPrompt(makeCtx(), guardrail);
+    expect(system).toContain("quantos km rodados");
+  });
+
+  it("json schema documenta collected_data", () => {
+    const { system } = buildPrompt(makeCtx(), guardrailNormal);
+    expect(system).toContain("collected_data");
+  });
+
+  it("[DATA ATUAL] presente no system com a data injetada", () => {
+    const fixedNow = new Date("2026-07-24T15:00:00.000Z");
+    const { system } = buildPrompt(makeCtx(), guardrailNormal, fixedNow);
+    expect(system).toContain("[DATA ATUAL]");
+    expect(system).toContain("2026-07-24");
   });
 });
