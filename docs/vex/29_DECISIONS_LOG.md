@@ -251,6 +251,74 @@ Active
 
 ---
 
+# REAL DECISIONS
+
+Date
+
+2026-07-24 (commit date). Log entry written retroactively on 2026-07-24 during a later session — not recorded at merge time. This entry itself is the fix for that gap.
+
+Decision ID
+
+DL-0001
+
+Title
+
+Priorizar Coleta de Financiamento/Troca Antes da Validação de Produção do MVP Terminar
+
+Category
+
+Product
+
+Context
+
+`27_PROJECT_STATUS.md` define a fase atual como "MVP Validation", com regra explícita: prioridade 1-4 é resolver blockers de produção (WhatsApp sandbox, B001-B005) e só prioridade 5 é "begin new feature development". Commit `147f1ef` (2026-07-24, mesmo dia), mergeou a feature de coleta de financiamento/troca — capacidade nova e independente do guardrail de margem existente e dos blockers de validação em aberto — antes de qualquer um dos blockers B001-B005 ter sido resolvido.
+
+Decision
+
+Priorizar e mergear a feature de coleta de financiamento/troca (`lib/collection.ts`, `lib/guardrails.ts`, migration 022, página `/agenda`) fora de ordem em relação à regra de prioridade documentada em `27_PROJECT_STATUS.md`.
+
+Reasoning
+
+Demanda real de cliente (Speed Motos) — leads já perguntando sobre financiamento e condições de troca em produção, sem fluxo pra IA responder ou coletar esses dados. Aprovado pelo founder.
+
+Alternatives Considered
+
+Esperar B001-B005 (desbloqueio WhatsApp real) resolverem antes de tocar em feature nova, conforme regra original.
+
+Expected Impact
+
+Feature entregue e funcional (635/635 testes passando, lint/typecheck limpos). Regra de prioridade de `27_PROJECT_STATUS.md` furada sem registro no momento do merge — motivou a criação da regra de processo em `27_PROJECT_STATUS.md` (exceção exige entrada no Decisions Log no mesmo PR/commit).
+
+Potential Risks
+
+Precedente de exceção não documentada no momento em que acontece — mitigado retroativamente por esta entrada e pela nova regra de processo.
+
+Owner
+
+Founder (aprovação) / Engineering (implementação)
+
+Related ADR
+
+None
+
+Related Issue
+
+Ver `27_PROJECT_STATUS.md` — RECENT COMPLETED WORK (coleta financiamento/troca) e ACTIVE BLOCKERS (B001-B005)
+
+Related Runbook
+
+None
+
+Review Date
+
+N/A — decisão pontual, não recorrente
+
+Status
+
+Active
+
+---
+
 # DECISION QUALITY RULES
 
 Every decision should answer:

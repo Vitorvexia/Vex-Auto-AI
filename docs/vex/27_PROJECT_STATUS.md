@@ -113,6 +113,10 @@ Priority 5
 
 Only then begin new feature development.
 
+Exception rule
+
+Any conscious exception to this priority order (e.g. shipping a new feature before validation is complete) requires an entry in `29_DECISIONS_LOG.md` in the same PR/commit that implements the exception — not after. No entry means the change should not have been merged.
+
 ---
 
 # MVP STATUS

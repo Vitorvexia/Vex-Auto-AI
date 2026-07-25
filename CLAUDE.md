@@ -1,6 +1,6 @@
 # Vex Auto — CLAUDE.md
 
-Contexto estratégico e operacional do produto. Fonte de verdade absoluta. Toda decisão técnica deve ser compatível com este documento.
+Contexto estratégico do produto — visão de médio/longo prazo (fases, filosofia, guardrails permanentes). Toda decisão técnica deve ser compatível com este documento, mas **não** decide o que pode ser trabalhado hoje — isso é `docs/vex/27_PROJECT_STATUS.md`. Em conflito de prioridade de sprint, `27_PROJECT_STATUS.md` vence.
 
 ---
 
@@ -501,7 +501,7 @@ npm install   # prepare script roda `husky` automaticamente
 
 ## Regras para Claude neste Projeto
 
-1. Tratar este documento como fonte de verdade absoluta
+1. Tratar este documento como fonte de verdade de visão de produto/arquitetura de longo prazo — não de prioridade operacional do dia. Antes de decidir se algo pode ser tocado agora, checar `docs/vex/27_PROJECT_STATUS.md`.
 2. Toda feature deve servir ao loop econômico (lead → conversão → reativação)
 3. Não simplificar a visão AI-First — IA é orquestradora, não assistente
 4. Guardrails são inegociáveis — nunca propor código que os viole
