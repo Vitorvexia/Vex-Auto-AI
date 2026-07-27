@@ -657,6 +657,367 @@ Raised during Speed Motos Cloud API cutover (2026-07-27) while wiring `whatsapp_
 
 ---
 
+ID
+
+BL-0007
+
+Title
+
+Server Action pra realocar `public.users.store_id` (mover usuário entre lojas)
+
+Problem
+
+`app/admin/actions.ts` só tem `createStoreUser`/`createStoreUserDirect` — provisionam login **novo**, sempre. Não existe caminho oficial pra realocar um usuário já existente pra outro `store_id`. Descoberto na prática 2026-07-27: `vlinceira@gmail.com` (login pessoal do founder) e `vlinceira2@gmail.com` ("Speed Motos Admin", conta já nomeada pra isso) estavam ambos presos em `store_id` da loja Demo (`aaaaaaaa-...`), sem jeito de apontar pra Speed Motos real (`32359022-...`) sem UPDATE manual direto na tabela — o que foi feito como contorno pontual (`vlinceira2@` realocado via SQL direto), não via código.
+
+Business Value
+
+Reduz fricção operacional toda vez que uma conta precisa mudar de loja (erro de provisionamento, reorganização de equipe, downgrade de piloto pra produção). Hoje exige acesso direto ao banco — não escala pra alguém que não seja engenharia.
+
+Customer Value
+
+Nenhum diretamente — é ferramenta interna de operação/suporte (super-admin), não feature de cliente final.
+
+Priority
+
+P4 — baixa prioridade, mas vai reaparecer (mesma classe de problema toda vez que um usuário for criado com `store_id` errado ou precisar mudar de loja).
+
+Status
+
+IDEA — não implementado. Contorno manual já aplicado uma vez (2026-07-27, `vlinceira2@gmail.com`).
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixa — nova Server Action em `app/admin/actions.ts` (`reassignUserStore(userId, newStoreId)`), protegida por `assertSuperAdmin()`, mesmo padrão de `updateStore`. `UPDATE users SET store_id = ? WHERE id = ?` com guard de `newStoreId` existir em `stores`. UI: dropdown de loja no card de cada usuário em `/admin`.
+
+Dependencies
+
+Nenhuma — `assertSuperAdmin()` e o modelo de `store_id` já existem.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+None yet
+
+Target Version
+
+Sem agendamento
+
+Success Metrics
+
+Não definido — item de ferramenta interna, sem métrica de produto associada.
+
+Notes
+
+Constatado durante o cutover Cloud API da Speed Motos (2026-07-27): dois logins (`vlinceira@`, `vlinceira2@`) presos na loja Demo por falta desse caminho. `vlinceira2@gmail.com` foi realocado manualmente pra Speed Motos como resolução pontual; `vlinceira@` ficou de propósito na Demo como ambiente de teste.
+
+---
+
+ID
+
+BL-0008
+
+Title
+
+Pipeline de envio multi-mensagem (bolhas separadas no WhatsApp)
+
+Problem
+
+O ajuste de tom de 2026-07-27 (`lib/prompts.ts`) pede respostas curtas quebradas em até 2-3 mensagens — hoje isso só é possível como quebra de linha dentro de uma única bolha do WhatsApp, porque o pipeline manda exatamente 1 mensagem por turno de IA (`lib/ai-pipeline.ts:213-243`, `lib/whatsapp-send.ts:63-126`, `AgentResult.reply_text` é string única em `lib/ai.ts:14-15`). Pra virar bolhas de verdade — como um vendedor mandando 2-3 mensagens seguidas — precisa de suporte real a múltiplos envios por turno.
+
+Business Value
+
+Atendimento mais humano/natural no WhatsApp — reduz a sensação de "bot" que uma resposta longa numa bolha só transmite, especialmente em saudação e qualificação inicial.
+
+Customer Value
+
+Lead recebe a conversa no ritmo que já espera de um vendedor real conversando no WhatsApp, não um bloco de texto único.
+
+Priority
+
+P4 — baixa prioridade agora. Reavaliar depois que o número novo (`1238597592667311`, registrado 2026-07-27) tiver reputação/`quality_rating` estabelecida — ver risco abaixo.
+
+Status
+
+IDEA — não implementado. Decisão de 2026-07-27: aplicar só o ajuste de tom via prompt por enquanto (quebra de linha dentro de 1 mensagem), adiar o suporte real a múltiplas mensagens.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Médio. Arquivos afetados:
+- `lib/ai.ts` — `AgentResult.reply_text: string` → `reply_texts: string[]`; `validateOutput` passa a validar array não-vazio (cap de itens e tamanho por item)
+- `lib/prompts.ts` — schema de output no `[FORMATO DE RESPOSTA]` muda de `reply_text` string pra `reply_texts` array
+- `lib/ai-pipeline.ts` — loop sequencial (nunca `Promise.all`, senão a Meta pode entregar fora de ordem): por chunk, `messages.insert` (linha própria) + `sendWhatsAppMessage`. `messageId` capturado hoje como valor único (linha 233, usado no retry) vira lista
+- Sistema de retry (`app/api/internal/retry-failed`) — hoje assume 1 `message_id` por `ai_logs` pra reenvio em `ok_send_failed`; com N mensagens por turno precisa decidir se reenvia todas ou só a que falhou — é reescrita de lógica, não só de schema
+
+Suites de teste que assumem hoje "1 mensagem por turno" como invariante e precisam revisão: `ai-pipeline.test.ts`, `ai-validation.test.ts`, `ai-output-guardrails.test.ts`, `prompts.test.ts`, `retry-failed.test.ts`.
+
+Dependencies
+
+Nenhuma técnica — depende só de decisão de prioridade.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+None yet
+
+Target Version
+
+Sem agendamento — reavaliar quando o número tiver reputação estabelecida na Meta
+
+Success Metrics
+
+Não definido ainda.
+
+Notes
+
+Riscos levantados em 2026-07-27, ao decidir adiar:
+- **Rate limit**: irrelevante no volume atual (1 loja) — Cloud API tem limite alto por tier. Vira relevante só em escala de centenas de lojas simultâneas.
+- **Ordem de entrega**: só garantida se o envio for sequencial (`await` cada POST antes do próximo). Implementação errada (paralela) pode entregar fora de ordem — bug sutil, difícil de pegar em teste manual.
+- **Qualidade do número na Meta**: número (`1238597592667311`) saiu do sandbox em 2026-07-27, `quality_rating: UNKNOWN`. Rajada de 2-3 mensagens automáticas sem delay logo no início da vida do número pode ler como comportamento de bot pro sistema de qualidade da Meta — motivo principal pra adiar até o número ter reputação estabelecida. Se implementado, considerar delay de 400-800ms entre envios.
+
+---
+
+ID
+
+BL-0009
+
+Title
+
+UI de resposta manual do vendedor (campo de texto na conversa)
+
+Problem
+
+Não existe, em lugar nenhum do sistema, uma forma do vendedor mandar uma mensagem WhatsApp pro lead através do Vex Auto. `app/conversations/[id]/page.tsx` só tem forms de assumir/devolver/atualizar status — nenhum campo de texto. `sendWhatsAppMessage` (`lib/whatsapp-send.ts`) só é chamado pelo pipeline de IA, follow-up e reativação, nunca por ação manual. Confirmado durante investigação de bug 2026-07-27: hoje, se um vendedor responde um cliente durante o handoff, só pode estar fazendo isso pelo WhatsApp Manager nativo da Meta, fora do Vex Auto — essa resposta nunca aparece em `messages`, nunca é rastreada, nunca conta em métrica nenhuma.
+
+Business Value
+
+Sem isso, o produto não cumpre a promessa central: "IA atende 24/7, humano entra só no fechamento" pressupõe que o humano consegue atender *dentro do sistema*. Hoje ele não consegue — o handoff joga a conversa pra um vácuo operacional dentro do Vex Auto (mesmo que o vendedor responda por fora).
+
+Customer Value
+
+Vendedor atende o cliente sem sair do Vex Auto — sem alternar pra outro app, sem perder contexto do dossiê do lead.
+
+Priority
+
+**ALTA.** Bloqueia dois outros itens: reprocessamento de mensagens não respondidas (`BL-0010`, depende diretamente) e confiabilidade de métricas/histórico (qualquer métrica de resposta/tempo de atendimento hoje ignora respostas dadas fora do sistema, subestimando atendimento real).
+
+Status
+
+IDEA — não implementado. Achado central da investigação de bug de handoff em 2026-07-27.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Médio. Campo de texto + form na página da conversa (`app/conversations/[id]/page.tsx`), nova Server Action (ex: `sendManualReply(conversationId, text)`) que chama `sendWhatsAppMessage` (mesmo client já usado pelo pipeline) e insere em `messages` com `autor` identificando o vendedor (hoje `autor` é enum simples `ia`/`lead`/`sistema` — precisa decidir se vira `humano` genérico ou referencia `users.id` pra saber qual vendedor respondeu). Reaproveita `getStoreWhatsAppPhoneId` já existente.
+
+Dependencies
+
+Nenhuma técnica — `sendWhatsAppMessage` e `getStoreWhatsAppPhoneId` já existem e são reaproveitáveis.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+BL-0010 (reprocessamento, bloqueado por este item)
+
+Target Version
+
+Deveria entrar antes do próximo teste de handoff em produção
+
+Success Metrics
+
+Toda resposta de vendedor durante handoff passa a existir em `messages` com autor identificável — zero resposta "invisível" ao sistema.
+
+Notes
+
+Achado que motivou este item foi considerado mais importante que o bug original que disparou a investigação (mensagens não respondidas ao devolver pra IA) — sem esta UI, qualquer automação em cima de "mensagem sem resposta no banco" corre risco de duplicar ou contradizer uma resposta que o vendedor já deu por fora do sistema (ver `BL-0010`, risco 4).
+
+---
+
+ID
+
+BL-0010
+
+Title
+
+Reprocessar mensagens não respondidas ao devolver conversa pra IA
+
+Problem
+
+Cenário real de teste (2026-07-27): conversa foi pra `AGUARDANDO_HUMANO`, cliente mandou mensagens, ninguém respondeu. Ao devolver pra IA (`returnConversationToAI`, `lib/actions.ts:51-76`), nada acontece além da troca de estado — a IA só volta a responder se o cliente mandar mensagem nova. As mensagens que ficaram esperando durante o handoff nunca são respondidas.
+
+Diagnóstico técnico completo: `returnConversationToAI` não chama `runAiPipeline` em nenhum momento, só `transitionConversationStatus` + insert de mensagem de sistema (`lib/status.ts:145-169` é update de banco puro, sem side-effect). `ingestMessage` salva mensagens `entrada` durante o handoff normalmente (não checa `handoff_to`); o guardrail (`lib/guardrails.ts:102-107`) é quem bloqueia a IA de responder, retornando `agent_status: "skipped_handoff"` sem gerar reply.
+
+Business Value
+
+Fecha o buraco do funil: hoje toda mensagem mandada durante o handoff é uma chance de conversão jogada fora se o vendedor não responder manualmente E não devolver de um jeito que reative a IA sozinha.
+
+Customer Value
+
+Cliente não fica no vácuo depois que a conversa "volta pra IA" — recebe resposta às mensagens que já tinha mandado, sem precisar mandar de novo.
+
+Priority
+
+Alta intenção, mas **bloqueada por `BL-0009`** — risco 4 abaixo não tem mitigação sem a UI de resposta manual existir primeiro.
+
+Status
+
+IDEA — não implementado, desenho técnico já validado em 2026-07-27, aguardando `BL-0009`.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Médio, assumindo `BL-0009` já resolvido:
+- Identificar mensagens `entrada` não respondidas na janela do handoff: usar os marcadores de sistema (`"Conversa assumida por humano"` / `"Conversa retornada para IA"`, `autor: "sistema"`) como bordas da janela; `entrada` sem `saida` depois dela (de nenhum autor, incluindo agora `autor` humano via `BL-0009`) e antes da próxima `entrada` conta como não respondida
+- Concatenar as não respondidas num `incoming_text` só e disparar `runAiPipeline` uma vez — evita reabrir o risco de ordem/múltiplos envios do `BL-0008`
+- **Threshold de 30 minutos** (decisão de produto, 2026-07-27): handoff com duração acima de 30min desde a última mensagem não respondida → não dispara reprocessamento automático, só marca pendência pro vendedor tratar manualmente. Dentro da janela de 30min, dispara normal
+- Dentro da janela, o prompt precisa reconhecer o tempo decorrido (mesmo padrão já usado pra data atual em `lib/prompts.ts` — `formatToday`) pra IA não soar como se estivesse respondendo em tempo real quando não está
+- Precisa de guarda de idempotência no gatilho do botão "devolver pra IA" — não existe hoje equivalente ao `isReplayedMessage` do webhook pra esse tipo de disparo (clique de botão, não WAMID); risco de duplo-clique disparando o pipeline 2x pras mesmas mensagens
+
+Dependencies
+
+**`BL-0009`** (UI de resposta manual) — obrigatório antes de implementar. Sem isso, "sem resposta no banco" não significa "sem resposta enviada" (vendedor pode ter respondido pelo WhatsApp Manager nativo da Meta, fora do sistema) — reprocessar nesse caso duplica ou contradiz uma resposta humana real.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+BL-0009 (bloqueante), BL-0008 (mesma classe de risco de ordem/múltiplos envios, mitigada aqui por concatenar num disparo só)
+
+Target Version
+
+Depois de BL-0009
+
+Success Metrics
+
+Zero mensagem de handoff sem resposta 30min depois do "devolver pra IA", dentro da janela de threshold.
+
+Notes
+
+Riscos técnicos mapeados em 2026-07-27, na ordem que o dono do produto pediu pra avaliar:
+1. **Resposta duplicada** — mitigado por guarda de idempotência no gatilho (a construir, não existe hoje nada equivalente pra esse tipo de disparo)
+2. **Ordem de entrega** — mitigado por concatenar num disparo só em vez de 1 disparo por mensagem (se decidir fazer 1-por-mensagem no futuro, reabre o mesmo risco do `BL-0008`, sequencial obrigatório)
+3. **Handoff durou horas, resposta fica sem sentido** — mitigado pelo threshold de 30min (decisão de produto) + reconhecimento de tempo decorrido no prompt
+4. **Vendedor já respondeu fora do sistema** (risco mais sério, motivou `BL-0009` virar bloqueante) — sem UI de resposta manual, não tem como saber se "sem linha em `messages`" significa "sem resposta enviada". Esse item só é seguro de implementar depois de `BL-0009` existir.
+
+---
+
+ID
+
+BL-0011
+
+Title
+
+Handoff parcial por assunto (preço/negociação não deveria travar o resto da conversa)
+
+Problem
+
+Caso real de teste (2026-07-27): lead perguntou "tem desconto nela?" — disparou `should_handoff=true` (regra de `lib/prompts.ts`, REGRAS FIXAS: "Se o lead insistir em desconto... defina should_handoff=true"), que transiciona a conversa inteira pra `AGUARDANDO_HUMANO`/`handoff_to=HUMANO` (`lib/ai-pipeline.ts:266-276`). A pergunta seguinte do mesmo lead, "tem quantas 160 no momento?" — pergunta de estoque, sem nenhuma relação com preço — também ficou sem resposta, porque `runGuardrails` (`lib/guardrails.ts:102-107`) é um gate binário: qualquer mensagem nova enquanto `handoff_to=HUMANO`, de qualquer assunto, cai direto em `mode: "human_handoff"` sem olhar o conteúdo. Como "tem desconto?" é uma das perguntas mais comuns do funil de vendas, esse é provavelmente o caminho mais frequente que leva o lead ao vácuo — mais frequente que o cenário geral do `BL-0010`.
+
+Business Value
+
+Evita perder o resto da conversa (perguntas de estoque, catálogo, agendamento) só porque uma pergunta específica de preço precisou de aprovação humana. Reduz a fração de leads que esfriam esperando resposta de uma pergunta que a IA nem precisava travar.
+
+Customer Value
+
+Lead continua recebendo resposta pras perguntas que a IA pode responder sozinha (estoque, catálogo, agendamento), enquanto só a negociação de preço espera o vendedor.
+
+Priority
+
+Alta intenção — impacto direto em conversão, caminho frequente. Mas é mudança estrutural (ver avaliação técnica abaixo), não é ajuste pequeno — prioridade de implementação é decisão de produto, não travada tecnicamente.
+
+Status
+
+IDEA — avaliação técnica feita em 2026-07-27, não implementado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+**Avaliação técnica: o modelo atual não comporta isso sem mudança estrutural.**
+
+`conversations.handoff_to` é um campo binário (`"IA" | "HUMANO"`) na própria linha da conversa — não existe conceito de "assunto suspenso". `runGuardrails` trata handoff como gate de prioridade máxima logo no passo 2 (linha 102-107): retorna `mode: "human_handoff"` **antes de olhar o conteúdo da mensagem nova**. Pra existir handoff parcial, seriam necessárias mudanças em pelo menos 4 pontos:
+
+1. **Novo estado além do binário** — algo como `handoff_topics: string[]` (coluna nova ou, seguindo o precedente já existente de `leads.contexto.pending_topics` usado pela coleta de financiamento/troca, um campo jsonb equivalente pra "tópicos suspensos aguardando humano")
+2. **`runGuardrails` reestruturado** — o gate do passo 2 não pode mais ser um `return` incondicional; precisa virar condicional ao tópico da mensagem nova: se bate com o tópico suspenso (preço/negociação), handoff continua pra essa mensagem; se não bate (estoque, catálogo), segue fluxo normal
+3. **Classificador determinístico de tópico "preço/negociação"** — crítico: essa classificação tem que acontecer **antes** de decidir se chama a LLM ou não (é o guardrail, pré-LLM, que decide). Não dá pra usar a própria LLM pra classificar "isso é sobre preço?", porque se for, a LLM não pode ser chamada — seria circular. `detectSignals` (`lib/lead-scoring.ts:80-105`) já é um classificador determinístico funcionando nesse exato padrão (casa frases fixas contra `incoming_text` pra `financiamento`/`troca`) — quem for implementar deve **estender esse mesmo detector** com termos de preço/negociação ("desconto", "abaixa", "melhor preço"), não construir um novo do zero
+4. **Ação de retorno com escopo** — `returnConversationToAI` hoje limpa o handoff inteiro; precisaria virar topic-aware (`clearHandoffTopic(conversationId, topic)`) pra reabrir só o tópico resolvido, não a conversa toda
+
+Interação com `BL-0009`: a UI de resposta manual também precisaria expor **qual tópico** está suspenso, não só "em handoff" — mais uma camada de UI em cima do que já é trabalho novo.
+
+**Não é 1 guardrail a mais — é adicionar uma dimensão inteira ao modelo de estado da conversa.** Esforço: Alto.
+
+Dependencies
+
+Nenhuma bloqueante direta, mas compõe com `BL-0009` (UI precisa refletir handoff parcial) e usa o mesmo padrão de detecção determinística que `BL-0008`/coleta já usam (`detectSignals`).
+
+Related ADR
+
+Provável candidato a ADR próprio, dado o tamanho da mudança de modelo — não decidido ainda.
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Caso concreto: teste 2026-07-27, sequência "tem desconto nela?" → "tem quantas 160 no momento?" sem resposta
+
+Target Version
+
+Sem agendamento — decisão de produto sobre priorizar essa mudança estrutural
+
+Success Metrics
+
+Não definido ainda.
+
+Notes
+
+Achado durante a mesma investigação de bug que gerou `BL-0009`/`BL-0010` (2026-07-27). "Tem desconto?" sendo uma das perguntas mais comuns do funil torna esse o caminho de vácuo mais frequente entre os três itens registrados nessa sessão — vale considerar priorizar na frente de `BL-0010` apesar do esforço maior, já que resolve uma fração maior do problema de "lead esfria esperando handoff".
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
