@@ -459,23 +459,37 @@ Critical
 
 Status
 
-Open
+Resolved (code/DB side) 2026-07-27 — pending Vercel env update + manual Meta panel steps (see below)
 
 Description
 
-`WHATSAPP_PHONE_NUMBER_ID` env var is set to the Meta sandbox number (`1150232648165177`), not the real Speed Motos number (`1233441783176942`, which is `ON_PREMISE` and incompatible with Cloud API as-is).
+`WHATSAPP_PHONE_NUMBER_ID` env var was set to the Meta sandbox number (`1150232648165177`), not the real Speed Motos number. Note: the DB column `stores.whatsapp_phone_number_id` had also drifted independently — as of 2026-07-27 it held `2365906556789250` (an intermediate value from the 2026-07-23 WABA setup attempt), which matched neither the sandbox nor the previously-documented `ON_PREMISE` number (`1233441783176942`). Docs had not tracked that drift.
+
+2026-07-27 update: Speed Motos registered a real Cloud API number today, out of sandbox.
+
+- WABA ID: `28099462022990346`
+- Phone Number ID: `1238597592667311`
+- Number: `+5532998366528`
+- Meta status: display name "Em análise", quality "Pendente"
+
+`stores.whatsapp_phone_number_id` and `stores.whatsapp_numero` updated in production DB to match (2026-07-27). `.env.local` `WHATSAPP_PHONE_NUMBER_ID` updated to `1238597592667311`.
 
 Impact
 
-Follow-up automation and lead reactivation sends fail in production.
+Follow-up automation and lead reactivation sends were failing in production while pointed at sandbox/stale values. Resolved for the code/DB path; production send still blocked until Vercel env vars (`WHATSAPP_PHONE_NUMBER_ID`, `WHATSAPP_ACCESS_TOKEN`) are updated and the app redeployed, and until Meta clears the "Em análise"/"Pendente" status.
 
 Workaround
 
-None — reads/writes to DB still work, only outbound WhatsApp send fails (non-fatal per pipeline design, `ok_send_failed` status).
+None — reads/writes to DB still work, only outbound WhatsApp send fails (non-fatal per pipeline design, `ok_send_failed` status) until the Vercel-side steps below land.
 
 Permanent Fix
 
-Register a Cloud API-compatible number for Speed Motos in Meta Business Manager, update `WHATSAPP_PHONE_NUMBER_ID` on Vercel. Progress 2026-07-23: WABA, payment, System User/token, and app-Live setup all completed and reusable — only the phone number itself is still pending, since the WABA's current number is Speed Motos' actively-used personal/business line and cannot be migrated without cutting off daily manual WhatsApp use. Needs a dedicated new number/SIM.
+Remaining steps (manual, outside code):
+1. Update `WHATSAPP_PHONE_NUMBER_ID` on Vercel (Production + Preview) to `1238597592667311`
+2. Generate new System User token scoped to the new WABA (`28099462022990346`), update `WHATSAPP_ACCESS_TOKEN` on Vercel
+3. Redeploy
+4. Confirm webhook Callback URL in Meta for Developers points at the production Vercel URL, and the `messages` field is subscribed
+5. WABA ID has no column in `stores` yet — tracked in `28_BACKLOG.md` as a follow-up for template-sending work, not required for basic send/receive
 
 Related
 

@@ -591,6 +591,72 @@ Ver `docs/superpowers/specs/2026-07-24-financiamento-troca-collection-design.md`
 
 ---
 
+ID
+
+BL-0006
+
+Title
+
+`stores.whatsapp_waba_id` column (WABA ID per store)
+
+Problem
+
+WABA ID (WhatsApp Business Account ID) is not persisted anywhere in the codebase — confirmed via full-repo grep (2026-07-27), zero references. Meta's Graph API requires the WABA ID (not the phone_number_id) for template-management operations (`message_templates` endpoint), which the project does not implement yet but will need for structured outbound (follow-up/reactivation templates, HSM). Speed Motos' real WABA ID (`28099462022990346`) was obtained 2026-07-27 during Cloud API rollout and currently has nowhere to live.
+
+Business Value
+
+Unblocks future template-based sending (required for WhatsApp-initiated conversations outside the 24h session window — follow-up and reactivation depend on this at scale).
+
+Customer Value
+
+None directly yet — infrastructure prerequisite, not user-facing.
+
+Priority
+
+P3 — not blocking current send/receive flow, which only needs `phone_number_id`. Becomes relevant when template sending is implemented.
+
+Status
+
+IDEA — recommended, not implemented. Raised during Speed Motos Cloud API cutover (2026-07-27).
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Low — single nullable `TEXT` column, same pattern as `whatsapp_phone_number_id` (migration 017: `ALTER TABLE stores ADD COLUMN IF NOT EXISTS ... TEXT`, no FK, no encryption — public Meta ID, not a token). Would need a companion getter in `lib/whatsapp-credentials.ts` (e.g. `getStoreWabaId`) when actually consumed.
+
+Dependencies
+
+None to add the column. Actual consumption depends on template-sending work, not yet scoped.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+None yet
+
+Target Version
+
+Fase 4 (Escala)
+
+Success Metrics
+
+Not yet defined — would tie to template message delivery/approval rate once template-sending work is scoped.
+
+Notes
+
+Raised during Speed Motos Cloud API cutover (2026-07-27) while wiring `whatsapp_phone_number_id`/`whatsapp_numero` for the real number. WABA ID (`28099462022990346`) has no home in the schema yet — this item is the fix. Not urgent: current send/receive path only needs `phone_number_id`.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
