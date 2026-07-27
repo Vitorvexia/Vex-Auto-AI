@@ -180,6 +180,7 @@ Regras críticas:
 - contexto como ativo principal
 - execução via APIs
 - estrutura modular
+- **credencial de integração externa é por tenant, nunca global** — cada loja registra sua própria credencial (WABA/número WhatsApp sob CNPJ próprio, e futuramente RENAVE) e o Vex Auto se conecta como integrador, não como dono do ativo. Vale hoje pro WhatsApp (`stores.whatsapp_phone_number_id`, migration 017) e é o padrão a repetir pra qualquer credencial de terceiro futura. Decisão registrada em `docs/vex/29_DECISIONS_LOG.md` (DL-0002).
 
 ### Pipeline de IA (`lib/ai-pipeline.ts`)
 
@@ -422,7 +423,7 @@ Todas as actions protegidas por `assertSuperAdmin()`.
 - ~~Autenticação de usuários real ausente~~ — ✔ Supabase Auth integrada ao `store_id`
 - Query de mensagens sem limite — **pendente**
 - ~~`assigned_to` ainda não utilizado~~ — ✔ feature/assigned-to (leads.assigned_to + atribuição manual + métricas por vendedor)
-- `WHATSAPP_ACCESS_TOKEN` global — por loja é roadmap B2+ — **pendente**
+- `WHATSAPP_ACCESS_TOKEN` global — por loja é roadmap B2+ — **pendente**. Hoje hospedado no Business Manager da Speed Motos (CNPJ de terceiro), aceito como dívida consciente pro piloto — ver `docs/vex/29_DECISIONS_LOG.md` DL-0003
 - **`WHATSAPP_PHONE_NUMBER_ID` aponta para sandbox** — `1150232648165177` (`+1 555-629-2868`). Número real Speed Motos (`1233441783176942`) é `ON_PREMISE`, incompatível com Cloud API. Envios de follow-up e reativação falham em produção. Resolução: registrar número Cloud API real na Meta e atualizar env na Vercel — **BLOQUEIO OPERACIONAL**
 - `error_category` ausente em `reactivation_logs` e `error_message` nunca populado em `follow_up_logs` — falhas de envio WA são silenciosas nos jobs — **pendente** (observabilidade)
 - ~~Masking de PII em logs~~ — ✔ `lib/pii.ts` + `lib/logger.ts` mascarando `phone/phone_normalized/to/from/numero` (PR #26)
@@ -469,7 +470,7 @@ Todas as actions protegidas por `assertSuperAdmin()`.
 | Decisão | Status | Contexto |
 |---------|--------|---------|
 | `DEFAULT_STORE_ID` via env | ✔ RESOLVIDO | Multi-tenant B1 implementado. `getServerStoreId()` obtém `store_id` via Supabase Auth. `DEFAULT_STORE_ID` não está mais em código produtivo. |
-| `WHATSAPP_ACCESS_TOKEN` global | Em andamento | Token ainda global por env. `phone_number_id` já é per-loja (migration 017). Token per-loja é roadmap B2+. |
+| `WHATSAPP_ACCESS_TOKEN` global | Em andamento | Token ainda global por env. `phone_number_id` já é per-loja (migration 017). Token per-loja é roadmap B2+. App/System User/token hoje no BM da Speed Motos — DL-0003. |
 
 ---
 

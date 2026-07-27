@@ -319,6 +319,140 @@ Active
 
 ---
 
+Date
+
+2026-07-26
+
+Decision ID
+
+DL-0002
+
+Title
+
+Credencial de WhatsApp é por Tenant (Loja), Não Global
+
+Category
+
+Architecture
+
+Context
+
+Migração B001 (sandbox → Cloud API real) confirmou que WABA "#1 Isadora", App "Vex Auto" e System User `vex-auto-api` estão registrados sob o CNPJ da CMOV MOBILIDADE URBANA LTDA (dona da Speed Motos) — não sob CNPJ do Vex Auto. Business Verification, forma de pagamento e templates pertencem à loja. Vex Auto se conecta como integrador via token do System User, não como dono do número/WABA. Ver `project_whatsapp_migration_b001` (memória).
+
+Decision
+
+Modelo de credencial WhatsApp é por tenant: cada loja cliente registra seu próprio WABA/número sob seu próprio CNPJ. Vex Auto nunca é dono do número nem do WABA — apenas consome via token per-loja. `stores.whatsapp_phone_number_id` (migration 017) já reflete isso no schema. Nenhum token global de WhatsApp deve ser introduzido como atalho — `WHATSAPP_ACCESS_TOKEN` global hoje é dívida técnica temporária (roadmap B2+ per-loja), não o modelo alvo.
+
+Reasoning
+
+Onboarding self-serve de clientes futuros exige que cada loja tenha WABA verificado com CNPJ próprio — é como a Meta exige para negócios reais (BSP/self-managed). Um WABA único do Vex Auto compartilhado entre lojas criaria dependência de relacionamento comercial com uma única loja como "dona" do canal, risco de perda de ativo se a relação azedar, e não escala para múltiplos clientes com CNPJs distintos.
+
+Alternatives Considered
+
+Registrar WABA único sob CNPJ do Vex Auto e sub-alocar números por loja — rejeitado: exige Vex Auto ser provedor verificado na Meta (Business Solution Provider), o que depende de CNPJ próprio do Vex Auto (ainda não existe, ver BL-0001) e não é caminho crítico para o primeiro cliente.
+
+Expected Impact
+
+Arquitetura de credencial (WABA + número + token) permanece por tenant desde o primeiro cliente — sem retrabalho quando o segundo cliente for onboardado. Mesmo raciocínio se aplica a credenciais futuras por loja (ex: RENAVE, quando chegar).
+
+Potential Risks
+
+`WHATSAPP_ACCESS_TOKEN` ainda global no código hoje (dívida técnica documentada em `CLAUDE.md` — Dívidas Técnicas Conhecidas) — se não migrado para per-loja antes do segundo cliente, cria acoplamento indevido. Mitigação: token per-loja já é item de roadmap explícito (Fase 2/B2+).
+
+Owner
+
+Founder (decisão de arquitetura) / Engineering (implementação já parcialmente feita — `phone_number_id` per-loja via migration 017)
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0001 (CNPJ próprio Vex Auto — necessário para onboarding self-serve e provedor verificado Meta), B001-B002 (migração WhatsApp Speed Motos)
+
+Related Runbook
+
+None
+
+Review Date
+
+Quando segundo cliente entrar em onboarding — validar que `WHATSAPP_ACCESS_TOKEN` per-loja foi implementado antes de repetir o fluxo
+
+Status
+
+Active
+
+---
+
+Date
+
+2026-07-26
+
+Decision ID
+
+DL-0003
+
+Title
+
+Manter Infraestrutura Meta (App/System User/Token) no Business Manager da Speed Motos Durante o Piloto
+
+Category
+
+Infrastructure
+
+Context
+
+Verificação direta no Meta Business Settings (founder, 2026-07-26) confirmou: existe um único Business Manager na conta — "Speed Motos" (3 ativos de negócio), nenhum BM próprio do Vex. WABA "#1 Atendimento" (ID `456613541838969`) é propriedade da Speed Motos, Verificação da empresa: Verificado, Status da conta: Aprovada. O app Meta (ID `731158340085674`), o System User e o token global `WHATSAPP_ACCESS_TOKEN` estão todos dentro desse mesmo BM da Speed Motos — hospedados no CNPJ da loja cliente, não em CNPJ do Vex. Método de pagamento vinculado é cartão da própria loja. Isso corrige/substitui a inferência anterior (não verificada) registrada em [[project_whatsapp_migration_b001]] (memória) e discutida em sessão anterior a esta.
+
+Decision
+
+Manter, durante o piloto, toda a infraestrutura Meta (app, System User, token) dentro do Business Manager da Speed Motos. Aceito conscientemente como dívida: o ativo de distribuição do produto (app Meta que hospeda a integração) está hoje no CNPJ de terceiro, não do Vex.
+
+Reasoning
+
+Viabiliza o piloto imediatamente sem esperar abertura do CNPJ próprio do Vex (SLU), que ainda não existe. Blast radius atual = 1 loja conectada (Speed Motos) — custo de migrar depois ainda é baixo. Esperar CNPJ próprio antes de rodar o piloto adiaria validação real sem ganho proporcional no estágio atual (1 cliente).
+
+Alternatives Considered
+
+Adiar piloto até abertura de CNPJ próprio do Vex e criação de BM separado — rejeitado: bloquearia validação de produto por tempo indeterminado sem benefício até existir 2º cliente.
+
+Expected Impact
+
+Piloto Speed Motos roda sem bloqueio administrativo adicional. Dívida de arquitetura explícita e rastreável (esta entrada + BL-0001) em vez de assumida tacitamente.
+
+Potential Risks
+
+Token global é escopado ao BM que autorizou o System User — cliente 2 com WABA em BM separado NÃO autentica com o token atual (`lib/whatsapp-send.ts:68`, `lib/whatsapp-signature.ts:15`, `app/api/whatsapp/webhook/route.ts:23`). Migração para BM próprio do Vex é pré-requisito técnico do segundo cliente, não apenas questão administrativa/comercial. Se a relação com a Speed Motos azedar antes da migração, o ativo de distribuição (app Meta) está sob controle de CNPJ de terceiro.
+
+Plano de saída: quando o Vex tiver BM próprio, usar o mecanismo "Atribuir parceiro" na tela do WABA — o BM da loja compartilha o WABA com o BM do Vex; o WABA continua propriedade da loja (consistente com DL-0002 — credencial de WABA é por tenant). Do lado do código, a migração é troca de 3 env vars (`lib/whatsapp-send.ts:68`, `lib/whatsapp-signature.ts:15`, `app/api/whatsapp/webhook/route.ts:23`) + redeploy — sem mudança estrutural.
+
+Owner
+
+Founder (decisão de aceitar a dívida) / Engineering (plano de saída documentado)
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0001 (WhatsApp Embedded Signup, bloqueado por CNPJ próprio do Vex — mesma dependência raiz: Vex precisa ser Meta Tech Provider/Business Partner, o que exige CNPJ próprio)
+
+Related Runbook
+
+None
+
+Review Date
+
+Antes de onboardar o 2º cliente — migração de BM é pré-requisito técnico, não pode ficar pendente além desse ponto
+
+Status
+
+Active
+
+---
+
 # DECISION QUALITY RULES
 
 Every decision should answer:
