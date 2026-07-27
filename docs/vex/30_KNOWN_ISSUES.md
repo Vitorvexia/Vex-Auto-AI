@@ -627,6 +627,94 @@ Do not reopen this investigation from scratch — read this entry first. The iso
 
 ---
 
+Issue ID
+
+KI-0005
+
+Title
+
+`tests/integration/webhook.test.ts` "itera TODAS as mensagens do batch" Intermittently Times Out (Real Anthropic API Latency — Test Harness Only)
+
+Category
+
+External Dependency
+
+Severity
+
+Low
+
+Status
+
+Won't Fix (documented, accepted)
+
+Environment
+
+Test (`test:integration`, real Supabase + real Anthropic + real WhatsApp send — never runs in the Husky pre-push hook, confirmed: `package.json` `test` = `vitest run tests/unit` only, this file lives in `tests/integration/`)
+
+Date Discovered
+
+2026-07-27, during item 0.8 review — spotted while running the full suite, unrelated to 0.8's changes (never touched `webhook.test.ts`, `ai-pipeline.ts`, or the webhook route in that session)
+
+Reported By
+
+Observed during verification, flagged to user; user asked for a 2-minute check + this registration
+
+Owner
+
+Engineering
+
+Description
+
+`webhook.test.ts` posts a 3-message WhatsApp batch (`{A, B, C}` across 2 phone numbers) to the real webhook route (`app/api/whatsapp/webhook/route.ts`), which processes each message through the real pipeline — real Anthropic API call per message (`runAgent`) plus real WhatsApp send. Test hit `vitest.config.ts`'s global `testTimeout: 15000` and failed with "Test timed out in 15000ms", reproduced on a second immediate re-run of the same file alone (not a one-off).
+
+Symptoms
+
+`it("itera TODAS as mensagens do batch (messages[])")` times out at 15s. Other tests in the same file (single-message cases) passed in the same run.
+
+Root Cause
+
+3 sequential real Anthropic API calls (one per message in the batch) inside one `it()`, against a 15s global timeout with no per-test override. Single-message tests in the same file have ~3x the effective budget per LLM call and pass reliably; the 3-message batch test doesn't get a proportionally larger timeout. Not a code bug — real LLM inference latency is inherently variable, and 15s for 3 sequential real API round-trips is a tight budget with zero margin.
+
+**Se você está mexendo em `ai-pipeline.ts` (ou qualquer coisa no caminho do webhook) e esse teste especificamente falhar:** é orçamento de tempo, não regressão sua. Antes de investigar a mudança que você acabou de fazer, primeiro rode só esse `it()` de novo isolado (`npx vitest run tests/integration/webhook.test.ts -t "itera TODAS"`) — se passar na segunda tentativa, é este issue, siga em frente. Só trate como regressão real se ele falhar consistentemente (3+ vezes seguidas) OU se o erro não for "Test timed out" (qualquer outro tipo de falha — assertion, exception — É regressão, não confundir com isto).
+
+Impact
+
+None on production or on push — `test:integration` is opt-in, never gates `git push` (see `27_PROJECT_STATUS.md` Quality Metrics, Bloqueante 2 closure). Only affects whoever runs `test:integration`/`test:all` and hits a slow Anthropic response during the 3-message batch test specifically.
+
+Workaround
+
+Re-run the test — passes on a normal-latency run.
+
+Permanent Fix
+
+Not planned now (out of scope, unrelated to item 0.8). If revisited, two options:
+
+(a) **Recommended — dedicated per-test timeout, not global.** `it("itera TODAS as mensagens do batch (messages[])", async () => {...}, 30000)` — one-line change, matches what this test actually needs (3x real API calls = needs 3x the budget other tests in the file get), doesn't touch `vitest.config.ts`'s global 15s (which is fine for every other test in the suite, unit and integration alike — raising it globally would just hide slow tests elsewhere instead of fixing this one specifically).
+
+(b) Mock the Anthropic call for this test. Bigger change — this test's actual intent is verifying webhook batch-iteration (`messages[]` handling, not LLM output quality), so mocking is arguably more correct long-term, but it's a real edit to test intent/setup, not a one-liner. Do (a) first; revisit (b) only if the file grows more LLM-heavy tests that all fight the same timeout problem.
+
+Validation Steps
+
+If revisited: re-run the file in a loop (same methodology as KI-0004) to confirm a longer timeout resolves it without masking a real regression.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+None
+
+Notes
+
+Distinct from KI-0004 (Realtime test flake) — different file, different root cause (real LLM latency vs. socket-reuse timing), same category of "known integration-test flake that never touches the push gate." Do not conflate the two when triaging `test:integration` failures.
+
+---
+
 (Update continuously.)
 
 ---
