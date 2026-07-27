@@ -453,6 +453,72 @@ Active
 
 ---
 
+Date
+
+2026-07-27
+
+Decision ID
+
+DL-0004
+
+Title
+
+Client Realtime Não Herda JWT da Sessão — `setAuth()` Explícito É Obrigatório em Todo Client Component com Postgres Changes
+
+Category
+
+Engineering
+
+Context
+
+Implementação do item 0.8 (Inbox em tempo real, `app/components/ConversationMessages.tsx`). RLS de `messages` (migration 005) e a tabela na publication `supabase_realtime` (migration 023) estavam corretas, e os testes de `lib/realtime-messages.ts` (mocks) passavam — mas um teste de integração real (`tests/integration/realtime-isolation.test.ts`, RT-1) mostrou que o usuário autenticado não recebia NENHUM evento `postgres_changes`, nem da própria loja. Diagnóstico isolado (service role vs anon+login) confirmou: o client `@supabase/supabase-js` não repassa o JWT da sessão pro socket do Realtime automaticamente após `signInWithPassword`/restauração de sessão via cookie — sem `client.realtime.setAuth(access_token)` explícito, a policy de RLS nunca resolve `auth.uid()` no contexto do Realtime, e o canal fica mudo pra qualquer store, incluindo a do próprio usuário. Testes de lib pura (mocks) não capturam esse tipo de falha porque simulam o canal, não a autenticação real do transporte.
+
+Decision
+
+Todo Client Component que assina `postgres_changes` deve chamar `supabase.realtime.setAuth(session.access_token)` explicitamente antes de `channel().subscribe()`, e reaplicar em todo evento de `onAuthStateChange` (token refresh) — não confiar em wiring automático entre auth e realtime. Padrão implementado em `app/components/ConversationMessages.tsx` (busca sessão via `getSession()`, seta auth, assina `onAuthStateChange` pro resto da vida do componente).
+
+Reasoning
+
+Sem esse passo, o bug é silencioso da pior forma possível: a UI carrega normalmente, o histórico inicial aparece (veio via Server Component/SSR, não via Realtime), e só falta o comportamento "ao vivo" — que é justamente o que ninguém nota testando manualmente uma vez, mas quebra o propósito inteiro do item 0.8 (vendedor não vê mensagem nova chegar). Testes unitários com mock de canal não pegam isso porque o mock não modela a ausência do JWT no transporte real.
+
+Alternatives Considered
+
+Confiar no wiring automático do `@supabase/ssr`/`supabase-js` entre sessão e Realtime — rejeitado: testado empiricamente (script de diagnóstico isolado) e confirmado que não propaga o token sozinho nesta versão instalada (`@supabase/supabase-js` 2.103.0). Pode mudar em versão futura, mas não dá pra assumir sem validar de novo.
+
+Expected Impact
+
+`ConversationMessages.tsx` funciona corretamente em produção (validado por `tests/integration/realtime-isolation.test.ts`, RT-1/RT-2a/RT-2b contra Supabase real). Todo Client Component futuro que precisar de Realtime com RLS deve seguir o mesmo padrão.
+
+Potential Risks
+
+Risco de regressão real: qualquer novo Client Component que assine `postgres_changes` e esqueça o `setAuth()` vai "funcionar" nos testes de lib (mock não pega) e falhar silenciosamente em produção do mesmo jeito que aconteceu aqui — sem erro visível, só ausência de comportamento. Mitigação: este registro + comentário no código-fonte (`ConversationMessages.tsx` e `tests/integration/realtime-isolation.test.ts`) explicando o porquê; revisão de código deve checar esse padrão especificamente em qualquer PR que adicione `channel().subscribe()` num Client Component novo.
+
+Owner
+
+Engineering (achado durante implementação, revisão exigiu prova empírica antes de aceitar como resolvido)
+
+Related ADR
+
+None
+
+Related Issue
+
+Roadmap item 0.8 (`53_ROADMAP.md`) — Inbox em tempo real
+
+Related Runbook
+
+None
+
+Review Date
+
+Quando a versão de `@supabase/supabase-js` for atualizada — revalidar se o wiring automático mudou antes de remover o `setAuth()` explícito
+
+Status
+
+Active
+
+---
+
 # DECISION QUALITY RULES
 
 Every decision should answer:

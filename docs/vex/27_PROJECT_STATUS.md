@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-07-24
+Last Updated: 2026-07-27
 
 ---
 
@@ -419,11 +419,17 @@ Yes
 
 Automated Tests
 
-Unverified in this pass — run `npm run test` (vitest) and record actual count. Do not carry forward the old "597 passing" figure without re-running it.
+CLOSED (2026-07-27): the "603 vs 635" discrepancy seen in earlier sessions was never a bug — it was two different npm scripts covering different scope, both correct for what they measured. Do not reopen this investigation.
+
+- `npm run test` — unit only (`tests/unit/`), what the Husky pre-push hook runs. 38 files / 612 tests passing.
+- `npm run test:integration` — hits real Supabase, run deliberately (never in the push hook). 6 files / 35 tests passing.
+- `npm run test:all` — both combined. 44 files / 647 tests passing.
+
+Script separation (2026-07-27, item 0.8 review): `test` used to alias `vitest run` (unit+integration combined), which meant every `git push` silently depended on live Supabase reachability. Split so the push-blocking path (`test`) is unit-only, fast, offline, deterministic — integration is opt-in via `test:integration`/`test:all`.
 
 Failing Tests
 
-Unverified — see above
+0 — see counts above
 
 TypeScript
 

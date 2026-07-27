@@ -481,10 +481,12 @@ Todo `git push` executa automaticamente via **Husky v9** (`pre-push` hook):
 ```sh
 npm run lint        # ESLint — zero warnings/errors
 npm run typecheck   # tsc --noEmit
-npm run test        # vitest run (unit + integration)
+npm run test        # vitest run tests/unit — rápido, offline, determinístico
 ```
 
 Push é bloqueado se qualquer comando falhar.
+
+`npm run test` roda **só `tests/unit/`** de propósito — precisa ser rápido, offline e determinístico pra rodar em todo push sem fricção. Testes de integração (`tests/integration/`) batem em Supabase de produção real e não entram no hook — rodar deliberadamente via `npm run test:integration` quando o trabalho tocar RLS, Realtime ou qualquer coisa que só o banco real valida. `npm run test:all` roda os dois juntos (uso manual, não é o que o hook chama).
 
 ### Setup para novo dev
 

@@ -4,7 +4,7 @@ import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthError } from "@/lib/auth";
 import { scoreClass, relativeTime } from "@/lib/format";
 import type { Autor, ConversationStatus, LeadStatus } from "@/types/domain";
-import { MessageBubble } from "@/app/components/MessageBubble";
+import { ConversationMessages } from "@/app/components/ConversationMessages";
 import { buildLeadDossier } from "@/lib/lead-dossier";
 import { DossieCard } from "@/app/components/DossieCard";
 import {
@@ -233,20 +233,15 @@ export default async function ConversationPage({
 
       <DossieCard dossier={dossier} score={lead?.score} />
 
-      <div className="chat">
-        {messages.length === 0 && (
-          <div className="empty">Nenhuma mensagem ainda</div>
-        )}
-        {messages.map((m: any) => (
-          <MessageBubble
-            key={m.id}
-            id={m.id}
-            autor={m.autor as Autor}
-            mensagem={m.mensagem}
-            created_at={m.created_at}
-          />
-        ))}
-      </div>
+      <ConversationMessages
+        conversationId={conv.id}
+        initialMessages={messages.map((m: any) => ({
+          id: m.id,
+          autor: m.autor as Autor,
+          mensagem: m.mensagem,
+          created_at: m.created_at,
+        }))}
+      />
         </div>{/* conv-main */}
       </div>{/* conv-layout */}
     </main>
