@@ -201,6 +201,8 @@ These documents evolve continuously.
 
 36_ENGINEERING_PLAYBOOK.md
 
+53_ROADMAP.md — consolidated roadmap (phases, dependencies, competitor analysis). Numbered 53 because 26-52 were already occupied when this document was created (2026-07-27); it is a Living Document in role, not in numeric range.
+
 ---
 
 # AI OPERATING SYSTEM (37-46) / AI RUNTIME (47-52)
@@ -236,6 +238,8 @@ The following documents always represent the latest project state.
 33_ENGINEERING_METRICS.md
 
 34_AI_MEMORY.md
+
+53_ROADMAP.md — source of phase priority (see 27_PROJECT_STATUS.md for what phase is active now)
 
 Read these before starting any task.
 
@@ -389,7 +393,7 @@ I need project status
 
 I need roadmap
 
-→ 28_BACKLOG.md
+→ 53_ROADMAP.md (phased plan, dependencies, competitor analysis). 28_BACKLOG.md is the underlying portfolio of individual items — 53_ROADMAP.md sequences them into phases.
 
 I need known bugs
 
