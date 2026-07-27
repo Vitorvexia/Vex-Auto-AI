@@ -519,6 +519,72 @@ Active
 
 ---
 
+Date
+
+2026-07-27
+
+Decision ID
+
+DL-0005
+
+Title
+
+RT-2a Flakiness Investigation — Confirmed Test-Harness Artifact, Not a Production Race
+
+Category
+
+Engineering
+
+Context
+
+Review of item 0.8 (`docs/vex/29_DECISIONS_LOG.md` DL-0004) surfaced a residual ~18% flake rate on `RT-2a` in `tests/integration/realtime-isolation.test.ts` (22 runs observed). Reviewer raised a specific, testable hypothesis before accepting 0.8 as closed: the flake's symptom (channel opened right after a different channel's `unsubscribe()`, on the same connection, intermittently stays mute) could be the SAME failure mode a real vendor hits switching conversations in the browser — `ConversationMessages.tsx` unsubscribes channel A and subscribes channel B when `conversationId` changes. If the test's non-determinism reflected the component's, the inbox could go silently mute on conversation switch in production, intermittently.
+
+Decision
+
+Investigated and REJECTED the hypothesis for production. `ConversationMessages.tsx` constructs a brand-new `createSupabaseBrowserClient()` inside the `useEffect` body on every `conversationId` change — each conversation switch gets an isolated `SupabaseClient` and therefore an isolated Realtime WebSocket. `RT-2a`'s flake instead comes from the test reusing `userA.client` (the same underlying socket) immediately after `RT-1` had just unsubscribed a channel on it in the same file — a pattern the component never does. Confirmed via reading the installed `@supabase/supabase-js` (2.103.0) source: `RealtimeClient.removeChannel()` triggers `this.disconnect()` once its channel list is empty, so old and new conversations never share a socket in production. Backed by a new mock-based test (`tests/unit/conversation-messages.test.ts`, 5 tests, stable across 5 consecutive runs, zero network) that locks in: fresh client per `conversationId`, old channel torn down exactly once per switch, nothing leaks on unmount, and even a same-task zero-yield triple-switch is handled safely by the component's existing `cancelled` guard (an intermediate conversation superseded before its own async setup completes never opens a channel it would have to tear down).
+
+Reasoning
+
+The reviewer's instinct — "if the test is non-deterministic, ask whether the same code path exists in production" — was the right question to ask, and it turned out the two are structurally different (test reuses a socket the component never does), not just "probably fine." Verifying this against the actual `@supabase/supabase-js` source rather than reasoning from the symptom alone is what makes this a closed investigation rather than a guess.
+
+Alternatives Considered
+
+Ship 0.8 without investigating, treating the flake as "probably just the test" — rejected per explicit instruction: the reviewer wanted the hypothesis checked against the real component before accepting 0.8 as done, specifically because a silent-mute-on-switch bug would be serious and easy to miss in manual testing (looks fine on first load, only fails on some switches).
+
+Expected Impact
+
+Item 0.8 closes with a documented, evidence-backed answer instead of an open question. `RT-2a`'s flake registered as `KI-0004` (`30_KNOWN_ISSUES.md`) — Won't Fix, low priority, `test:integration` never gates push — so it doesn't get silently re-investigated from scratch by someone hitting it later.
+
+Potential Risks
+
+If a future `@supabase/supabase-js` upgrade changes `RealtimeClient`'s per-client socket behavior (e.g., connection pooling/sharing across client instances), this conclusion would need re-validation — noted in `KI-0004`'s workaround/permanent-fix sections. Low probability, but the investigation's conclusion is tied to today's library internals, not just today's test result.
+
+Owner
+
+Engineering (investigation) / User (accepted the finding, no fix required)
+
+Related ADR
+
+None
+
+Related Issue
+
+`docs/vex/30_KNOWN_ISSUES.md` KI-0004, roadmap item 0.8 (`53_ROADMAP.md`)
+
+Related Runbook
+
+None
+
+Review Date
+
+If `@supabase/supabase-js` is upgraded — revalidate the per-client-socket assumption before trusting this conclusion again
+
+Status
+
+Active
+
+---
+
 # DECISION QUALITY RULES
 
 Every decision should answer:

@@ -36,7 +36,7 @@ Três fatos moldam este roadmap:
 | 0.5 | **Log de auditoria** (quem fez o quê) | LGPD + rastreabilidade. Vira obrigatório quando RENAVE entrar. | 0.3 | P |
 | 0.6 | **Abertura da SLU** | Dependência técnica do cliente 2 (ver contexto). Destrava também pagamento, contrato, gateway, RENAVE e Embedded Signup. Roda em paralelo, não bloqueia o piloto. | — | Externo |
 | 0.7 | **Política de Privacidade + aviso de IA no atendimento** | O piloto processa dado pessoal real de terceiros (clientes finais da loja). Obrigação nasce do tratamento do dado, não do contrato. Não depende de CNPJ. | — | P |
-| 0.8 | **Inbox em tempo real** | `app/conversations/[id]/page.tsx` é Server Component puro — sem `use client`, sem subscribe, sem polling. `revalidate=0` só garante dado fresco por request; **mensagem nova só aparece com F5**. Com Cloud API o vendedor não tem app de WhatsApp para abrir: sem live update ele não vê nada chegar. É bloqueador de venda, não melhoria. Solução: converter a área de mensagens em Client Component com `supabase.channel().on('postgres_changes')`. Não mexe em pipeline nem em Server Actions. | — | P |
+| 0.8 | ✔ **CONCLUÍDO** (2026-07-27) — **Inbox em tempo real** | Área de mensagens isolada em `app/components/ConversationMessages.tsx` (Client Component), assina `postgres_changes` via `supabase.channel()`, filtrado por `conversation_id`. Isolamento multi-tenant garantido por RLS (`messages_own_store_select`), validado contra Supabase real (`tests/integration/realtime-isolation.test.ts`). Migration 023 adiciona `messages` à publication `supabase_realtime`. Pipeline e Server Actions intocados. Achado no caminho: client Realtime não herda o JWT da sessão sozinho — exige `realtime.setAuth()` explícito (DL-0004, `29_DECISIONS_LOG.md`). | — | P |
 | 0.9 | **UI de resposta manual do vendedor** (BL-0009) | **Não existe forma do vendedor responder pelo sistema.** Não há Server Action nem campo de texto; `sendWhatsAppMessage` só é chamado pelo pipeline de IA, follow-up e reativação. Ou seja, o handoff passa a conversa para um humano que não consegue falar com o cliente dentro do VEX Auto — ele precisa sair e responder pelo WhatsApp Manager da Meta. Essas respostas nunca entram em `messages`. É o mesmo problema que criticamos no concorrente que redireciona para o WhatsApp do vendedor, só que por omissão em vez de por design. **Forma um par com 0.8:** inbox que atualiza mas não deixa responder não serve; campo de resposta que não atualiza sozinho também não. | 0.8 | M |
 
 ---
@@ -129,7 +129,6 @@ Três fatos moldam este roadmap:
 | Item | Status | Referência |
 |------|--------|------------|
 | RBAC zero | Fase 0.3 | — |
-| Inbox sem tempo real (só F5) | Fase 0.8 | `app/conversations/[id]/page.tsx` |
 | **Vendedor não consegue responder pelo sistema** — só pelo WhatsApp Manager da Meta, e essas respostas nunca entram em `messages`. **As métricas de atendimento hoje estão erradas, não apenas incompletas.** | Fase 0.9 | BL-0009 |
 | Handoff binário — guardrail de preço mata a conversa inteira | Fase 1.11 | BL-0011 |
 | `returnConversationToAI` não dispara o pipeline | Fase 2.12 | `lib/actions.ts:51-76` |

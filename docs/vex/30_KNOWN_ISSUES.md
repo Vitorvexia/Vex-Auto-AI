@@ -539,6 +539,94 @@ Related
 
 ---
 
+Issue ID
+
+KI-0004
+
+Title
+
+`tests/integration/realtime-isolation.test.ts` RT-2a Intermittently Fails on Channel Setup (Test Harness Only — Not a Product Bug)
+
+Category
+
+Application
+
+Severity
+
+Low
+
+Status
+
+Won't Fix (documented, accepted)
+
+Environment
+
+Test (`test:integration`, real Supabase — never runs in the Husky pre-push hook, see `27_PROJECT_STATUS.md` Quality Metrics)
+
+Date Discovered
+
+2026-07-27, during item 0.8 (Inbox em tempo real) review
+
+Reported By
+
+User review of the 0.8 PR — flagged the flake and asked for root-cause investigation before considering 0.8 closed
+
+Owner
+
+Engineering
+
+Description
+
+`RT-2a` (userA subscribes to a channel for a conversation belonging to storeB, asserting no cross-store event arrives) intermittently times out at the `waitForSubscribed` step (~18% of runs across 22 observed executions) with "timeout esperando status SUBSCRIBED do canal". `RT-1` and `RT-2b` — structurally identical assertions, different client instances — never failed once in the same 22 runs.
+
+Symptoms
+
+Channel opened via `subscribeToConversationMessages(userA.client, ...)` in `RT-2a` occasionally never reaches `SUBSCRIBED` within an 8-15s budget. Always the same test (`RT-2a`), never `RT-1` or `RT-2b`.
+
+Root Cause
+
+Investigated hypothesis (raised by user): does `app/components/ConversationMessages.tsx` have the same race in production — unsubscribe channel A, subscribe channel B in quick succession when the vendor switches conversations, causing the new channel to intermittently stay mute?
+
+Confirmed NOT applicable to production. `ConversationMessages.tsx` calls `createSupabaseBrowserClient()` fresh inside the `useEffect` body on every `conversationId` change — each conversation switch gets its own `SupabaseClient` instance, and therefore its own independent Realtime WebSocket (confirmed by reading the installed `@supabase/supabase-js` 2.103.0 source: `RealtimeClient.removeChannel()` calls `this.disconnect()` once `channels.length === 0`, so the old socket is torn down cleanly and never shared with the new one).
+
+`RT-2a`'s flakiness is a test-harness artifact: it reuses the SAME `userA.client` (and therefore the same underlying socket) that `RT-1` just used and unsubscribed from moments earlier in the same test file — a pattern the production component never exercises. Rapid resubscribe on a socket that just tore down a channel is the actual trigger, not RLS, not the app's subscribe/unsubscribe ordering.
+
+Added `tests/unit/conversation-messages.test.ts` (5 tests, mock-based, zero network, stable across 5 consecutive runs) to lock in the real invariant: every `conversationId` change gets a fresh client/socket, the old one's channel is torn down (`removeChannel` called exactly once), and nothing leaks on unmount — including a same-task zero-yield triple-switch case, where the component's own `cancelled` guard correctly prevents an intermediate conversation from ever opening a channel it would immediately have to tear down.
+
+Impact
+
+None on production. `test:integration` is never part of the push-blocking path (`npm run test` — see `27_PROJECT_STATUS.md`), so this flake cannot block a push or a deploy. Only affects whoever runs `test:integration`/`test:all` deliberately and happens to hit the ~18% window on `RT-2a` specifically.
+
+Workaround
+
+Re-run `npm run test:integration` (or just the one file) — RT-2a passing on retry confirms it's the known harness flake, not a regression. If `RT-1` or `RT-2b` ever fail, that IS a signal worth investigating — those two have never flaked.
+
+Permanent Fix
+
+Not planned — fixing it would mean giving `RT-2a` its own fresh client (mirroring `RT-2b`'s pattern) instead of reusing `userA.client` right after `RT-1`. Low priority: the test still proves what it needs to (isolation holds — never once violated in 22+ runs), and reworking it purely to remove a non-blocking flake isn't worth the churn right now. Revisit if `test:integration` starts being consulted more heavily (e.g., made a CI gate) or if the flake rate changes.
+
+Validation Steps
+
+If revisited: give `RT-2a` its own freshly-signed-in client (same pattern as `userB` in the same file) instead of reusing `userA.client`, then re-run the 8-run batch methodology used during this investigation to confirm the flake is gone.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+None — caught during code review, never shipped/observed in production
+
+Notes
+
+Do not reopen this investigation from scratch — read this entry first. The isolation guarantee itself (RLS blocking cross-store `postgres_changes`) has never failed in any run; only channel-setup timing on a reused, just-torn-down socket has. See DL-0004 (realtime.setAuth() requirement) and DL-0005 (this investigation) in `29_DECISIONS_LOG.md` for the full trail.
+
+---
+
 (Update continuously.)
 
 ---
