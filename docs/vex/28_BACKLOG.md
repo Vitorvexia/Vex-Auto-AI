@@ -1018,6 +1018,70 @@ Achado durante a mesma investigação de bug que gerou `BL-0009`/`BL-0010` (2026
 
 ---
 
+BL-0012
+
+Title
+
+Persistir `metadata.phone_number_id` do webhook Meta em `messages.meta`
+
+Problem
+
+`app/api/whatsapp/webhook/route.ts` só lê `metadata.display_phone_number` (usado pra achar a loja por `stores.whatsapp_numero`) — `metadata.phone_number_id`, o identificador canônico da Meta pro número que recebeu a mensagem, é descartado, nunca logado, nunca persistido. Com múltiplas lojas/números (ou mesmo uma loja trocando de número), não dá pra auditar retroativamente de qual `phone_number_id` cada evento chegou. Achado em 2026-07-28: essa lacuna impediu confirmar B001 por evidência direta de payload — a resolução teve que se apoiar em `stores.whatsapp_phone_number_id` (causa) + `agent_status: ok` (efeito) em vez do dado do próprio evento.
+
+Business Value
+
+Auditoria/debug mais rápido em incidente de roteamento de número — hoje, se um evento chegar "estranho", não tem como confirmar por qual `phone_number_id` ele entrou sem inferir de outra fonte.
+
+Customer Value
+
+Nenhum direto — é observabilidade interna, não visível pro lead ou pro vendedor.
+
+Priority
+
+Baixa — custo baixo, mas nenhum incidente real até hoje que dependesse disso pra ser resolvido (B001 foi resolvido sem esse dado, por outra cadeia de evidência).
+
+Status
+
+IDEA — não implementado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixo. `messages.meta` já existe (jsonb, default `{}`, mesmo campo usado pelo aviso de IA — `AI_DISCLOSURE_KIND` em `lib/ai-pipeline.ts`). Bastaria incluir `phone_number_id: metadata?.phone_number_id ?? null` no objeto `meta` do insert em `ingestMessage`/`webhook_ingest_message`, e tipar o campo no payload do webhook (`route.ts:71` só declara `display_phone_number` hoje). Sem migration.
+
+Dependencies
+
+Nenhuma.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+B001 (`27_PROJECT_STATUS.md`, ACTIVE BLOCKERS) — resolvido em 2026-07-28 sem esse dado; a ausência dele foi registrada como ressalva de evidência na resolução.
+
+Target Version
+
+Sem agendamento.
+
+Success Metrics
+
+Não definido.
+
+Notes
+
+Baixa prioridade proposital — não implementar sem pedido explícito.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

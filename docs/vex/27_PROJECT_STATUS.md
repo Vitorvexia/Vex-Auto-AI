@@ -163,6 +163,8 @@ Status
 
 🟡 Waiting Production Validation
 
+Não é mais "sandbox / aguardando número real" — isso foi resolvido (B001, ver `ACTIVE BLOCKERS`). É "número real ativo em produção desde 27/07, acumulando validação": a janela inicial de ~4h com mensagens reais e `agent_status: ok` (27/07, 18:31–22:44) é começo da validação, não conclusão. Não inflar pra ✅ até rodar mais tempo.
+
 ---
 
 AI Pipeline
@@ -211,13 +213,17 @@ Status
 
 Critical blockers should always remain here. Source: CLAUDE.md (2026-07-20 audit), all operational/config — no code work pending.
 
-B001
+B001 — RESOLVIDO (evidência de 27/07/2026, documentado 28/07)
 
-`WHATSAPP_PHONE_NUMBER_ID` points at sandbox (`1150232648165177`). Real Speed Motos number (`1233441783176942`) is `ON_PREMISE`, incompatible with Cloud API. Follow-up and reactivation sends fail in production as a result.
+O envio de WhatsApp resolve o número por LOJA: `lib/whatsapp-credentials.ts` usa `stores.whatsapp_phone_number_id ?? env WHATSAPP_PHONE_NUMBER_ID (fallback) ?? null`. Todos os call sites de envio passam por `getStoreWhatsAppPhoneId(storeId)` — nenhum lê a env var direto. A Speed Motos tem `stores.whatsapp_phone_number_id = 1238597592667311` (número dedicado real, WABA `28099462022990346`, +55 32 98366-528). Ou seja: pra essa loja o banco resolve o número real independente do valor da env var — a env global virou irrelevante pra Speed Motos (só importaria se o campo da loja fosse nulo). Isso é a arquitetura per-tenant do DL-0002 funcionando como projetada.
 
-Progress (2026-07-23): Business Verification confirmed (CMOV MOBILIDADE URBANA LTDA). WABA "#1 Isadora" identified, payment method added, System User created with permanent token, app "Vex Auto" (`731158340085674`) published (Live mode — required adding public `/privacidade` page, PR #28). Webhook confirmed reachable (test event received in Vercel logs). Template `follow_up` (Marketing category) submitted for approval.
+Evidência:
+- Causa (direta): `stores.whatsapp_phone_number_id` da Speed Motos = número real, confirmado por query. É o campo que o código lê em runtime.
+- Efeito (direto): mensagens de entrada reais com WAMID em 27/07 entre 18:31 e 22:44, pipeline processando, envios de volta com `agent_status: ok`. 2 `parse_error` (LLM) e alguns `skipped_handoff` (handoff ativo, esperado).
 
-New blocker found: the WABA's existing phone number (`+55 32 3541-3127`, phone_number_id `2365906556789250`) turned out to be Speed Motos' actively-used personal/business WhatsApp line (daily manual conversations with customers, despachante, etc) — NOT available for Cloud API migration (would disconnect the regular WhatsApp app on that number permanently). Confirmed via Graph API `/deregister` call that the number was never actually Cloud-API-linked despite the wizard showing "Registrado" — no harm done, regular app still works normally.
+Ressalva de evidência: não há prova ao nível do payload de qual `phone_number_id` recebeu os eventos, porque o webhook nunca captura `metadata.phone_number_id` (só `display_phone_number`, usado pra achar a loja por `stores.whatsapp_numero`). Esse dado nunca foi persistido — ausência real na base (ver `BL-0012`, `28_BACKLOG.md`). Mas como a resolução do número é por `stores.*` e não pelo payload, o payload é irrelevante pra conclusão: a cadeia código→banco→envios-ok está comprovada onde importa.
+
+Consequência: aviso de IA (0.7 parte 2) ATIVO em produção. 0.2 (templates) a um passo — falta aprovação Meta dos 9 templates + ligar `WHATSAPP_TEMPLATE_SEND_ENABLED`.
 
 Owner
 
@@ -225,7 +231,7 @@ Business Owner
 
 Status
 
-Pending — needs a NEW dedicated phone number/SIM (not currently in daily manual use) added to the same WABA. All other setup (WABA, payment, template, System User, token, app Live) is reusable once the new number arrives. See `project_whatsapp_migration_b001.md` memory for full resume-here detail.
+Resolved (evidência 2026-07-27, documentado 2026-07-28)
 
 ---
 
@@ -305,7 +311,7 @@ Still blocked on: all 9 templates (`follow_up_1/2/3`, `reactivation_vehicle_1/2/
 
 Most recent accomplishments (source: git log, most recent first).
 
-🟡 Roadmap 0.7 — Política de Privacidade + aviso de IA (`795e7fc`, `be2aae3`, 2026-07-28) — **implementado, NÃO é "transparência ativa em produção".** Parte 1: página `/privacidade` reescrita com conteúdo real (loja = controladora LGPD, VEX Auto = operador — DL-0006), no ar, sem exigir login. Parte 2: aviso de IA determinístico por código na 1ª mensagem de toda conversa nova (`lib/ai-pipeline.ts`, gatilho `is_new_conversation` do RPC `webhook_ingest_message`), `autor="sistema"`, idempotência via `messages.meta->>kind` (sem match de texto), rastro `meta.sent` reflete se o envio WA teve sucesso. 672 testes unitários cobrindo ambos os fluxos. **Pendências que impedem fechar o item:** (1) `CONTATO_EMAIL` na página é placeholder — falta Vitor confirmar e-mail real da loja; (2) nem a página nem o texto do aviso passaram por revisão jurídica (dívida registrada em DL-0006); (3) **o aviso só chega no celular de um lead real quando B001 resolver** — `WHATSAPP_PHONE_NUMBER_ID` ainda aponta pra sandbox Meta, então hoje nenhum envio (aviso, resposta da IA, follow-up, reativação) chega em produção. Não marcar 0.7 como concluído até esses 3 pontos fecharem.
+🟡 Roadmap 0.7 — Política de Privacidade + aviso de IA (`795e7fc`, `be2aae3`, 2026-07-28) — **implementado, mas NÃO fechado.** Parte 1: página `/privacidade` reescrita com conteúdo real (loja = controladora LGPD, VEX Auto = operador — DL-0006), no ar, sem exigir login. Parte 2: aviso de IA determinístico por código na 1ª mensagem de toda conversa nova (`lib/ai-pipeline.ts`, gatilho `is_new_conversation` do RPC `webhook_ingest_message`), `autor="sistema"`, idempotência via `messages.meta->>kind` (sem match de texto), rastro `meta.sent` reflete se o envio WA teve sucesso. 672 testes unitários cobrindo ambos os fluxos. Com B001 resolvido (ver `ACTIVE BLOCKERS`), o aviso já é enviado de fato pro número real da Speed Motos — **não é mais dependência bloqueante deste item.** **Pendências que ainda impedem fechar o item:** (1) `CONTATO_EMAIL` na página é placeholder — falta Vitor confirmar e-mail real da loja; (2) nem a página nem o texto do aviso passaram por revisão jurídica (dívida registrada em DL-0006). Não marcar 0.7 como concluído até esses 2 pontos fecharem.
 
 ✅ Inbox em tempo real (roadmap 0.8, `815e5b1`, 2026-07-27) — `app/components/ConversationMessages.tsx` isola a área de mensagens em Client Component, assina `postgres_changes` filtrado por `conversation_id`, banner de reconexão. Isolamento multi-tenant validado contra Supabase real (`tests/integration/realtime-isolation.test.ts`). Migration 023 (publication `supabase_realtime`). Achado: `realtime.setAuth()` explícito é obrigatório — DL-0004 (`29_DECISIONS_LOG.md`). Investigação de flakiness residual em teste de isolamento fechada sem bug de produto — DL-0005 + `30_KNOWN_ISSUES.md` KI-0004.
 
