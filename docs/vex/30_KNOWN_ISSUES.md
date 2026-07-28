@@ -797,6 +797,91 @@ Write this down BEFORE the flag ever flips — this is exactly the kind of misla
 
 ---
 
+Issue ID
+
+KI-0007
+
+Title
+
+`tsconfig.json` Found Corrupted in Working Tree Twice in 2 Days — No Confirmed Root Cause
+
+Category
+
+Tooling / Dev Environment
+
+Severity
+
+Medium
+
+Status
+
+Open — watching (no fix possible without a repro; documented per user request to avoid rediscovering from scratch a 3rd time)
+
+Environment
+
+Local dev only (Windows, path contains non-ASCII characters: `C:\Users\vitor\OneDrive\Área de Trabalho\VEX`). Never observed in CI or production — CI does a fresh `npm ci` checkout of the committed (correct) file every run.
+
+Date Discovered
+
+2026-07-28, during item 0.7 (`/privacidade` LGPD rewrite) — `npm run lint` crashed with a `tsc` internal `Debug Failure: Expected .../tsconfig.json === ...\tsconfig.json` (forward vs. backslash path-equality assertion inside TypeScript's own diagnostic-formatting code, itself a downstream symptom of the JSON already being invalid, not the cause of the corruption).
+
+Reported By
+
+User — flagged this was the **2nd occurrence in 2 days**: 2026-07-27, `"ignoreDeprecations": "6.0"` appeared malformed; 2026-07-28, `"baseUrl": "."` had been mangled to `: "."` (quoted key name sheared off, colon + value left intact).
+
+Owner
+
+Engineering
+
+Description
+
+Twice in two days, `tsconfig.json` was found modified in the working tree with a corrupted key: a complete, valid key-value pair had its quoted key name stripped, leaving a bare `: <value>` line — invalid JSON. Both times this broke `npm run lint` / `npm run typecheck` outright (JSON.parse-level failure surfaces through `tsc`'s config loader). Both incidents were **never committed** — `git log -p --follow -- tsconfig.json` shows exactly 2 commits total against this file (initial creation, and a legitimate `exclude: ["node_modules", "gstack"]` change from PR work on 2026-04-29), neither matching either corruption. Confirms: corruption is a pure working-tree artifact, not something that ever got staged/pushed.
+
+Investigation (what was ruled out)
+
+- **No repo-level formatter to blame**: no `.prettierrc`/prettier config, no `.editorconfig`, no `.vscode/settings.json` in the repo (checked — none exist).
+- **Husky hooks don't write files**: `.husky/pre-push` only runs `lint`/`typecheck`/`test`; no `pre-commit` hook exists; nothing in the hook chain edits `tsconfig.json`.
+- **Confirmed a real, proven auto-rewriter exists and runs on every `next lint`/`next dev`/`next build`**: `node_modules/next/dist/lib/typescript/writeConfigurationDefaults.js` parses and re-serializes `tsconfig.json` via `next/dist/compiled/comment-json` whenever it detects missing/incorrect Next.js-recommended compiler options, and **does write to disk** (`fs.promises.writeFile(tsConfigPath, ...)`) when it finds something to change. This is a legitimate, silent, automatic file-write path triggered by ordinary dev commands — proven to exist, but the specific keys it manages (`lib`, `allowJs`, `skipLibCheck`, `strict`, `noEmit`, `incremental`, `module`, `esModuleInterop`, `moduleResolution`, `resolveJsonModule`, `isolatedModules`, `jsx`, `plugins`, `include`, `exclude`) do **not** include `baseUrl` or `ignoreDeprecations` — so this exact function is not a direct match for either observed corruption, though it does establish that concurrent/automatic rewrites of this file are a normal, expected occurrence in this project, not a hypothetical.
+- **`ignoreDeprecations` is a real TypeScript 5.5+ compiler option** (confirmed present in `node_modules/typescript/lib/typescript.js` and `_tsc.js`) used specifically to silence deprecated-option warnings — this is exactly the kind of key VS Code's built-in TS language server offers to auto-insert via a lightbulb quick-fix when it flags a deprecated tsconfig option. Suspected but **not confirmed** — no direct evidence (editor history, extension logs) ties a specific quick-fix action to either incident.
+
+Root Cause
+
+**Not conclusively identified.** Leading hypothesis (circumstantial, not proven): a race between two independent writers of the same file — (a) Next.js's own automatic `tsconfig.json` rewriter (proven to exist and run on ordinary `lint`/`dev`/`build` invocations) and (b) an IDE-driven edit (e.g., VS Code TS-server quick-fix, or an agent/tool edit) computed against stale file offsets. If writer (a) rewrites the file between when writer (b) reads it and when writer (b) applies its edit, (b)'s insertion lands at the wrong position in the now-different file, shearing off part of an existing key — which matches the observed pattern (key name vanishes, colon+value survives) far better than a clean single-writer bug would. This is a plausible mechanism, not a confirmed diagnosis.
+
+Impact
+
+Breaks `npm run lint` and `npm run typecheck` locally (JSON parse failure), which also blocks the Husky `pre-push` hook. No impact on CI (fresh checkout) or production (build artifacts, not source, ship). Caught before any push both times.
+
+Workaround
+
+Manually restore the missing key (in both observed cases, restoring to the last-committed value made the working tree exactly match `HEAD` — i.e., the "fix" is just reverting an uncommitted, unintentional edit).
+
+Permanent Fix
+
+None planned — no reliable repro, so no targeted fix is possible yet. If it recurs a 3rd time: (1) capture the exact byte-level diff immediately (`git diff tsconfig.json`) before touching the file, (2) check whether `next dev` or `next lint`/`next build` was running at the same moment an IDE edit was made, (3) check VS Code's local history (`.history` or the built-in "Timeline" view) for the file to see the edit that introduced the corruption, since that would show the exact tool/action responsible.
+
+Validation Steps
+
+N/A — nothing to validate without a fix. Watch for a 3rd occurrence and capture more forensic detail per "Permanent Fix" above.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+None
+
+Notes
+
+Corrupted twice in 2 days, same shape both times (quoted key name sheared off a key-value pair), never committed either time. Treat any future `tsconfig.json`-related lint/typecheck crash as "check for this pattern first" before assuming a real regression — compare against `git diff HEAD -- tsconfig.json`; if it doesn't match `HEAD`, this is very likely a recurrence, not a code bug.
+
+---
+
 (Update continuously.)
 
 ---
