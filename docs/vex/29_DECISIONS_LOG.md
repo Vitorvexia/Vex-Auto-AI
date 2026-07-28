@@ -255,6 +255,72 @@ Active
 
 Date
 
+2026-07-28
+
+Decision ID
+
+DL-0006
+
+Title
+
+Política de Privacidade do Piloto Redigida como da Loja (Controladora), VEX Auto como Operador
+
+Category
+
+Business
+
+Context
+
+O item 0.7 do roadmap exige política de privacidade pública (`/privacidade`) porque o piloto processa dado pessoal real de clientes finais da loja (nome, telefone, conteúdo de conversa via WhatsApp). A obrigação de informar o titular nasce do tratamento do dado, não do contrato. O VEX Auto ainda não tem CNPJ próprio (SLU, item 0.6 — pendente), então não tem personalidade jurídica pra figurar como controlador nem assinar contrato de tratamento.
+
+Decision
+
+Publicar a política como sendo DA LOJA (Speed Motos / CMOV), identificada como controladora (LGPD), com o VEX Auto mencionado como operador que trata dados em nome da loja. Página em `/privacidade`, contato do titular e retenção (24 meses) parametrizados.
+
+Reasoning
+
+Na LGPD, quem decide as finalidades do tratamento é controlador; quem trata em nome de outro é operador. No piloto, a loja decide (WABA, CNPJ e decisão comercial são dela) — ela é controladora de fato. Publicar como se o VEX Auto fosse controlador seria factualmente errado e assumiria responsabilidade sem estrutura jurídica pra suportá-la. Ter a política da loja resolve a obrigação imediata sem depender da abertura da SLU.
+
+Alternatives Considered
+
+(a) Abrir CNPJ do VEX Auto agora só pra viabilizar a política — rejeitado: decisão estrutural cara puxada por documento que se resolve de outro jeito; abertura da SLU tem gatilhos próprios (cliente pagante, 2º cliente, pagamento, RENAVE), não a política. (b) Publicar a política como do VEX Auto (controlador) — rejeitado: factualmente incorreto e assume responsabilidade indevida.
+
+Expected Impact
+
+Obrigação de transparência com o titular cumprida no piloto sem bloquear em dependência de CNPJ. Página serve de base reutilizável — quando a SLU existir, cria-se a política própria do VEX Auto (papel de operador + relação B2B) e a da loja passa a referenciá-la.
+
+Potential Risks
+
+O texto NÃO é parecer jurídico — é base defensável pra piloto com 1 loja, redigida por CTO+IA, não por advogado. Antes de onboardar cliente pagante, precisa de revisão jurídica profissional (mesmo padrão de dívida consciente do DL-0003). Aviso de IA na primeira mensagem do WhatsApp é obrigação SEPARADA desta página e ainda não foi implementado (parte 2 do item 0.7).
+
+Owner
+
+Founder (decisão) / CTO+Engineering (implementação)
+
+Related ADR
+
+None
+
+Related Issue
+
+Item 0.7 do `53_ROADMAP.md`; item 0.6 (SLU) como dependência da política própria futura do VEX Auto
+
+Related Runbook
+
+None
+
+Review Date
+
+Antes de onboardar o 1º cliente pagante — revisão jurídica profissional obrigatória nesse ponto
+
+Status
+
+Active
+
+---
+
+Date
+
 2026-07-24 (commit date). Log entry written retroactively on 2026-07-24 during a later session — not recorded at merge time. This entry itself is the fix for that gap.
 
 Decision ID
