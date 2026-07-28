@@ -259,6 +259,76 @@ Date
 
 Decision ID
 
+DL-0007
+
+Title
+
+Fechar Decisão de Posicionamento (B+) com Base em Inteligência Competitiva — AEG Media/Venda.IA
+
+Category
+
+Business
+
+Context
+
+Reunião de descoberta com AEG Media (28/07/2026) + análise da página pública de serviços da Venda.IA (crm.vendaia.app.br). A AEG é uma AGÊNCIA DE GROWTH/AQUISIÇÃO full-service, não uma plataforma de software: seus seis serviços são tráfego pago (Google/Meta), landing pages, IMPLEMENTAÇÃO de CRMs de terceiros (não CRM proprietário — o próprio site diz "implementamos e integramos diferentes CRMs"), social media, chatbot de atendimento e consultoria comercial. O vocabulário do site é de "associação/associados/adesão", sugerindo foco em segmento adjacente (proteção veicular/consórcio) além de revenda pura. Escala alegada: +700 lojas (500+ empresas na página), 9+ anos, presença no maior evento automotivo da América Latina, parceria de financiamento com C6 Bank. Vendem a IA de atendimento também avulsa (preço NÃO confirmado — estimativa não verificada de ~R$800/mês). FONTE: reunião com o próprio concorrente + página pública de serviços; a profundidade real do chatbot e do CRM deles NÃO foi testada de forma independente.
+
+Decision
+
+Fechar a decisão de posicionamento (seção "Posicionamento — decisão ainda em aberto" do `53_ROADMAP.md`) como B+: camada de inteligência operacional que o lojista OPERA, plugada no sistema de gestão existente, mais RENAVE e site da loja — sem terceirizar o funil de marketing nem competir por distribuição de mídia paga.
+
+Reasoning
+
+A AEG ocupa o espaço "terceirize sua máquina de aquisição" (mídia + landing + social + consultoria + chatbot), operado COMO SERVIÇO por eles; o CRM que oferecem é implementação de ferramenta de terceiro, não produto proprietário. Isso é estruturalmente distinto do VEX (B+): software operacional que o LOJISTA opera, com IA integrada ao estoque e ao dossiê do lead, CRM próprio, RENAVE e site da loja. A diferenciação do VEX NÃO se apoia na IA de atendimento isolada (que a AEG também tem e vende avulsa), mas no conjunto operacional integrado — sobretudo RENAVE (obrigatório por lei, janela de mercado) e site próprio da loja, que a AEG comprovadamente não entrega. Competir no espaço da AEG exigiria orçamento de mídia e operação de agência que não existem hoje e não são o negócio pretendido.
+
+Alternatives Considered
+
+Manter decisão em aberto; migrar para posicionamento (A), cobrindo a mesa mínima completa e competindo com Revenda Mais/Autoconf.
+
+Expected Impact
+
+Roadmap Fase 1-3 mantém-se válido sem alteração de escopo; decisão documentada evita retrabalho de análise. Reforça a prioridade estratégica de RENAVE e do site da loja como peças de DIFERENCIAÇÃO (não apenas requisito), por serem o que a AEG não cobre.
+
+Potential Risks
+
+Risco de GTM (não de produto): distribuição/mindshare da AEG (700+ lojas, evento LatAm, parceria C6) não é mitigado por esta decisão. Monitorar separadamente (ver `27_PROJECT_STATUS.md`).
+
+A AEG já vende a IA de atendimento avulsa — a fronteira "eles no marketing, VEX no operacional" é menos limpa do que a reunião sugeriu na parte de IA. Mitigação: diferenciação ancorada em RENAVE + site + operacional integrado, não na IA isolada.
+
+Fonte parcialmente enviesada: caracterização vem do próprio concorrente (reunião + página de vendas). A profundidade real do CRM/chatbot deles não foi verificada de forma independente.
+
+Owner
+
+Founder
+
+Related ADR
+
+None
+
+Related Issue
+
+Seção "Posicionamento" do `53_ROADMAP.md`
+
+Related Runbook
+
+None
+
+Review Date
+
+Revisar se surgir inteligência competitiva INDEPENDENTE (não vinda da própria AEG) sobre a profundidade operacional/CRM deles, OU se a AEG anunciar/expandir a venda da IA avulsa como produto de software autônomo. NÃO tratar como decisão imutável — é a melhor leitura com os dados de 28/07.
+
+Status
+
+Active
+
+---
+
+Date
+
+2026-07-28
+
+Decision ID
+
 DL-0006
 
 Title

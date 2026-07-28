@@ -343,6 +343,8 @@ Update this section continuously — do not let it silently rot like it did befo
 
 # CURRENT KNOWN RISKS
 
+Risco de mercado: concorrente com distribuição em escala (AEG Media/Venda.IA — 700+ lojas alegadas, presença no maior evento automotivo da América Latina, parceria de financiamento com C6 Bank) pode comprimir a janela de diferenciação técnica, sobretudo porque já vende a IA de atendimento avulsa. Mitigação estratégica: diferenciação do VEX ancorada em RENAVE + site + operacional integrado (ver `DL-0007`). Monitorar; não altera prioridade de Fase 0. Ver `29_DECISIONS_LOG.md` e `53_ROADMAP.md` (Concorrentes mapeados).
+
 LLM timeout under heavy load.
 
 Cron execution time.

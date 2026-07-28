@@ -166,17 +166,21 @@ Origem: o commit `147f1ef` (coleta de financiamento/troca) furou a prioridade se
 
 ---
 
-## Posicionamento — decisão ainda em aberto
+## Posicionamento — decisão fechada (B+)
 
-O VEX Auto não cobre a mesa mínima do mercado (portais, NF-e, FIPE, RENAVE com API, financeiro, contratos, vistoria, app). Duas estratégias possíveis, e elas mudam o valor de metade deste roadmap:
+**Fechado em 28/07/2026** — ver `DL-0007` em `29_DECISIONS_LOG.md`, motivado por inteligência competitiva da reunião AEG Media/Venda.IA + análise da página pública de serviços deles. Este roadmap opera como **(B+)**: camada de inteligência operacional que o lojista opera plugada no sistema de gestão que ele já tem, mais RENAVE (janela de mercado) e site da loja — sem terceirizar o funil de marketing nem competir por distribuição de mídia paga, sem virar ERP.
 
-**(A) Cobrir a mesa mínima** e competir de frente com Revenda Mais (+5.000 lojas) e Autoconf, sendo "igual a eles com IA melhor". Caro, demorado, e entra num jogo onde eles têm anos de vantagem.
+Contexto histórico da decisão — o VEX Auto não cobre a mesa mínima do mercado (portais, NF-e, FIPE, RENAVE com API, financeiro, contratos, vistoria, app). Duas estratégias estavam em aberto, e elas mudavam o valor de metade deste roadmap:
 
-**(B) Camada de inteligência comercial** que pluga em cima do sistema de gestão que o dealer já tem. Ele mantém o Revenda Mais para RENAVE/NF-e/portais e usa o VEX para o que ele faz melhor: IA no WhatsApp, qualificação, follow-up, reativação de base morta. Ticket menor, venda muito mais rápida — não exige troca de sistema, que é a maior barreira de adoção em B2B.
+**(A) Cobrir a mesa mínima** e competir de frente com Revenda Mais (+5.000 lojas) e Autoconf, sendo "igual a eles com IA melhor". Caro, demorado, e entra num jogo onde eles têm anos de vantagem. **Rejeitado.**
 
-Este roadmap está desenhado como **(B+)**: camada de inteligência, mais RENAVE (janela de mercado) e site (requisito mínimo), sem virar ERP.
+**(B) Camada de inteligência comercial** que pluga em cima do sistema de gestão que o dealer já tem. Ele mantém o Revenda Mais para RENAVE/NF-e/portais e usa o VEX para o que ele faz melhor: IA no WhatsApp, qualificação, follow-up, reativação de base morta. Ticket menor, venda muito mais rápida — não exige troca de sistema, que é a maior barreira de adoção em B2B. **Escolhido, como (B+).**
 
-A mesma feature é obrigatória em (A) e desperdício em (B). Vale fechar essa decisão antes da Fase 2.
+Razão da escolha: a AEG Media é agência de growth/aquisição full-service (tráfego pago, landing pages, implementação de CRM de terceiros, social media, chatbot, consultoria comercial) — opera COMO SERVIÇO, não entrega software que o lojista opera. O CRM que oferecem é implementação de ferramenta de terceiro, não produto proprietário. **RENAVE e site próprio da loja são DIFERENCIAÇÃO contra a AEG, não só requisito de mercado** — a AEG comprovadamente não entrega nenhum dos dois. A diferenciação do VEX não se apoia na IA de atendimento isolada (a AEG também vende, avulsa) — se apoia no conjunto operacional integrado. Risco de GTM/distribuição da AEG não é mitigado por essa decisão — ver `27_PROJECT_STATUS.md`, CURRENT KNOWN RISKS.
+
+A mesma feature era obrigatória em (A) e desperdício em (B) — decisão fechada elimina essa ambiguidade daqui pra frente.
+
+**Gatilho de revisão** (mesmo do `DL-0007`): revisar se surgir inteligência competitiva independente (não vinda da própria AEG) sobre a profundidade operacional/CRM deles, ou se a AEG anunciar/expandir a venda da IA avulsa como produto de software autônomo. Não é decisão imutável — é a melhor leitura com os dados de 28/07.
 
 ---
 
@@ -191,6 +195,7 @@ A mesma feature é obrigatória em (A) e desperdício em (B). Vale fechar essa d
 | **Boom Sistemas** | Foco em financiamento, assinatura digital, CRM com WhatsApp. |
 | **ecosys AUTO** | Produz conteúdo educando o mercado sobre critérios de escolha. |
 | **DealerSpace / DealerAI, CarChat, G30 IA** | Mapeados anteriormente, sem análise de feature nesta rodada. |
+| **AEG Media / Venda.IA** | Agência de growth/aquisição full-service (+700 lojas alegadas, 9+ anos), NÃO plataforma de software. Serviços: tráfego pago, landing pages, implementação de CRM de terceiros, social media, chatbot, consultoria comercial. IA de atendimento vendida também avulsa (~R$800/mês, estimado não confirmado). Parceria de financiamento C6 Bank. Sem RENAVE, sem site próprio da loja, sem estoque integrado. Foco parcial em associações/adesão. Onboarding manual (~15 dias). |
 
 **Padrão mínimo declarado pelo mercado em 2026:** IA deixou de ser diferencial e virou critério de seleção — descrição automática de veículo, respostas inteligentes no WhatsApp, sugestão de precificação. Somado a: estoque, CRM, portais, NF-e, site próprio, FIPE, RENAVE e controle de acesso por perfil.
 

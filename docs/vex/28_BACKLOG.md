@@ -447,7 +447,7 @@ None yet
 
 Target Version
 
-Fase 4 (Escala)
+Fase 2 (alinhado com `53_ROADMAP.md`, item 2.10 — roadmap é fonte de verdade de fase, DL-0002)
 
 Success Metrics
 
@@ -455,7 +455,7 @@ Não definido ainda — depende de decisão sobre onde/como a foto é exibida pr
 
 Notes
 
-Ver `docs/superpowers/specs/2026-07-24-financiamento-troca-collection-design.md`, seção "Explicitly Out of Scope".
+Ver `docs/superpowers/specs/2026-07-24-financiamento-troca-collection-design.md`, seção "Explicitly Out of Scope". Validado externamente 28/07/2026 — concorrente (AEG/Venda.IA) já oferece chatbot de atendimento, confirma que recebimento/processamento multimídia é expectativa de mercado. Não altera prioridade de fase — Fase 0/1 seguem sem alteração.
 
 ---
 
@@ -513,7 +513,7 @@ None yet
 
 Target Version
 
-Fase 4 (Escala)
+Fase 2 (alinhado com `53_ROADMAP.md`, item 2.9 — roadmap é fonte de verdade de fase, DL-0002)
 
 Success Metrics
 
@@ -521,7 +521,7 @@ Taxa de transcrição bem-sucedida na primeira tentativa; não definido formalme
 
 Notes
 
-Requisito explícito do dono do produto durante o brainstorm de 2026-07-24 ("quero que a IA identifique o áudio"), decomposto pra spec futura junto com BL-0003 por ser infraestrutura nova e não ter overlap com a coleta em texto.
+Requisito explícito do dono do produto durante o brainstorm de 2026-07-24 ("quero que a IA identifique o áudio"), decomposto pra spec futura junto com BL-0003 por ser infraestrutura nova e não ter overlap com a coleta em texto. Validado externamente 28/07/2026 — concorrente (AEG/Venda.IA) já oferece chatbot de atendimento, confirma que recebimento/processamento multimídia é expectativa de mercado. Não altera prioridade de fase — Fase 0/1 seguem sem alteração.
 
 ---
 
