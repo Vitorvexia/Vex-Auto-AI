@@ -11,6 +11,7 @@ import {
   assignConversationToHuman,
   returnConversationToAI,
   updateLeadStatus,
+  sendManualReply,
 } from "@/lib/actions";
 import { LEAD_TRANSITIONS } from "@/lib/status";
 
@@ -242,6 +243,22 @@ export default async function ConversationPage({
           created_at: m.created_at,
         }))}
       />
+
+      {conv.handoff_to === "HUMANO" ? (
+        <form action={sendManualReply.bind(null, conv.id)} className="reply-form">
+          <textarea
+            name="mensagem"
+            placeholder="Responder ao lead pelo WhatsApp…"
+            required
+            rows={3}
+          />
+          <button type="submit">Enviar</button>
+        </form>
+      ) : (
+        <div className="reply-form-disabled">
+          Assuma a conversa antes de responder pelo WhatsApp.
+        </div>
+      )}
         </div>{/* conv-main */}
       </div>{/* conv-layout */}
     </main>

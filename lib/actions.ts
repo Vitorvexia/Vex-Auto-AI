@@ -8,8 +8,10 @@ import {
 } from "@/lib/status";
 import type { LeadStatus } from "@/types/domain";
 import { ingestLeadManually, type IngestLeadResult } from "@/lib/lead-ingestion";
-import { getServerStoreId } from "@/lib/auth";
+import { getServerStoreId, getServerUserId } from "@/lib/auth";
 import { markReactivationConverted } from "@/lib/reactivation";
+import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
+import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 
 const VALID_LEAD_STATUSES = new Set<string>([
   "NOVO",
@@ -72,6 +74,81 @@ export async function returnConversationToAI(
     autor: "sistema",
     mensagem: "Conversa retornada para IA",
   });
+  revalidatePath(`/conversations/${conversationId}`);
+}
+
+export async function sendManualReply(
+  conversationId: string,
+  formData: FormData
+): Promise<void> {
+  const [storeId, userId] = await Promise.all([
+    getServerStoreId(),
+    getServerUserId(),
+  ]);
+
+  const { data: conv } = await supabaseAdmin
+    .from("conversations")
+    .select("id, lead_id, handoff_to, conversation_status")
+    .eq("id", conversationId)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  if (!conv) throw new Error("Conversa não encontrada");
+
+  // Guard de estado: só permite resposta manual com a conversa em handoff —
+  // evita colisão com a IA respondendo ao mesmo tempo (runGuardrails só
+  // bloqueia a IA nesse mesmo estado, ver lib/guardrails.ts).
+  const inHandoff =
+    conv.handoff_to === "HUMANO" || conv.conversation_status === "AGUARDANDO_HUMANO";
+  if (!inHandoff) {
+    throw new Error("Assuma a conversa antes de responder.");
+  }
+
+  const mensagem = ((formData.get("mensagem") as string | null) ?? "").trim();
+  if (!mensagem) {
+    throw new Error("Digite uma mensagem antes de enviar.");
+  }
+
+  const { data: lead } = await supabaseAdmin
+    .from("leads")
+    .select("phone_normalized")
+    .eq("id", conv.lead_id)
+    .maybeSingle();
+  if (!lead?.phone_normalized) throw new Error("Telefone do lead não encontrado.");
+
+  // Insert com sent:false primeiro — mesmo padrão do aviso de IA (item 0.7
+  // parte 2): rastro reflete a realidade do envio, não assume sucesso.
+  const { data: saved } = await supabaseAdmin
+    .from("messages")
+    .insert({
+      store_id: storeId,
+      conversation_id: conversationId,
+      lead_id: conv.lead_id,
+      direcao: "saida",
+      autor: "humano",
+      mensagem,
+      sent_by: userId,
+      meta: { sent: false },
+    })
+    .select("id")
+    .single();
+
+  const messageId = saved?.id ?? null;
+
+  try {
+    const phoneId = await getStoreWhatsAppPhoneId(storeId);
+    await sendWhatsAppMessage(lead.phone_normalized, mensagem, phoneId);
+    if (messageId) {
+      await supabaseAdmin
+        .from("messages")
+        .update({ meta: { sent: true } })
+        .eq("id", messageId);
+    }
+  } catch (e) {
+    // Não-fatal: mensagem já persistida com sent:false, refletindo que o
+    // envio não foi confirmado — vendedor vê no inbox, não é perdida
+    console.error("[manual-reply] falha ao enviar mensagem manual:", e);
+  }
+
   revalidatePath(`/conversations/${conversationId}`);
 }
 

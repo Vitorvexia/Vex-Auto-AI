@@ -26,3 +26,10 @@ export async function getServerStoreId(): Promise<string> {
   if (!data?.store_id) throw new StoreNotFoundError(user.id);
   return data.store_id as string;
 }
+
+export async function getServerUserId(): Promise<string> {
+  const supabase = await createSupabaseServerClient();
+  const { data: { user }, error } = await supabase.auth.getUser();
+  if (error || !user) throw new AuthError();
+  return user.id;
+}

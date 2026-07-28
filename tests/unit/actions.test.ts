@@ -4,15 +4,27 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — variáveis para factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockTransitionConv, mockTransitionLead, mockRevalidate, mockGetServerStoreId, mockMarkReactivationConverted } =
-  vi.hoisted(() => ({
-    mockFrom: vi.fn(),
-    mockTransitionConv: vi.fn(),
-    mockTransitionLead: vi.fn(),
-    mockRevalidate: vi.fn(),
-    mockGetServerStoreId: vi.fn(),
-    mockMarkReactivationConverted: vi.fn(),
-  }));
+const {
+  mockFrom,
+  mockTransitionConv,
+  mockTransitionLead,
+  mockRevalidate,
+  mockGetServerStoreId,
+  mockGetServerUserId,
+  mockMarkReactivationConverted,
+  mockSendWhatsAppMessage,
+  mockGetStoreWhatsAppPhoneId,
+} = vi.hoisted(() => ({
+  mockFrom: vi.fn(),
+  mockTransitionConv: vi.fn(),
+  mockTransitionLead: vi.fn(),
+  mockRevalidate: vi.fn(),
+  mockGetServerStoreId: vi.fn(),
+  mockGetServerUserId: vi.fn(),
+  mockMarkReactivationConverted: vi.fn(),
+  mockSendWhatsAppMessage: vi.fn(),
+  mockGetStoreWhatsAppPhoneId: vi.fn(),
+}));
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -24,6 +36,15 @@ vi.mock("@/lib/supabase", () => ({
 
 vi.mock("@/lib/auth", () => ({
   getServerStoreId: mockGetServerStoreId,
+  getServerUserId: mockGetServerUserId,
+}));
+
+vi.mock("@/lib/whatsapp-send", () => ({
+  sendWhatsAppMessage: mockSendWhatsAppMessage,
+}));
+
+vi.mock("@/lib/whatsapp-credentials", () => ({
+  getStoreWhatsAppPhoneId: mockGetStoreWhatsAppPhoneId,
 }));
 
 vi.mock("@/lib/status", () => ({
@@ -64,6 +85,7 @@ import {
   returnConversationToAI,
   updateLeadStatus,
   moveLeadStatus,
+  sendManualReply,
 } from "@/lib/actions";
 
 // ---------------------------------------------------------------------------
@@ -95,7 +117,10 @@ beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   mockGetServerStoreId.mockResolvedValue("store-test");
+  mockGetServerUserId.mockResolvedValue("user-1");
   mockMarkReactivationConverted.mockResolvedValue(undefined);
+  mockSendWhatsAppMessage.mockResolvedValue(undefined);
+  mockGetStoreWhatsAppPhoneId.mockResolvedValue("phone-id-1");
 
   // Default: ownership checks pass. Tests that need specific insert chains call chainInsert().
   const defaultChain = {
@@ -366,6 +391,148 @@ describe("updateLeadStatus — guardrail de margem no fechamento", () => {
     ).rejects.toThrow("Veículo não encontrado");
 
     expect(mockTransitionLead).not.toHaveBeenCalled();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sendManualReply — item 0.9 (resposta manual do vendedor)
+// ---------------------------------------------------------------------------
+
+function makeReplyFormData(mensagem: string): FormData {
+  const fd = new FormData();
+  fd.append("mensagem", mensagem);
+  return fd;
+}
+
+function setupManualReplyMocks(opts: {
+  conv?: { lead_id: string; handoff_to: string; conversation_status: string } | null;
+  lead?: { phone_normalized: string } | null;
+  savedMessageId?: string | null;
+}) {
+  const conversationsChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: opts.conv ?? null, error: null }),
+  };
+  const leadsChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({ data: opts.lead ?? null, error: null }),
+  };
+  const messagesInsertMock = vi.fn().mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({
+        data: opts.savedMessageId !== undefined ? (opts.savedMessageId ? { id: opts.savedMessageId } : null) : { id: "msg-1" },
+        error: null,
+      }),
+    }),
+  });
+  const messagesUpdateMock = vi.fn().mockReturnValue({
+    eq: vi.fn().mockResolvedValue({ data: null, error: null }),
+  });
+  const messagesChain = { insert: messagesInsertMock, update: messagesUpdateMock };
+
+  mockFrom.mockImplementation((table: string) => {
+    if (table === "conversations") return conversationsChain;
+    if (table === "leads") return leadsChain;
+    if (table === "messages") return messagesChain;
+    throw new Error(`tabela inesperada em sendManualReply: ${table}`);
+  });
+
+  return { messagesInsertMock, messagesUpdateMock };
+}
+
+describe("sendManualReply", () => {
+  const HANDOFF_CONV = { lead_id: "lead-1", handoff_to: "HUMANO", conversation_status: "AGUARDANDO_HUMANO" };
+  const LEAD = { phone_normalized: "+5511999990000" };
+
+  it("insere com autor:humano, direcao:saida, sent_by preenchido, meta.sent false→true após envio ok", async () => {
+    const { messagesInsertMock, messagesUpdateMock } = setupManualReplyMocks({
+      conv: HANDOFF_CONV,
+      lead: LEAD,
+      savedMessageId: "msg-42",
+    });
+
+    await sendManualReply("conv-1", makeReplyFormData("Oi, tudo bem?"));
+
+    expect(messagesInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        autor: "humano",
+        direcao: "saida",
+        mensagem: "Oi, tudo bem?",
+        sent_by: "user-1",
+        meta: { sent: false },
+      })
+    );
+    expect(mockSendWhatsAppMessage).toHaveBeenCalledWith(
+      LEAD.phone_normalized,
+      "Oi, tudo bem?",
+      "phone-id-1"
+    );
+    expect(messagesUpdateMock).toHaveBeenCalledWith({ meta: { sent: true } });
+  });
+
+  it("envio falha: meta.sent permanece false, não derruba a action, mensagem já registrada", async () => {
+    const { messagesInsertMock, messagesUpdateMock } = setupManualReplyMocks({
+      conv: HANDOFF_CONV,
+      lead: LEAD,
+      savedMessageId: "msg-42",
+    });
+    mockSendWhatsAppMessage.mockRejectedValueOnce(new Error("timeout"));
+
+    await expect(sendManualReply("conv-1", makeReplyFormData("Oi"))).resolves.toBeUndefined();
+
+    expect(messagesInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ meta: { sent: false } })
+    );
+    expect(messagesUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("guard: handoff_to != HUMANO e status != AGUARDANDO_HUMANO → rejeita, não insere, não envia", async () => {
+    const { messagesInsertMock } = setupManualReplyMocks({
+      conv: { lead_id: "lead-1", handoff_to: "IA", conversation_status: "ATIVA" },
+      lead: LEAD,
+    });
+
+    await expect(
+      sendManualReply("conv-1", makeReplyFormData("Oi"))
+    ).rejects.toThrow("Assuma a conversa antes de responder");
+
+    expect(messagesInsertMock).not.toHaveBeenCalled();
+    expect(mockSendWhatsAppMessage).not.toHaveBeenCalled();
+  });
+
+  it("sent_by referencia o usuário logado correto", async () => {
+    mockGetServerUserId.mockResolvedValueOnce("user-vendedor-b");
+    const { messagesInsertMock } = setupManualReplyMocks({
+      conv: HANDOFF_CONV,
+      lead: LEAD,
+      savedMessageId: "msg-42",
+    });
+
+    await sendManualReply("conv-1", makeReplyFormData("Oi"));
+
+    expect(messagesInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ sent_by: "user-vendedor-b" })
+    );
+  });
+
+  it("conversa não encontrada (cross-store) → erro, não insere", async () => {
+    const { messagesInsertMock } = setupManualReplyMocks({ conv: null });
+
+    await expect(
+      sendManualReply("conv-outra-loja", makeReplyFormData("Oi"))
+    ).rejects.toThrow("Conversa não encontrada");
+    expect(messagesInsertMock).not.toHaveBeenCalled();
+  });
+
+  it("mensagem vazia → rejeita antes de qualquer insert", async () => {
+    const { messagesInsertMock } = setupManualReplyMocks({ conv: HANDOFF_CONV, lead: LEAD });
+
+    await expect(
+      sendManualReply("conv-1", makeReplyFormData("   "))
+    ).rejects.toThrow("Digite uma mensagem");
+    expect(messagesInsertMock).not.toHaveBeenCalled();
   });
 });
 
