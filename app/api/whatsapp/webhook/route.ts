@@ -212,6 +212,7 @@ export async function POST(req: NextRequest) {
               leadId: r.lead_id,
               conversationId: r.conversation_id,
               incomingText: text,
+              isNewConversation: r.is_new_conversation,
             });
             result.agent_status = agent_status;
             if (agentError) result.error = agentError;

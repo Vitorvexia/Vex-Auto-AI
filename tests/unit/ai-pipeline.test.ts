@@ -123,6 +123,7 @@ const BASE_PARAMS = {
   leadId: "lead-1",
   conversationId: "conv-1",
   incomingText: "Olá, quero um carro",
+  isNewConversation: false,
 };
 
 const BASE_CTX = {
@@ -694,5 +695,208 @@ describe("runAiPipeline — coleta de financiamento/troca", () => {
     const result = await runAiPipeline(BASE_PARAMS);
 
     expect(result.agent_status).toBe("ok");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Item 0.7 parte 2 — Aviso de IA na primeira mensagem (transparência LGPD)
+// ---------------------------------------------------------------------------
+
+// Mock de "messages" com comportamentos configuráveis:
+// - a checagem de idempotência (select().eq().eq().eq().limit().maybeSingle(),
+//   filtro real é meta->>kind="ai_disclosure") resolve `existingDisclosure`
+//   (null por padrão → nenhum aviso prévio)
+// - o insert (aviso "sistema" com .select("id").single(), e reply "ia" também
+//   com .select("id").single()) é capturado por `insertMock`
+// - o update (meta.sent: false → true após envio confirmado) é capturado por
+//   `updateMock`, default resolve com sucesso
+function mockMessagesTable(
+  existingDisclosure: { id: string } | null,
+  opts?: { insertMock?: any; updateMock?: any }
+) {
+  const selectChain: any = {};
+  selectChain.eq = vi.fn().mockReturnValue(selectChain);
+  selectChain.limit = vi.fn().mockReturnValue(selectChain);
+  selectChain.maybeSingle = vi.fn().mockResolvedValue({ data: existingDisclosure, error: null });
+
+  const c: any = {};
+  c.select = vi.fn().mockReturnValue(selectChain);
+  c.insert = opts?.insertMock ?? defaultMessagesInsertMock();
+  c.update =
+    opts?.updateMock ??
+    vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) });
+  return c;
+}
+
+function defaultMessagesInsertMock() {
+  return vi.fn().mockReturnValue({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: { id: "msg-id" }, error: null }),
+    }),
+  });
+}
+
+describe("runAiPipeline — aviso de IA (item 0.7 parte 2)", () => {
+  it("is_new_conversation=true: insere aviso de sistema ANTES da resposta da IA e envia ambos nessa ordem", async () => {
+    const messagesInsertMock = defaultMessagesInsertMock();
+    const messagesUpdateEqMock = vi.fn().mockResolvedValue({ data: null, error: null });
+    const messagesUpdateMock = vi.fn().mockReturnValue({ eq: messagesUpdateEqMock });
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) =>
+      table === "messages"
+        ? mockMessagesTable(null, { insertMock: messagesInsertMock, updateMock: messagesUpdateMock })
+        : defaultSupabaseChain()
+    );
+
+    await runAiPipeline({ ...BASE_PARAMS, isNewConversation: true });
+
+    expect(messagesInsertMock).toHaveBeenCalledTimes(2);
+    const [disclosureArgs] = messagesInsertMock.mock.calls[0];
+    const [replyArgs] = messagesInsertMock.mock.calls[1];
+    expect(disclosureArgs.autor).toBe("sistema");
+    expect(disclosureArgs.direcao).toBe("saida");
+    expect(disclosureArgs.mensagem).toContain("assistente virtual");
+    expect(disclosureArgs.mensagem).toContain(BASE_CTX.store_name);
+    expect(disclosureArgs.meta).toEqual({ kind: "ai_disclosure", sent: false });
+    expect(replyArgs.autor).toBe("ia");
+    expect(replyArgs.mensagem).toBe(BASE_RESULT.reply_text);
+
+    expect(sendWhatsAppMessage).toHaveBeenCalledTimes(2);
+    expect(sendWhatsAppMessage).toHaveBeenNthCalledWith(
+      1,
+      BASE_CTX.lead.phone_normalized,
+      expect.stringContaining("assistente virtual"),
+      "test-phone-id"
+    );
+    expect(sendWhatsAppMessage).toHaveBeenNthCalledWith(
+      2,
+      BASE_CTX.lead.phone_normalized,
+      BASE_RESULT.reply_text,
+      "test-phone-id"
+    );
+
+    // Envio confirmado → meta atualizado pra sent=true (rastro reflete a realidade)
+    expect(messagesUpdateMock).toHaveBeenCalledTimes(1);
+    expect(messagesUpdateMock).toHaveBeenCalledWith({ meta: { kind: "ai_disclosure", sent: true } });
+    expect(messagesUpdateEqMock).toHaveBeenCalledWith("id", "msg-id");
+  });
+
+  it("falha no envio do aviso: meta permanece sent=false, sem update pra true (rastro não mente)", async () => {
+    const messagesInsertMock = defaultMessagesInsertMock();
+    const messagesUpdateMock = vi.fn().mockReturnValue({ eq: vi.fn().mockResolvedValue({ data: null, error: null }) });
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) =>
+      table === "messages"
+        ? mockMessagesTable(null, { insertMock: messagesInsertMock, updateMock: messagesUpdateMock })
+        : defaultSupabaseChain()
+    );
+    // sendWhatsAppMessage rejeita só na 1ª chamada (envio do aviso) — reply segue normal depois
+    vi.mocked(sendWhatsAppMessage).mockRejectedValueOnce(new Error("timeout"));
+
+    const result = await runAiPipeline({ ...BASE_PARAMS, isNewConversation: true });
+
+    expect(result.agent_status).toBe("ok"); // falha no aviso é não-fatal pro pipeline
+    const [disclosureArgs] = messagesInsertMock.mock.calls[0];
+    expect(disclosureArgs.meta).toEqual({ kind: "ai_disclosure", sent: false });
+    expect(messagesUpdateMock).not.toHaveBeenCalled(); // envio falhou → nunca vira sent=true
+  });
+
+  it("is_new_conversation=false: nenhum aviso é inserido nem enviado", async () => {
+    const messagesInsertMock = defaultMessagesInsertMock();
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) =>
+      table === "messages" ? mockMessagesTable(null, { insertMock: messagesInsertMock }) : defaultSupabaseChain()
+    );
+
+    await runAiPipeline({ ...BASE_PARAMS, isNewConversation: false });
+
+    expect(messagesInsertMock).toHaveBeenCalledTimes(1);
+    expect(messagesInsertMock.mock.calls[0][0].autor).toBe("ia");
+    expect(sendWhatsAppMessage).toHaveBeenCalledTimes(1);
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith(
+      BASE_CTX.lead.phone_normalized,
+      BASE_RESULT.reply_text,
+      "test-phone-id"
+    );
+  });
+
+  it("reabertura de conversa (lead com histórico, conversa nova): gatilho é is_new_conversation, não is_new_lead", async () => {
+    // Lead com contexto/score de long-timer — não é "novo", mas a conversa é.
+    vi.mocked(buildAgentContext).mockResolvedValue({
+      ...BASE_CTX,
+      lead: { ...BASE_CTX.lead, score: 65, contexto: { veiculo_interesse: "Titan 160" } },
+      conversation: { ...BASE_CTX.conversation, summary: "Cliente antigo, sumiu por 40 dias." },
+    } as any);
+
+    const messagesInsertMock = defaultMessagesInsertMock();
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) =>
+      table === "messages" ? mockMessagesTable(null, { insertMock: messagesInsertMock }) : defaultSupabaseChain()
+    );
+
+    await runAiPipeline({ ...BASE_PARAMS, isNewConversation: true });
+
+    expect(messagesInsertMock).toHaveBeenCalledTimes(2);
+    expect(messagesInsertMock.mock.calls[0][0].autor).toBe("sistema");
+  });
+
+  it("idempotência: se já existir aviso salvo nesta conversa, não duplica nem reenvia", async () => {
+    const messagesInsertMock = defaultMessagesInsertMock();
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) =>
+      table === "messages"
+        ? mockMessagesTable({ id: "existing-disclosure" }, { insertMock: messagesInsertMock })
+        : defaultSupabaseChain()
+    );
+
+    await runAiPipeline({ ...BASE_PARAMS, isNewConversation: true });
+
+    // Só o insert do reply da IA — aviso já existia, não foi reinserido
+    expect(messagesInsertMock).toHaveBeenCalledTimes(1);
+    expect(messagesInsertMock.mock.calls[0][0].autor).toBe("ia");
+    expect(sendWhatsAppMessage).toHaveBeenCalledTimes(1);
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith(
+      BASE_CTX.lead.phone_normalized,
+      BASE_RESULT.reply_text,
+      "test-phone-id"
+    );
+  });
+
+  it("human_handoff com is_new_conversation=true: early return antes do bloco de aviso — nada é enviado", async () => {
+    vi.mocked(runGuardrails).mockReturnValue({
+      mode: "human_handoff",
+      reason: "conversa sob controle humano",
+    } as any);
+
+    const result = await runAiPipeline({ ...BASE_PARAMS, isNewConversation: true });
+
+    expect(result.agent_status).toBe("skipped_handoff");
+    expect(sendWhatsAppMessage).not.toHaveBeenCalled();
+  });
+
+  it("aviso não interfere na coleta de financiamento/troca nem no reply_text da IA", async () => {
+    vi.mocked(runGuardrails).mockReturnValue({
+      mode: "normal",
+      reason: "normal",
+      collection: { ask: ["financiamento"], collect: [], missingTrocaFields: [] },
+    } as any);
+
+    const messagesInsertMock = defaultMessagesInsertMock();
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "messages") return mockMessagesTable(null, { insertMock: messagesInsertMock });
+      return defaultSupabaseChain();
+    });
+
+    await runAiPipeline({ ...BASE_PARAMS, isNewConversation: true });
+
+    // Aviso + reply, nessa ordem, reply_text intacto (sem prefixo do aviso)
+    expect(messagesInsertMock).toHaveBeenCalledTimes(2);
+    expect(messagesInsertMock.mock.calls[0][0].autor).toBe("sistema");
+    expect(messagesInsertMock.mock.calls[1][0].autor).toBe("ia");
+    expect(messagesInsertMock.mock.calls[1][0].mensagem).toBe(BASE_RESULT.reply_text);
+
+    // Coleta de financiamento continua persistindo pending_topics normalmente
+    const leadsChains = vi.mocked(supabaseAdmin.from).mock.calls
+      .map((call, i) => ({ table: call[0], chain: vi.mocked(supabaseAdmin.from).mock.results[i].value }))
+      .filter((c) => c.table === "leads");
+    const contextoUpdateCall = leadsChains
+      .flatMap((c) => c.chain.update.mock.calls)
+      .find((args: any[]) => args[0]?.contexto?.pending_topics?.includes("financiamento"));
+    expect(contextoUpdateCall).toBeDefined();
   });
 });

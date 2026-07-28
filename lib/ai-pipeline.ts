@@ -82,6 +82,84 @@ function redactCpfFromLog(result: AgentResult): unknown {
 }
 
 // ============================================================================
+// Aviso de IA — transparência LGPD na primeira mensagem da conversa
+// ============================================================================
+//
+// Determinístico por código (não depende de a LLM lembrar de avisar).
+// Gatilho: is_new_conversation (webhook_ingest_message, migration 003) —
+// dispara em toda thread nova, inclusive reabertura de conversa ENCERRADA.
+// autor="sistema": mesmo canal já usado por lib/actions.ts e lib/follow-up.ts
+// para texto não-autorado pela LLM. Enviado ANTES da resposta da IA.
+//
+// Idempotência via messages.meta->>kind="ai_disclosure" (coluna jsonb já
+// existente, sem uso prévio) — não por match de texto literal, que quebraria
+// se stores.nome mudasse entre uma execução e um reprocessamento (BL-0010/
+// BL-0012). meta.sent rastreia se o envio WA teve sucesso: registrado como
+// false no insert, atualizado pra true só após sendWhatsAppMessage confirmar
+// — evita o inbox mentir "avisado" quando o envio falhou silenciosamente.
+// ============================================================================
+
+const AI_DISCLOSURE_KIND = "ai_disclosure" as const;
+
+function buildAiDisclosureText(storeName: string): string {
+  return `Você está falando com o atendimento digital da ${storeName}. Sou um assistente virtual e posso te ajudar a encontrar seu veículo, tirar dúvidas e agendar uma visita. Se preferir falar com um vendedor, é só pedir a qualquer momento.`;
+}
+
+async function sendAiDisclosureIfNeeded(params: {
+  storeId: string;
+  conversationId: string;
+  leadId: string;
+  storeName: string;
+  phoneNormalized: string;
+}): Promise<void> {
+  const text = buildAiDisclosureText(params.storeName);
+
+  // Idempotência: se o pipeline rodar 2x pra mesma conversa nova, não duplica.
+  const { data: existing } = await supabaseAdmin
+    .from("messages")
+    .select("id")
+    .eq("conversation_id", params.conversationId)
+    .eq("autor", "sistema")
+    .eq("meta->>kind", AI_DISCLOSURE_KIND)
+    .limit(1)
+    .maybeSingle();
+
+  if (existing) return;
+
+  const { data: saved } = await supabaseAdmin
+    .from("messages")
+    .insert({
+      store_id: params.storeId,
+      conversation_id: params.conversationId,
+      lead_id: params.leadId,
+      direcao: "saida",
+      autor: "sistema",
+      mensagem: text,
+      received_at: new Date().toISOString(),
+      meta: { kind: AI_DISCLOSURE_KIND, sent: false },
+    })
+    .select("id")
+    .single();
+
+  const disclosureId = saved?.id ?? null;
+
+  try {
+    const phoneId = await getStoreWhatsAppPhoneId(params.storeId);
+    await sendWhatsAppMessage(params.phoneNormalized, text, phoneId);
+    if (disclosureId) {
+      await supabaseAdmin
+        .from("messages")
+        .update({ meta: { kind: AI_DISCLOSURE_KIND, sent: true } })
+        .eq("id", disclosureId);
+    }
+  } catch (e) {
+    // Não-fatal pro pipeline: aviso já está no banco com sent=false, refletindo
+    // a realidade (mensagem não confirmadamente entregue) — não bloqueia a resposta da IA
+    console.error("[ai-disclosure] falha ao enviar aviso de IA:", e);
+  }
+}
+
+// ============================================================================
 // ai_logs helper
 // ============================================================================
 
@@ -126,6 +204,7 @@ export async function runAiPipeline(params: {
   leadId: string;
   conversationId: string;
   incomingText: string;
+  isNewConversation: boolean;
 }): Promise<{ agent_status: AgentStatus; error?: string }> {
   const start = Date.now();
   const model = process.env.ANTHROPIC_MODEL ?? null;
@@ -177,6 +256,17 @@ export async function runAiPipeline(params: {
         model,
       });
       return { agent_status: "skipped_handoff" };
+    }
+
+    // Aviso de IA — antes de gerar/enviar a resposta comercial
+    if (params.isNewConversation) {
+      await sendAiDisclosureIfNeeded({
+        storeId: params.storeId,
+        conversationId: params.conversationId,
+        leadId: params.leadId,
+        storeName: ctx.store_name,
+        phoneNormalized: ctx.lead.phone_normalized,
+      });
     }
 
     const payload = buildPrompt(ctx, guardrail, now);
