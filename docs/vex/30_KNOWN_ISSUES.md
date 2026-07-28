@@ -882,6 +882,90 @@ Corrupted twice in 2 days, same shape both times (quoted key name sheared off a 
 
 ---
 
+Issue ID
+
+KI-0008
+
+Title
+
+Teste de Integração do Item 0.8 (Realtime) Deixou Sobras em Produção — Paliativo Aplicado, Causa Raiz Não Resolvida
+
+Category
+
+Test Infrastructure
+
+Severity
+
+Medium
+
+Status
+
+Mitigated — dado de teste limpo (2026-07-28); causa raiz (ausência de Supabase de staging) segue aberta
+
+Environment
+
+`tests/integration/realtime-isolation.test.ts` roda contra o Supabase de **produção** real (não existe staging) — `npm run test:integration`, nunca gatilhado pelo hook `pre-push` (só `tests/unit/`).
+
+Date Discovered
+
+Sobras criadas durante a sessão de desenvolvimento do item 0.8 (2026-07-27, ver `29_DECISIONS_LOG.md` DL-0004/DL-0005). Achado e limpo em 2026-07-28.
+
+Reported By
+
+Vitor, ao revisar `/admin` e notar stores/leads estranhos misturados com dado real.
+
+Owner
+
+Engineering
+
+Description
+
+`users.store_id` é `ON DELETE RESTRICT` (não `CASCADE`) — uma store com usuário vinculado nunca é deletável até o usuário (`auth.users`, que cascade pra `public.users`) ser removido primeiro. O `afterAll` do teste, numa versão anterior à atual, deletava a store direto e engolia o erro do delete falho, deixando store + usuário + leads/conversations/messages cascateados presos em produção silenciosamente — sem crash, sem log de alerta, só o dado ficando pra trás.
+
+9 stores (`Test RT-A/RT-B <timestamp>`, `Test webhook <timestamp>`) + 8 usuários (auth+public, `Vendedor A/B`) + 2 leads (artefato do setup do B001, não deste teste) acumularam em produção até serem identificados e removidos.
+
+Symptoms
+
+`/admin` e qualquer contagem de lojas/usuários misturava dado de teste com dado real (`stores` tinha 12 linhas, só 3 legítimas). `leads` tinha 2 registros órfãos (`#1 Atendimento`, `WhatsApp Business`) sem relação com clientes reais.
+
+Root Cause
+
+Duas causas empilhadas: (1) bug pontual no `afterAll` (delete de store antes de deletar o usuário vinculado, ordem errada pro `ON DELETE RESTRICT`) — **já corrigido**, o teste atual (`tests/integration/realtime-isolation.test.ts:180-197`) deleta usuário primeiro, store depois, e verifica explicitamente que a store sumiu, logando erro se não sumir. (2) causa estrutural que **continua aberta**: o teste roda contra produção real porque não existe Supabase de staging — qualquer bug de cleanup (futuro, não só este) tem blast radius direto em produção. O prefixo `__test__realtime-isolation` no nome (adicionado depois) mitiga descoberta manual de sobras futuras, mas não elimina o risco de o teste escrever em produção.
+
+Impact
+
+Nenhum impacto funcional (stores/users de teste não processavam tráfego real, não apareciam pra clientes). Impacto foi de higiene/confiança dos dados administrativos — `/admin` e métricas de contagem ficavam poluídas.
+
+Workaround
+
+Limpeza manual aplicada via `scripts/cleanup-realtime-tests.sql` (2026-07-28) — ver arquivo pra IDs exatos e resultado confirmado (12→3 stores).
+
+Permanent Fix
+
+Não planejado agora. Fix real seria um projeto Supabase de staging dedicado pra `tests/integration/`, isolando qualquer teste que crie dado real do banco de produção — mudança de infraestrutura, não linha de código. Até lá, todo teste de integração novo que cria dado em produção deve seguir o padrão já estabelecido em `realtime-isolation.test.ts`: prefixo `__test__<nome-do-teste>` no nome + `afterAll` que verifica explicitamente que o cleanup funcionou (não só tenta e ignora erro).
+
+Validation Steps
+
+Se um teste de integração futuro deixar sobra: identificar por `nome LIKE '__test__%'` (convenção), nunca assumir que "parece teste" é prova suficiente — confirmar com checagem inversa contra as stores/usuários reais conhecidos antes de deletar qualquer coisa em produção.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+None
+
+Notes
+
+Esta limpeza é paliativo, não solução. Ausência de Supabase de staging pra testes de integração é dívida estrutural conhecida — cada novo teste de integração que grava em produção repete o mesmo risco até essa dívida ser paga.
+
+---
+
 (Update continuously.)
 
 ---
