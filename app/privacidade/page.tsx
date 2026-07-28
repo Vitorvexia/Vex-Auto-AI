@@ -1,5 +1,3 @@
-// Parâmetros da política — trocar aqui quando a loja confirmar o e-mail de contato.
-const CONTATO_EMAIL = "privacidade@speedmotos.com.br";
 const RETENCAO_MESES = 24;
 
 export const metadata = {
@@ -143,12 +141,10 @@ export default function PrivacidadePage() {
           </h2>
           <p style={{ fontSize: "14px", lineHeight: 1.6, color: "var(--text)" }}>
             Você pode solicitar acesso, correção ou exclusão dos seus dados, além
-            de pedir esclarecimento sobre com quem eles são compartilhados. Fale
-            com a loja pelo próprio WhatsApp ou entre em contato por{" "}
-            <a href={`mailto:${CONTATO_EMAIL}`} style={{ color: "var(--accent)", textDecoration: "underline" }}>
-              {CONTATO_EMAIL}
-            </a>
-            .
+            de pedir esclarecimento sobre com quem eles são compartilhados. Para
+            exercer qualquer um desses direitos, fale com a loja pelo mesmo
+            WhatsApp do atendimento. Se preferir falar com uma pessoa, é só pedir
+            a qualquer momento — seu pedido será tratado por um atendente da loja.
           </p>
         </section>
 
