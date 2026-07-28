@@ -50,21 +50,13 @@ function getApiVersion(): string {
 }
 
 /**
- * Envia mensagem de texto via WhatsApp Cloud API.
- *
- * Requer env var:
- *   WHATSAPP_ACCESS_TOKEN — token de acesso do app Meta
- *
- * @param to            Número do destinatário em E.164 (com ou sem +)
- * @param text          Texto da mensagem (truncado em 4096 chars — limite da WA Cloud API)
- * @param phoneNumberId Phone Number ID da Meta (resolvido por getStoreWhatsAppPhoneId)
- * @throws WhatsAppSendError em falha HTTP ou credenciais ausentes
+ * POST compartilhado pro endpoint /messages da WA Cloud API — usado tanto por
+ * texto livre (sessão de 24h) quanto por template (business-initiated).
+ * Timeout de 5s: Meta API p99 é ~1s sob condições normais; sem isso uma Meta
+ * API travada bloqueia até o Vercel matar a function, impedindo logAi de
+ * rodar e tornando o envio falho irrecuperável pelo job de retry.
  */
-export async function sendWhatsAppMessage(
-  to: string,
-  text: string,
-  phoneNumberId: string
-): Promise<void> {
+async function postToWhatsApp(phoneNumberId: string, body: string): Promise<void> {
   const token = process.env.WHATSAPP_ACCESS_TOKEN;
 
   if (!token || !phoneNumberId) {
@@ -73,27 +65,8 @@ export async function sendWhatsAppMessage(
     );
   }
 
-  // WA Cloud API espera E.164 sem o prefixo '+'
-  const recipient = to.replace(/^\+/, "");
-
-  // WA Cloud API rejeita mensagens com mais de 4096 caracteres
-  const WA_TEXT_LIMIT = 4096;
-  const safeText =
-    text.length > WA_TEXT_LIMIT ? text.slice(0, WA_TEXT_LIMIT - 3) + "..." : text;
-
   const url = `${WA_API_BASE}/${getApiVersion()}/${phoneNumberId}/messages`;
 
-  const body = JSON.stringify({
-    messaging_product: "whatsapp",
-    recipient_type: "individual",
-    to: recipient,
-    type: "text",
-    text: { body: safeText },
-  });
-
-  // Abort fetch after 5s — Meta API p99 is ~1s under normal conditions.
-  // Without a timeout, a hanging Meta API will block until Vercel kills the function,
-  // preventing logAi from running and making the failed send unrecoverable by the retry job.
   const controller = new AbortController();
   const sendTimeout = setTimeout(() => controller.abort(), 5000);
   let res: Response;
@@ -122,5 +95,101 @@ export async function sendWhatsAppMessage(
       category,
       isRetryable
     );
+  }
+}
+
+/**
+ * Envia mensagem de texto via WhatsApp Cloud API.
+ *
+ * Requer env var:
+ *   WHATSAPP_ACCESS_TOKEN — token de acesso do app Meta
+ *
+ * Válido só dentro da janela de sessão de 24h (resposta da IA, retry de
+ * ai_logs). Fora dessa janela, a Meta rejeita texto livre — usar
+ * sendWhatsAppTemplateMessage.
+ *
+ * @param to            Número do destinatário em E.164 (com ou sem +)
+ * @param text          Texto da mensagem (truncado em 4096 chars — limite da WA Cloud API)
+ * @param phoneNumberId Phone Number ID da Meta (resolvido por getStoreWhatsAppPhoneId)
+ * @throws WhatsAppSendError em falha HTTP ou credenciais ausentes
+ */
+export async function sendWhatsAppMessage(
+  to: string,
+  text: string,
+  phoneNumberId: string
+): Promise<void> {
+  // WA Cloud API espera E.164 sem o prefixo '+'
+  const recipient = to.replace(/^\+/, "");
+
+  // WA Cloud API rejeita mensagens com mais de 4096 caracteres
+  const WA_TEXT_LIMIT = 4096;
+  const safeText =
+    text.length > WA_TEXT_LIMIT ? text.slice(0, WA_TEXT_LIMIT - 3) + "..." : text;
+
+  const body = JSON.stringify({
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: "text",
+    text: { body: safeText },
+  });
+
+  await postToWhatsApp(phoneNumberId, body);
+}
+
+/**
+ * Envia mensagem via template pré-aprovado da WA Cloud API (business-initiated,
+ * fora da janela de 24h — follow-up e reativação). Cada template precisa estar
+ * aprovado no Meta Business Manager antes do envio funcionar; template não
+ * aprovado/inexistente retorna erro HTTP da Meta (ver WhatsAppSendError).
+ *
+ * @param to            Número do destinatário em E.164 (com ou sem +)
+ * @param templateName  Nome exato do template aprovado na Meta (ex: "follow_up_1")
+ * @param languageCode  Código de idioma do template (ex: "pt_BR")
+ * @param params        Valores das variáveis {{1}}, {{2}}... na ordem — vira o
+ *                      body component da Cloud API. Array vazio = sem parameters.
+ * @param phoneNumberId Phone Number ID da Meta (resolvido por getStoreWhatsAppPhoneId)
+ * @throws WhatsAppSendError em falha HTTP (inclui template não aprovado/inexistente)
+ *         ou credenciais ausentes — mensagem inclui templateName pra identificar
+ *         no log qual template falhou.
+ */
+export async function sendWhatsAppTemplateMessage(
+  to: string,
+  templateName: string,
+  languageCode: string,
+  params: string[],
+  phoneNumberId: string
+): Promise<void> {
+  const recipient = to.replace(/^\+/, "");
+
+  const body = JSON.stringify({
+    messaging_product: "whatsapp",
+    recipient_type: "individual",
+    to: recipient,
+    type: "template",
+    template: {
+      name: templateName,
+      language: { code: languageCode },
+      components:
+        params.length > 0
+          ? [{ type: "body", parameters: params.map((text) => ({ type: "text", text })) }]
+          : [],
+    },
+  });
+
+  try {
+    await postToWhatsApp(phoneNumberId, body);
+  } catch (err) {
+    if (err instanceof WhatsAppSendError) {
+      // Identifica qual template falhou no log — sem isso, "WhatsApp API retornou 400"
+      // não diferencia template não aprovado de número de destino inválido.
+      throw new WhatsAppSendError(
+        `${err.message} (template=${templateName})`,
+        err.statusCode,
+        err.category,
+        err.isRetryable
+      );
+    }
+    throw err;
   }
 }

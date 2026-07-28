@@ -45,7 +45,12 @@ vi.mock("@/lib/whatsapp-credentials", () => ({
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { buildFollowUpText, runFollowUpJob } from "@/lib/follow-up";
+import {
+  buildFollowUpText,
+  followUpTemplateName,
+  followUpTemplateParams,
+  runFollowUpJob,
+} from "@/lib/follow-up";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -138,6 +143,63 @@ describe("buildFollowUpText — templates", () => {
   it("attempt 3: menciona encerrar", () => {
     const text = buildFollowUpText(3, "João");
     expect(text.toLowerCase()).toMatch(/encerrar|encerr/);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// followUpTemplateName / followUpTemplateParams — envio por template Meta
+// (funções puras — não dependem de WHATSAPP_TEMPLATE_SEND_ENABLED; o flag só
+// decide QUAL função de envio é chamada em runFollowUpJob, testado em
+// tests/unit/follow-up-template-send.test.ts)
+// ---------------------------------------------------------------------------
+
+describe("followUpTemplateName", () => {
+  it("attempt 1 → follow_up_1", () => {
+    expect(followUpTemplateName(1)).toBe("follow_up_1");
+  });
+
+  it("attempt 2 → follow_up_2", () => {
+    expect(followUpTemplateName(2)).toBe("follow_up_2");
+  });
+
+  it("attempt 3 → follow_up_3", () => {
+    expect(followUpTemplateName(3)).toBe("follow_up_3");
+  });
+
+  it("attempt inválido (fora de 1-3) cai no fallback follow_up_1 — mesmo clamp de buildFollowUpText", () => {
+    expect(followUpTemplateName(99)).toBe("follow_up_1");
+    expect(followUpTemplateName(0)).toBe("follow_up_1");
+  });
+});
+
+describe("followUpTemplateParams", () => {
+  it("nome preenchido vira único parâmetro ({{1}})", () => {
+    expect(followUpTemplateParams("Carlos")).toEqual(["Carlos"]);
+  });
+
+  it("nome null vira 'você' — mesmo fallback de buildFollowUpText", () => {
+    expect(followUpTemplateParams(null)).toEqual(["você"]);
+  });
+
+  it("nome com espaços extras usa trim — mesmo fallback de buildFollowUpText", () => {
+    expect(followUpTemplateParams("  Ana  ")).toEqual(["Ana"]);
+  });
+});
+
+describe("followUpTemplateName/Params — consistência com buildFollowUpText (texto do inbox precisa bater com o que o template renderiza)", () => {
+  it("param[0] é exatamente o nome usado no texto renderizado, em todas as 3 tentativas", () => {
+    for (const attempt of [1, 2, 3]) {
+      const text = buildFollowUpText(attempt, "Fernanda");
+      const [param] = followUpTemplateParams("Fernanda");
+      expect(text).toContain(param);
+    }
+  });
+
+  it("nome null: texto e param usam 'você' de forma idêntica", () => {
+    const text = buildFollowUpText(1, null);
+    const [param] = followUpTemplateParams(null);
+    expect(param).toBe("você");
+    expect(text).toContain(param);
   });
 });
 

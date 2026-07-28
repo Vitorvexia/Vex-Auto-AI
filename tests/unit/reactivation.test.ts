@@ -50,6 +50,8 @@ vi.mock("@/lib/whatsapp-credentials", () => ({
 
 import {
   buildReactivationText,
+  reactivationTemplateName,
+  reactivationTemplateParams,
   markReactivationResponded,
   markReactivationConverted,
   runReactivationJob,
@@ -202,6 +204,94 @@ describe("buildReactivationText — com veículo", () => {
     const with_veh = buildReactivationText(1, "X", { veiculo_interesse: "Fiat Uno" });
     const no_veh = buildReactivationText(1, "X");
     expect(with_veh).not.toBe(no_veh);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// reactivationTemplateName / reactivationTemplateParams — envio por template
+// Meta (funções puras — flag decide QUAL função de envio é chamada em
+// runReactivationJob, testado em tests/unit/reactivation-template-send.test.ts)
+// ---------------------------------------------------------------------------
+
+describe("reactivationTemplateName", () => {
+  it("sem veículo, attempt 1/2/3 → reactivation_no_vehicle_1/2/3", () => {
+    expect(reactivationTemplateName(1)).toBe("reactivation_no_vehicle_1");
+    expect(reactivationTemplateName(2)).toBe("reactivation_no_vehicle_2");
+    expect(reactivationTemplateName(3)).toBe("reactivation_no_vehicle_3");
+  });
+
+  it("com veículo, attempt 1/2/3 → reactivation_vehicle_1/2/3", () => {
+    const ctx = { veiculo_interesse: "Honda Civic 2020" };
+    expect(reactivationTemplateName(1, ctx)).toBe("reactivation_vehicle_1");
+    expect(reactivationTemplateName(2, ctx)).toBe("reactivation_vehicle_2");
+    expect(reactivationTemplateName(3, ctx)).toBe("reactivation_vehicle_3");
+  });
+
+  it("veiculo_interesse null cai em reactivation_no_vehicle — mesmo fallback de buildReactivationText", () => {
+    expect(reactivationTemplateName(1, { veiculo_interesse: null })).toBe(
+      "reactivation_no_vehicle_1"
+    );
+  });
+
+  it("veiculo_interesse string vazia/só espaço cai em reactivation_no_vehicle", () => {
+    expect(reactivationTemplateName(1, { veiculo_interesse: "   " })).toBe(
+      "reactivation_no_vehicle_1"
+    );
+  });
+
+  it("attempt inválido cai no fallback 1 — mesmo clamp de buildReactivationText", () => {
+    expect(reactivationTemplateName(99)).toBe("reactivation_no_vehicle_1");
+    expect(reactivationTemplateName(99, { veiculo_interesse: "Fiat Uno" })).toBe(
+      "reactivation_vehicle_1"
+    );
+  });
+});
+
+describe("reactivationTemplateParams", () => {
+  it("sem veículo: só nome ({{1}})", () => {
+    expect(reactivationTemplateParams("Carlos")).toEqual(["Carlos"]);
+  });
+
+  it("com veículo: nome e veículo na ordem [{{1}}, {{2}}]", () => {
+    expect(
+      reactivationTemplateParams("Carlos", { veiculo_interesse: "Honda Civic 2020" })
+    ).toEqual(["Carlos", "Honda Civic 2020"]);
+  });
+
+  it("nome null vira 'você' — mesmo fallback de buildReactivationText", () => {
+    expect(reactivationTemplateParams(null)).toEqual(["você"]);
+  });
+
+  it("veiculo_interesse null/vazio omite o segundo parâmetro", () => {
+    expect(reactivationTemplateParams("Ana", { veiculo_interesse: null })).toEqual(["Ana"]);
+    expect(reactivationTemplateParams("Ana", { veiculo_interesse: "  " })).toEqual(["Ana"]);
+  });
+});
+
+describe("reactivationTemplateName/Params — consistência com buildReactivationText (texto do inbox precisa bater com o que o template renderiza)", () => {
+  it("sem veículo: param[0] aparece no texto renderizado nas 3 tentativas", () => {
+    for (const attempt of [1, 2, 3]) {
+      const text = buildReactivationText(attempt, "Fernanda");
+      const [nome] = reactivationTemplateParams("Fernanda");
+      expect(text).toContain(nome);
+    }
+  });
+
+  it("com veículo: nome E veículo aparecem no texto renderizado, na mesma tentativa", () => {
+    const ctx = { veiculo_interesse: "Toyota Corolla" };
+    for (const attempt of [1, 2, 3]) {
+      const text = buildReactivationText(attempt, "Bruno", ctx);
+      const [nome, veiculo] = reactivationTemplateParams("Bruno", ctx);
+      expect(text).toContain(nome);
+      expect(text).toContain(veiculo);
+    }
+  });
+
+  it("nome null: texto e param usam 'você' de forma idêntica", () => {
+    const text = buildReactivationText(1, null);
+    const [param] = reactivationTemplateParams(null);
+    expect(param).toBe("você");
+    expect(text).toContain(param);
   });
 });
 

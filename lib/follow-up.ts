@@ -1,7 +1,13 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
+import { sendWhatsAppMessage, sendWhatsAppTemplateMessage } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { maskPhone } from "@/lib/pii";
+
+// Envio por template Meta aprovado (follow_up_1/2/3) — desligado por padrão.
+// Template não aprovado retorna erro da Meta; ativar só depois da aprovação
+// dos 9 templates (roadmap 0.2, docs/vex/29_DECISIONS_LOG.md).
+const TEMPLATE_SEND_ENABLED = process.env.WHATSAPP_TEMPLATE_SEND_ENABLED === "true";
+const TEMPLATE_LANGUAGE = "pt_BR";
 
 // ---------------------------------------------------------------------------
 // Templates — 3 tentativas com textos distintos
@@ -16,13 +22,27 @@ const TEMPLATES: Record<number, (nome: string) => string> = {
     `${nome}, esta é nossa última tentativa de contato. Podemos encerrar por aqui — mas adoraríamos te ajudar a encontrar o veículo perfeito antes disso!`,
 };
 
+/** Único ponto de fallback de tentativa inválida — texto e nome de template SEMPRE usam isso, senão divergem. */
+function clampAttempt(attemptNumber: number): 1 | 2 | 3 {
+  return attemptNumber === 2 || attemptNumber === 3 ? attemptNumber : 1;
+}
+
 export function buildFollowUpText(
   attemptNumber: number,
   nome: string | null
 ): string {
   const safeName = nome?.trim() || "você";
-  const template = TEMPLATES[attemptNumber] ?? TEMPLATES[1];
-  return template(safeName);
+  return TEMPLATES[clampAttempt(attemptNumber)](safeName);
+}
+
+/** Nome do template Meta aprovado pra essa tentativa (ex: "follow_up_1"). */
+export function followUpTemplateName(attemptNumber: number): string {
+  return `follow_up_${clampAttempt(attemptNumber)}`;
+}
+
+/** Parâmetros do template na ordem — {{1}} = nome. Mesmo fallback de buildFollowUpText. */
+export function followUpTemplateParams(nome: string | null): string[] {
+  return [nome?.trim() || "você"];
 }
 
 // ---------------------------------------------------------------------------
@@ -102,7 +122,21 @@ export async function runFollowUpJob(opts?: {
 
     try {
       const phoneId = await getStoreWhatsAppPhoneId(conv.store_id);
-      await sendWhatsAppMessage(conv.phone_normalized, text, phoneId);
+
+      // Texto renderizado (buildFollowUpText) e template enviado à Meta usam
+      // o mesmo clampAttempt/nome — precisam bater, senão o vendedor vê no
+      // inbox algo diferente do que o cliente recebeu.
+      if (TEMPLATE_SEND_ENABLED) {
+        await sendWhatsAppTemplateMessage(
+          conv.phone_normalized,
+          followUpTemplateName(attemptNumber),
+          TEMPLATE_LANGUAGE,
+          followUpTemplateParams(conv.nome),
+          phoneId
+        );
+      } else {
+        await sendWhatsAppMessage(conv.phone_normalized, text, phoneId);
+      }
 
       await supabaseAdmin.from("messages").insert({
         conversation_id: conv.conversation_id,

@@ -295,7 +295,9 @@ Engineering
 
 Status
 
-Open — needs template-based send path in `sendWhatsAppMessage`/`follow-up.ts`/`reactivation.ts`, plus the remaining ~8 templates created and approved in Meta.
+Open — NOT resolved. Send path implemented (2026-07-27): `sendWhatsAppTemplateMessage` in `lib/whatsapp-send.ts`, wired into `follow-up.ts`/`reactivation.ts` behind `WHATSAPP_TEMPLATE_SEND_ENABLED` (default `false`/off — current free-text behavior unchanged). Covered by mocked unit tests only (`tests/unit/follow-up-template-send.test.ts`, `tests/unit/reactivation-template-send.test.ts`, `tests/unit/whatsapp-send.test.ts`) — **no real send has been attempted or confirmed**. This is implementation, not delivery.
+
+Still blocked on: all 9 templates (`follow_up_1/2/3`, `reactivation_vehicle_1/2/3`, `reactivation_no_vehicle_1/2/3`) submitted to Meta for approval, pending. B006 does not close until: templates approved in Meta + `WHATSAPP_TEMPLATE_SEND_ENABLED=true` + a real business-initiated send (outside the 24h session window) confirmed arriving on a real device.
 
 ---
 

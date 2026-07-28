@@ -1,7 +1,13 @@
 import { supabaseAdmin } from "@/lib/supabase";
-import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
+import { sendWhatsAppMessage, sendWhatsAppTemplateMessage } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { maskPhone } from "@/lib/pii";
+
+// Envio por template Meta aprovado (reactivation_vehicle_1/2/3,
+// reactivation_no_vehicle_1/2/3) — desligado por padrão, mesmo mecanismo de
+// lib/follow-up.ts. Ativar só depois da aprovação dos 9 templates.
+const TEMPLATE_SEND_ENABLED = process.env.WHATSAPP_TEMPLATE_SEND_ENABLED === "true";
+const TEMPLATE_LANGUAGE = "pt_BR";
 
 // ---------------------------------------------------------------------------
 // Context de reativação — dados do lead usados para enriquecer templates
@@ -33,21 +39,48 @@ const TEMPLATES_NO_VEHICLE: Record<number, (nome: string) => string> = {
     `Oi, ${nome}! Passando uma última vez — se quiser conversar sobre veículos, é só me chamar por aqui.`,
 };
 
+/** Único ponto de fallback de tentativa inválida — texto e nome de template SEMPRE usam isso, senão divergem. */
+function clampAttempt(attemptNumber: number): 1 | 2 | 3 {
+  return attemptNumber === 2 || attemptNumber === 3 ? attemptNumber : 1;
+}
+
+function safeVehicle(leadContext?: LeadReactivationContext | null): string | null {
+  return leadContext?.veiculo_interesse?.trim() || null;
+}
+
 export function buildReactivationText(
   attemptNumber: number,
   nome: string | null,
   leadContext?: LeadReactivationContext | null
 ): string {
   const safeName = nome?.trim() || "você";
-  const veiculo = leadContext?.veiculo_interesse?.trim() || null;
+  const veiculo = safeVehicle(leadContext);
+  const n = clampAttempt(attemptNumber);
 
-  if (veiculo) {
-    const template = TEMPLATES_WITH_VEHICLE[attemptNumber] ?? TEMPLATES_WITH_VEHICLE[1];
-    return template(safeName, veiculo);
-  }
+  if (veiculo) return TEMPLATES_WITH_VEHICLE[n](safeName, veiculo);
+  return TEMPLATES_NO_VEHICLE[n](safeName);
+}
 
-  const template = TEMPLATES_NO_VEHICLE[attemptNumber] ?? TEMPLATES_NO_VEHICLE[1];
-  return template(safeName);
+/** Nome do template Meta aprovado (ex: "reactivation_vehicle_1" / "reactivation_no_vehicle_1"). */
+export function reactivationTemplateName(
+  attemptNumber: number,
+  leadContext?: LeadReactivationContext | null
+): string {
+  const n = clampAttempt(attemptNumber);
+  return safeVehicle(leadContext) ? `reactivation_vehicle_${n}` : `reactivation_no_vehicle_${n}`;
+}
+
+/**
+ * Parâmetros do template na ordem — reactivation_vehicle: {{1}}=nome, {{2}}=veículo.
+ * reactivation_no_vehicle: {{1}}=nome. Mesmo fallback de buildReactivationText.
+ */
+export function reactivationTemplateParams(
+  nome: string | null,
+  leadContext?: LeadReactivationContext | null
+): string[] {
+  const safeName = nome?.trim() || "você";
+  const veiculo = safeVehicle(leadContext);
+  return veiculo ? [safeName, veiculo] : [safeName];
 }
 
 // ---------------------------------------------------------------------------
@@ -202,7 +235,23 @@ export async function runReactivationJob(opts?: {
     // 3. Enviar via WhatsApp
     try {
       const phoneId = await getStoreWhatsAppPhoneId(lead.store_id);
-      await sendWhatsAppMessage(lead.phone_normalized, text, phoneId);
+      const leadContext: LeadReactivationContext = { veiculo_interesse: lead.veiculo_interesse };
+
+      // Texto renderizado (buildReactivationText, já em message_text/messages)
+      // e template enviado à Meta usam o mesmo clampAttempt/nome/veículo —
+      // precisam bater, senão o vendedor vê no inbox algo diferente do que
+      // o cliente recebeu.
+      if (TEMPLATE_SEND_ENABLED) {
+        await sendWhatsAppTemplateMessage(
+          lead.phone_normalized,
+          reactivationTemplateName(attemptNumber, leadContext),
+          TEMPLATE_LANGUAGE,
+          reactivationTemplateParams(lead.nome, leadContext),
+          phoneId
+        );
+      } else {
+        await sendWhatsAppMessage(lead.phone_normalized, text, phoneId);
+      }
 
       console.log(
         `[reactivation] sent lead=${lead.lead_id} attempt=${attemptNumber} phone=${maskedPhone}`

@@ -1,5 +1,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES } from "@/lib/whatsapp-send";
+import {
+  sendWhatsAppMessage,
+  sendWhatsAppTemplateMessage,
+  WhatsAppSendError,
+  PERMANENT_CATEGORIES,
+} from "@/lib/whatsapp-send";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -201,6 +206,125 @@ describe("sendWhatsAppMessage", () => {
       statusCode: 401,
       message: "WhatsApp API retornou 401",
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// sendWhatsAppTemplateMessage — envio por template Meta (roadmap 0.2)
+// ---------------------------------------------------------------------------
+
+describe("sendWhatsAppTemplateMessage", () => {
+  it("monta payload type=template com 1 parâmetro (ex: follow_up_1)", async () => {
+    const spy = mockFetchOk();
+
+    await sendWhatsAppTemplateMessage(
+      "+5511999990000",
+      "follow_up_1",
+      "pt_BR",
+      ["Carlos"],
+      TEST_PHONE_ID
+    );
+
+    expect(spy).toHaveBeenCalledOnce();
+    const [url, init] = spy.mock.calls[0] as [string, RequestInit];
+    expect(url).toContain("/123456789/messages");
+
+    const body = JSON.parse(init.body as string);
+    expect(body.messaging_product).toBe("whatsapp");
+    expect(body.recipient_type).toBe("individual");
+    expect(body.to).toBe("5511999990000");
+    expect(body.type).toBe("template");
+    expect(body.template).toEqual({
+      name: "follow_up_1",
+      language: { code: "pt_BR" },
+      components: [{ type: "body", parameters: [{ type: "text", text: "Carlos" }] }],
+    });
+
+    const headers = init.headers as Record<string, string>;
+    expect(headers["Authorization"]).toBe("Bearer test-token");
+  });
+
+  it("monta payload com 2 parâmetros na ordem (ex: reactivation_vehicle_1 — nome, veículo)", async () => {
+    const spy = mockFetchOk();
+
+    await sendWhatsAppTemplateMessage(
+      "+5511999990000",
+      "reactivation_vehicle_1",
+      "pt_BR",
+      ["Carlos", "Honda Civic 2020"],
+      TEST_PHONE_ID
+    );
+
+    const body = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.template.components).toEqual([
+      {
+        type: "body",
+        parameters: [
+          { type: "text", text: "Carlos" },
+          { type: "text", text: "Honda Civic 2020" },
+        ],
+      },
+    ]);
+  });
+
+  it("params vazio → components vazio (sem body component)", async () => {
+    const spy = mockFetchOk();
+    await sendWhatsAppTemplateMessage("+5511999990000", "no_params_template", "pt_BR", [], TEST_PHONE_ID);
+    const body = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.template.components).toEqual([]);
+  });
+
+  it("strip '+' do número, igual sendWhatsAppMessage", async () => {
+    const spy = mockFetchOk();
+    await sendWhatsAppTemplateMessage("+5511987654321", "follow_up_1", "pt_BR", ["X"], TEST_PHONE_ID);
+    const body = JSON.parse((spy.mock.calls[0] as [string, RequestInit])[1].body as string);
+    expect(body.to).toBe("5511987654321");
+  });
+
+  it("lança WhatsAppSendError quando WHATSAPP_ACCESS_TOKEN ausente", async () => {
+    delete process.env.WHATSAPP_ACCESS_TOKEN;
+    await expect(
+      sendWhatsAppTemplateMessage("+5511999990000", "follow_up_1", "pt_BR", ["X"], TEST_PHONE_ID)
+    ).rejects.toMatchObject({ name: "WhatsAppSendError" });
+  });
+
+  it("template não aprovado/inexistente (HTTP 400) → erro identifica o template pelo nome na mensagem", async () => {
+    mockFetchError(400, "Template name does not exist in the translation");
+
+    await expect(
+      sendWhatsAppTemplateMessage(
+        "+5511999990000",
+        "reactivation_vehicle_2",
+        "pt_BR",
+        ["X", "Y"],
+        TEST_PHONE_ID
+      )
+    ).rejects.toMatchObject({
+      name: "WhatsAppSendError",
+      statusCode: 400,
+      message: expect.stringContaining("template=reactivation_vehicle_2"),
+    });
+  });
+
+  it("preserva category/isRetryable da classificação de status (ex: 401 → auth_error, não retryable)", async () => {
+    mockFetchError(401, "Invalid OAuth access token");
+
+    await expect(
+      sendWhatsAppTemplateMessage("+5511999990000", "follow_up_1", "pt_BR", ["X"], TEST_PHONE_ID)
+    ).rejects.toMatchObject({
+      name: "WhatsAppSendError",
+      statusCode: 401,
+      category: "auth_error",
+      isRetryable: false,
+      message: expect.stringContaining("template=follow_up_1"),
+    });
+  });
+
+  it("propaga erro de rede como exceção não-WhatsAppSendError (sem enriquecer com template=)", async () => {
+    mockFetchNetworkError();
+    await expect(
+      sendWhatsAppTemplateMessage("+5511999990000", "follow_up_1", "pt_BR", ["X"], TEST_PHONE_ID)
+    ).rejects.toThrow(TypeError);
   });
 });
 
