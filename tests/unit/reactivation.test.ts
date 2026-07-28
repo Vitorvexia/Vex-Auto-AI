@@ -593,6 +593,37 @@ describe("runReactivationJob — falha no envio WA", () => {
     );
   });
 
+  it("grava error_message identificável em reactivation_logs quando WA falha — falha não fica silenciosa", async () => {
+    mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } })); // claim
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } })); // messages
+    mockSend.mockRejectedValueOnce(new Error("WhatsApp API retornou 400"));
+    const updateChain = chain({ match: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(updateChain);
+
+    await runReactivationJob();
+
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ status: "failed", error_message: "WhatsApp API retornou 400" })
+    );
+  });
+
+  it("erro não-Error (ex: string lançada) vira error_message via String(err) — nunca undefined", async () => {
+    mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } }));
+    // eslint-disable-next-line prefer-promise-reject-errors
+    mockSend.mockRejectedValueOnce("falha crua sem Error");
+    const updateChain = chain({ match: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(updateChain);
+
+    await runReactivationJob();
+
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ error_message: "falha crua sem Error" })
+    );
+  });
+
   it("dois leads: primeiro falha WA, segundo é enviado — ambos processados", async () => {
     const lead2 = { ...ELIGIBLE_LEAD, lead_id: "lead-2", conversation_id: "conv-2" };
     mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD, lead2], error: null });

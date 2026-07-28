@@ -266,7 +266,10 @@ export async function runReactivationJob(opts?: {
       // 4. Marcar como falha no log (idempotente se chamado novamente)
       await supabaseAdmin
         .from("reactivation_logs")
-        .update({ status: "failed" })
+        .update({
+          status: "failed",
+          error_message: err instanceof Error ? err.message : String(err),
+        })
         .match({ lead_id: lead.lead_id, attempt_number: attemptNumber });
 
       result.failed++;

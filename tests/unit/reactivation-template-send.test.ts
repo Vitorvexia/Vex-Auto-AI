@@ -192,4 +192,24 @@ describe("runReactivationJob — WHATSAPP_TEMPLATE_SEND_ENABLED=true", () => {
     expect(result).toMatchObject({ processed: 1, sent: 0, failed: 1 });
     expect(updateChain.update).toHaveBeenCalledWith(expect.objectContaining({ status: "failed" }));
   });
+
+  it("template não aprovado grava error_message identificando o template — não fica silenciosa", async () => {
+    mockRpc.mockResolvedValueOnce({ data: [ELIGIBLE_LEAD], error: null });
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } })); // claim
+    mockFrom.mockReturnValueOnce(chain({ insert: { data: null, error: null } })); // messages
+    mockSendTemplate.mockRejectedValueOnce(
+      new Error("WhatsApp API retornou 400 (template=reactivation_no_vehicle_1)")
+    );
+    const updateChain = chain({ match: { data: null, error: null } });
+    mockFrom.mockReturnValueOnce(updateChain);
+
+    await runReactivationJob();
+
+    expect(updateChain.update).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: "failed",
+        error_message: "WhatsApp API retornou 400 (template=reactivation_no_vehicle_1)",
+      })
+    );
+  });
 });

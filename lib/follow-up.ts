@@ -161,7 +161,10 @@ export async function runFollowUpJob(opts?: {
 
       await supabaseAdmin
         .from("follow_up_logs")
-        .update({ status: "failed" })
+        .update({
+          status: "failed",
+          error_message: err instanceof Error ? err.message : String(err),
+        })
         .match({
           conversation_id: conv.conversation_id,
           attempt_number: attemptNumber,

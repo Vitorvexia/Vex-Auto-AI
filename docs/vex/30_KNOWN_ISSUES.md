@@ -715,6 +715,88 @@ Distinct from KI-0004 (Realtime test flake) — different file, different root c
 
 ---
 
+Issue ID
+
+KI-0006
+
+Title
+
+`classifyStatus()` Mislabels Template-Rejection Errors as `invalid_recipient` — Will Misdirect Debugging Once WHATSAPP_TEMPLATE_SEND_ENABLED Is Turned On
+
+Category
+
+WhatsApp
+
+Severity
+
+Low
+
+Status
+
+Open (not blocking — flag is off, no real template sends happen yet)
+
+Environment
+
+Production, only once `WHATSAPP_TEMPLATE_SEND_ENABLED=true` (roadmap 0.2, `27_PROJECT_STATUS.md` B006)
+
+Date Discovered
+
+2026-07-27, during item 0.2 review (template send path implementation)
+
+Reported By
+
+User review — flagged as needing to be written down before the flag ever gets turned on, so it doesn't cost someone a debugging afternoon later
+
+Owner
+
+Engineering
+
+Description
+
+`classifyStatus()` in `lib/whatsapp-send.ts` maps any HTTP 400 response from the Meta Cloud API to category `invalid_recipient`. That mapping was written for `sendWhatsAppMessage` (free text), where 400 realistically only means "bad recipient number." `sendWhatsAppTemplateMessage` (added for item 0.2) hits the same `classifyStatus()` via the shared `postToWhatsApp()` helper — but Meta also returns HTTP 400 for template-specific failures (template not approved, template doesn't exist, template/language mismatch, etc). Once template sends are live, an unapproved-template failure will be logged with `category: "invalid_recipient"`, which is simply wrong and will point whoever's debugging at the phone number instead of the template.
+
+Symptoms
+
+Not observed yet — flag is off, no real template send has happened. This is a pre-emptive registration, not a live incident.
+
+Root Cause
+
+`classifyStatus(status: number)` only looks at the HTTP status code, with no awareness of whether the request was a text send or a template send. Both `invalid_recipient` (bad number) and template-rejection failures share HTTP 400 on Meta's side, and the function was designed before template sends existed.
+
+Impact
+
+None today (flag off). Once `WHATSAPP_TEMPLATE_SEND_ENABLED=true`: `follow_up_logs.error_category`/`reactivation_logs` equivalent (not yet persisted — see item 3 increment, `error_message` only) would show a misleading category if that column is ever added. Even without a category column, anyone scanning logs by `category`/`isRetryable` semantics (e.g., "is this retryable?") gets the WRONG answer for a template rejection: `invalid_recipient` is `isRetryable: false` (permanent, matches reality for a genuinely-unapproved template) but is filed under the wrong label, so a human or a future automated retry-classifier reading `category` alone will think "bad phone number," not "check template approval status in Meta Business Manager."
+
+Workaround
+
+`sendWhatsAppTemplateMessage`'s thrown `WhatsAppSendError.message` already includes `(template=<name>)` (added alongside the function itself) — read the message, not just the category, when triaging a template send failure. `error_message` (this session's item-3 increment, `follow-up.ts`/`reactivation.ts`) persists that full message to `follow_up_logs`/`reactivation_logs`, so the template name is recoverable from the DB even though `category` is mislabeled.
+
+Permanent Fix
+
+Not planned now — flag is off, zero real-world exposure yet. If revisited before turning the flag on: `postToWhatsApp()` (or `classifyStatus()`) would need to know it's handling a template request (e.g., an explicit `isTemplate` param, or having `sendWhatsAppTemplateMessage` post-process the thrown error's category — remap `invalid_recipient` → a new category, e.g. `template_rejected`, whenever the error came from the template path) so `category`/`isRetryable` reflect template-specific reality instead of borrowing text-send semantics.
+
+Validation Steps
+
+If revisited: trigger a real rejection against an unapproved template name in a Meta sandbox/test app, confirm the resulting `WhatsAppSendError.category` is no longer `invalid_recipient`.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+None
+
+Notes
+
+Write this down BEFORE the flag ever flips — this is exactly the kind of mislabeling that reads as "obviously the phone number" and sends someone down the wrong path for an hour before they think to check Meta's template approval status instead.
+
+---
+
 (Update continuously.)
 
 ---
