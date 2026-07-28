@@ -824,7 +824,7 @@ Priority
 
 Status
 
-IDEA — não implementado. Achado central da investigação de bug de handoff em 2026-07-27.
+✔ CONCLUÍDO (2026-07-28, `0f65d99`) — item 0.9 do roadmap. `sendManualReply` (`lib/actions.ts`), form em `app/conversations/[id]/page.tsx`, migration 025 (`messages.sent_by`). Desbloqueia `BL-0010`.
 
 Owner
 
@@ -888,11 +888,11 @@ Cliente não fica no vácuo depois que a conversa "volta pra IA" — recebe resp
 
 Priority
 
-Alta intenção, mas **bloqueada por `BL-0009`** — risco 4 abaixo não tem mitigação sem a UI de resposta manual existir primeiro.
+Alta intenção. **DESBLOQUEADO (2026-07-28):** `BL-0009` concluído — risco 4 abaixo agora tem mitigação (UI de resposta manual existe). Pronto pra ser pego.
 
 Status
 
-IDEA — não implementado, desenho técnico já validado em 2026-07-27, aguardando `BL-0009`.
+IDEA — não implementado, desenho técnico já validado em 2026-07-27. Pré-requisito (`BL-0009`) satisfeito desde 2026-07-28 — desbloqueado, pronto pra ser pego.
 
 Owner
 
@@ -909,7 +909,7 @@ Médio, assumindo `BL-0009` já resolvido:
 
 Dependencies
 
-**`BL-0009`** (UI de resposta manual) — obrigatório antes de implementar. Sem isso, "sem resposta no banco" não significa "sem resposta enviada" (vendedor pode ter respondido pelo WhatsApp Manager nativo da Meta, fora do sistema) — reprocessar nesse caso duplica ou contradiz uma resposta humana real.
+**`BL-0009`** (UI de resposta manual) — ✔ satisfeito (2026-07-28, `0f65d99`). Sem isso, "sem resposta no banco" não significa "sem resposta enviada" (vendedor pode ter respondido pelo WhatsApp Manager nativo da Meta, fora do sistema) — reprocessar nesse caso duplicaria ou contradiria uma resposta humana real. Com a UI existindo, essa ambiguidade não existe mais — qualquer resposta humana passa a estar em `messages` com `autor:"humano"`.
 
 Related ADR
 
