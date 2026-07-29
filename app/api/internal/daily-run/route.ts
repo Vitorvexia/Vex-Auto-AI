@@ -24,6 +24,7 @@ import { runFollowUpJob } from "@/lib/follow-up";
 import { runReactivationJob } from "@/lib/reactivation";
 import { runRetryFailedJob } from "@/lib/retry-failed";
 import { supabaseAdmin } from "@/lib/supabase";
+import * as Sentry from "@sentry/nextjs";
 
 export const runtime = "nodejs";
 
@@ -84,6 +85,7 @@ async function executeDailyRun(limit?: number): Promise<NextResponse> {
       error: storesError.message,
       ts: new Date().toISOString(),
     }));
+    Sentry.captureException(storesError, { tags: { job: "daily_run_stores_fetch" } });
     return NextResponse.json({ error: "stores_fetch_failed" }, { status: 500 });
   }
 
@@ -115,6 +117,7 @@ async function executeDailyRun(limit?: number): Promise<NextResponse> {
         error: storeResult.error,
         ts: new Date().toISOString(),
       }));
+      Sentry.captureException(e, { tags: { job: "daily_run_store" }, extra: { store_id: store.id } });
     }
 
     storeResults.push(storeResult);
@@ -130,6 +133,7 @@ async function executeDailyRun(limit?: number): Promise<NextResponse> {
       retryResult = await runRetryFailedJob({ limit });
     } catch (e) {
       retryResult = { error: e instanceof Error ? e.message : String(e) };
+      Sentry.captureException(e, { tags: { job: "daily_run_retry_failed" } });
     }
   }
 

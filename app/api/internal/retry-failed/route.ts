@@ -17,6 +17,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { runRetryFailedJob } from "@/lib/retry-failed";
+import * as Sentry from "@sentry/nextjs";
 
 export const runtime = "nodejs";
 
@@ -59,6 +60,7 @@ export async function POST(req: NextRequest) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : "internal_error";
     const status = msg === "query_failed" || msg === "claim_failed" ? 500 : 500;
+    Sentry.captureException(e, { tags: { job: "retry_failed_run" } });
     return NextResponse.json({ error: msg }, { status });
   }
 }

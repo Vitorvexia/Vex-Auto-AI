@@ -1215,6 +1215,12 @@ Fora de escopo: verificação de identidade real (confirmar que quem informou o 
 
 ---
 
+NOTA (não é item formal de backlog)
+
+Achado adjacente durante fechamento do item 0.4 (Sentry, 2026-07-29): `AgentParseError` (`lib/ai.ts`) embute até 80 chars do output bruto da LLM na própria mensagem do erro (`raw.slice(0, 80)`). Se a LLM ecoar nome de lead num JSON malformado, esses chars passam pro Sentry sem filtro de nome — CPF/telefone continuam protegidos (`lib/sentry-scrub.ts` roda regex sobre qualquer string, confirmado por teste dedicado), mas nome livre não tem padrão fixo pra regex pegar. Vetor teórico e de baixa probabilidade (depende da LLM ecoar nome numa saída já malformada) — não bloqueou fechamento de 0.4. Revisitar só se houver evidência real de ocorrência (checar `raw` interpolado no Sentry por `pipeline_stage: "run_ai_pipeline"`).
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

@@ -6,6 +6,7 @@ import { ingestMessage } from "@/lib/ingest";
 import { runAiPipeline } from "@/lib/ai-pipeline";
 import { isReplayedMessage } from "@/lib/replay-guard";
 import { maskPhone } from "@/lib/pii";
+import * as Sentry from "@sentry/nextjs";
 
 // Precisamos de Node runtime para node:crypto (HMAC)
 export const runtime = "nodejs";
@@ -114,6 +115,7 @@ export async function POST(req: NextRequest) {
 
       if (storeErr) {
         systemicError = true;
+        Sentry.captureException(storeErr, { tags: { webhook_stage: "store_lookup" } });
         for (const m of messages) {
           results.push({
             message_external_id: m?.id ?? "?",
@@ -239,6 +241,7 @@ export async function POST(req: NextRequest) {
             });
           } else {
             systemicError = true;
+            Sentry.captureException(e, { tags: { webhook_stage: "ingest_or_pipeline" } });
             results.push({
               message_external_id: externalId,
               status: "error",

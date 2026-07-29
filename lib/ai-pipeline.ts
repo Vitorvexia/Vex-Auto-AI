@@ -22,6 +22,7 @@ import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
 import { markReactivationResponded } from "@/lib/reactivation";
 import { maskPhone } from "@/lib/pii";
 import { applyCollectionUpdate } from "@/lib/collection";
+import * as Sentry from "@sentry/nextjs";
 
 // ============================================================================
 // Tipos
@@ -156,6 +157,7 @@ async function sendAiDisclosureIfNeeded(params: {
     // Não-fatal pro pipeline: aviso já está no banco com sent=false, refletindo
     // a realidade (mensagem não confirmadamente entregue) — não bloqueia a resposta da IA
     console.error("[ai-disclosure] falha ao enviar aviso de IA:", e);
+    Sentry.captureException(e, { tags: { pipeline_stage: "ai_disclosure_send" } });
   }
 }
 
@@ -192,6 +194,7 @@ export async function logAi(params: {
   } catch (e) {
     // ai_logs failure must never break the webhook response
     console.error("[ai_logs] falha ao gravar log:", e);
+    Sentry.captureException(e, { tags: { pipeline_stage: "log_ai_insert" } });
   }
 }
 
@@ -292,6 +295,7 @@ export async function runAiPipeline(params: {
       } catch (collectionErr) {
         // non-fatal: reply já foi gerado, persistência de coleta não bloqueia resposta
         console.error("[collection] falha ao persistir contexto/agendamento:", collectionErr);
+        Sentry.captureException(collectionErr, { tags: { pipeline_stage: "collection_persist" } });
       }
       if (update.forceHandoff) {
         result.should_handoff = true;
@@ -346,8 +350,15 @@ export async function runAiPipeline(params: {
           phone: phoneMasked,
           ts: new Date().toISOString(),
         }));
+        // Mensagem sintética, nunca sendErr diretamente — sendErr.message pode
+        // conter texto vindo da resposta da Meta (mesma cautela do log acima).
+        Sentry.captureMessage(
+          `whatsapp_send_failed category=${sendErr.category} status=${sendErr.statusCode ?? "?"}`,
+          { level: "error", tags: { pipeline_stage: "whatsapp_reply_send", category: sendErr.category } }
+        );
       } else {
         console.error("[whatsapp-send] erro inesperado:", sendErr);
+        Sentry.captureException(sendErr, { tags: { pipeline_stage: "whatsapp_reply_send" } });
       }
       // Não propaga: reply já está no banco, pipeline continua
     }
@@ -360,8 +371,9 @@ export async function runAiPipeline(params: {
           "AGUARDANDO_HUMANO",
           { handoff_to: "HUMANO" }
         );
-      } catch {
+      } catch (e) {
         // Reply já salvo; falha na transição não é fatal para o webhook
+        Sentry.captureException(e, { tags: { pipeline_stage: "handoff_transition" } });
       }
     }
 
@@ -394,8 +406,9 @@ export async function runAiPipeline(params: {
           .from("leads")
           .update({ score: scoreResult.newScore })
           .eq("id", params.leadId);
-      } catch {
+      } catch (e) {
         // non-fatal: reply já salvo, score update não bloqueia resposta
+        Sentry.captureException(e, { tags: { pipeline_stage: "score_update" } });
       }
       try {
         await supabaseAdmin.from("lead_score_events").insert({
@@ -408,13 +421,16 @@ export async function runAiPipeline(params: {
           reasons: scoreResult.reasons,
           source: scoreSource,
         });
-      } catch {
+      } catch (e) {
         // non-fatal: score é autoritativo, auditoria pode ter gaps no MVP
+        Sentry.captureException(e, { tags: { pipeline_stage: "lead_score_events_insert" } });
       }
     }
 
     // Marcar reativação como respondida se aplicável — non-fatal
-    markReactivationResponded(params.leadId).catch(() => {});
+    markReactivationResponded(params.leadId).catch((e) =>
+      Sentry.captureException(e, { tags: { pipeline_stage: "reactivation_mark_responded" } })
+    );
 
     const finalStatus: AgentStatus = !sendFailed
       ? "ok"
@@ -442,6 +458,19 @@ export async function runAiPipeline(params: {
     else if (e instanceof AgentOutputError) agentStatus = "output_error";
 
     const errorMsg = e instanceof Error ? e.message : String(e);
+
+    // Falha de pipeline (LLM timeout/parse/output ou erro genérico) — risco
+    // conhecido (CURRENT KNOWN RISKS, 27_PROJECT_STATUS.md). store/conversation/
+    // lead_id são identificadores internos (UUID), não PII — beforeSend ainda
+    // escaneia errorMsg como rede de segurança caso algo vaze por engano.
+    Sentry.captureException(e, {
+      tags: { pipeline_stage: "run_ai_pipeline", agent_status: agentStatus },
+      extra: {
+        store_id: params.storeId,
+        conversation_id: params.conversationId,
+        lead_id: params.leadId,
+      },
+    });
 
     await logAi({
       storeId: params.storeId,

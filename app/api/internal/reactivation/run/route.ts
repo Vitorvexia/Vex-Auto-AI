@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createHash, timingSafeEqual } from "node:crypto";
 import { runReactivationJob } from "@/lib/reactivation";
+import * as Sentry from "@sentry/nextjs";
 
 export const runtime = "nodejs";
 
@@ -110,6 +111,7 @@ async function runJob(opts: { storeId?: string; limit?: number }) {
         error: err instanceof Error ? err.message : String(err),
       })
     );
+    Sentry.captureException(err, { tags: { job: "reactivation_run" } });
     return NextResponse.json({ ok: false, error: "job_failed" }, { status: 500 });
   }
 }
