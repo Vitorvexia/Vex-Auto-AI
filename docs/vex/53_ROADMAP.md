@@ -197,8 +197,12 @@ A mesma feature era obrigatória em (A) e desperdício em (B) — decisão fecha
 | **ecosys AUTO** | Produz conteúdo educando o mercado sobre critérios de escolha. |
 | **DealerSpace / DealerAI, CarChat, G30 IA** | Mapeados anteriormente, sem análise de feature nesta rodada. |
 | **AEG Media / Venda.IA** | Agência de growth/aquisição full-service (+700 lojas alegadas, 9+ anos), NÃO plataforma de software. Serviços: tráfego pago, landing pages, implementação de CRM de terceiros, social media, chatbot, consultoria comercial. IA de atendimento vendida também avulsa (~R$800/mês, estimado não confirmado). Parceria de financiamento C6 Bank. Sem RENAVE, sem site próprio da loja, sem estoque integrado. Foco parcial em associações/adesão. Onboarding manual (~15 dias). |
+| **Thera Company / THERA.IA** | IA de atendimento WhatsApp+Instagram pura (não CRM, "só pré-atendimento" — palavras da própria call, 29/07/2026). Integra com estoque em tempo real, negociação com piso configurável por loja, atende motos. Volume alegado: clientes com 3mil leads/mês sem gargalo. Pricing real: R$450 implementação + R$850/mês até 600 leads/mês (reajuste contratual acima disso). Contrato flexível (sem fidelidade mínima obrigatória, cancelamento sem multa). Fraquezas confirmadas na call: sem resposta clara sobre tratamento de CPF/dado pessoal ("vai pros atendimentos" — vago), sem resposta sobre comportamento de fallback quando foge do escopo da IA ("não sei dizer"), áudio de IA genérico sem voz própria do cliente. |
+| **Azul360 CRM** | CRM omnichannel genérico (WhatsApp+Instagram+Messenger+IA), SEM vertical automotiva — zero estoque, zero FIPE, zero RENAVE, zero site. Não é concorrente direto, é referência de pricing de mercado: R$745–R$2.980/mês (5 a 20 usuários), IA cobrada por quota de resposta (100 a 1000/mês conforme plano). |
 
 **Padrão mínimo declarado pelo mercado em 2026:** IA deixou de ser diferencial e virou critério de seleção — descrição automática de veículo, respostas inteligentes no WhatsApp, sugestão de precificação. Somado a: estoque, CRM, portais, NF-e, site próprio, FIPE, RENAVE e controle de acesso por perfil.
+
+**Pricing benchmark (29/07/2026):** R$850/mês (até 600 leads/mês) é a primeira referência real de mercado pra módulo de IA de atendimento isolado (Thera). Azul360 (CRM genérico, não automotivo) referencia a faixa de CRM omnichannel com IA por quota: R$745–R$2.980/mês. Útil pra quando a Fase 5 (Monetização) definir pricing do VEX — nenhuma decisão de preço tomada aqui, só registro de dado de mercado.
 
 ---
 
