@@ -1082,6 +1082,72 @@ Baixa prioridade proposital — não implementar sem pedido explícito.
 
 ---
 
+BL-0013
+
+Title
+
+Demo por auto-simulação da IA (ferramenta de conversão de venda)
+
+Problem
+
+Hoje não existe forma de um prospect (dono de loja avaliando o VEX) EXPERIMENTAR a IA antes de comprar. A venda depende de explicar o produto, o que converte menos que deixar o prospect sentir na prática.
+
+Business Value
+
+Aumenta conversão da venda B2B. Técnica validada em concorrente real (Thera Company / THERA.IA — na demo deles, o vendedor IA diz "me manda um Oi que eu te atendo como o vendedor" e transforma a venda numa demonstração ao vivo; o prospect vira "cliente" por alguns minutos e sente o produto). Custo de construção baixo: reusa o MESMO motor de IA que já atende cliente em produção — não é produto novo, é o motor existente apontado pra um contexto de simulação.
+
+Customer Value
+
+O prospect (lojista) experimenta o atendimento de IA como se fosse um cliente da própria loja dele, antes de decidir comprar — reduz a incerteza de "será que funciona pro meu caso".
+
+Priority
+
+P2 (Fase 1 — ferramenta de aquisição; não bloqueia Fase 0).
+
+Status
+
+IDEA — não implementado, registrado a partir de análise competitiva (Thera, 28/07/2026).
+
+Owner
+
+Founder / Engineering
+
+Estimated Complexity
+
+Decompor em DUAS peças de complexidade distinta:
+(a) MODO DEMO na IA — um estado que sinaliza "isto é simulação, use um cenário de exemplo fixo (veículo fictício, loja fictícia), NÃO o estoque real de um tenant". Reusa o pipeline de IA existente. Médio, testável isolado.
+(b) CANAL DE ENTRADA da demo — onde o prospect dispara ("mande um oi"): botão na landing, número de WhatsApp dedicado do VEX pra demo, ou reuso de número existente. Depende de como a landing (1.7) e a infra de número são construídas. Não estimável até 1.7 existir.
+
+Dependencies
+
+Landing page de vendas (item 1.7 do `53_ROADMAP.md`) — a demo vive onde o prospect encontra o VEX. Conecta também com o mascote de qualificação (1.8). NÃO começar antes de 1.7 existir.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Item 1.7 e 1.8 do `53_ROADMAP.md`
+
+Target Version
+
+Fase 1
+
+Success Metrics
+
+Taxa de conversão prospect→demo→call agendada; a definir quando a landing existir.
+
+Notes
+
+Origem — análise competitiva da Thera Company (28/07/2026, via prints de conversa real). A Thera usa exatamente esse fluxo de demo por auto-simulação e converte bem. IMPORTANTE — o que replicar é só o FORMATO de demo (auto-simulação ao vivo), NÃO o tratamento de dado sensível da Thera: eles expõem CPF em texto claro no dossiê do grupo e não verificam idade antes de coletar dado de financiamento (num caso real o lead tinha 19 anos e o fluxo coletaria CPF/financiamento sem checagem). O VEX já é mais maduro nisso (CPF removido do `ai_logs`) e NÃO deve regredir. Ver também: item separado de verificação de idade no fluxo de coleta de financiamento (a validar/criar em sessão futura, não faz parte deste BL).
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
