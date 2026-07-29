@@ -13,6 +13,7 @@ export interface FinanciamentoData {
   cpf: string | null;
   renda_aproximada: string | null;
   entrada_disposta: string | null;
+  data_nascimento: string | null; // "YYYY-MM-DD" ou null se não informado
 }
 
 export interface TrocaData {
@@ -27,6 +28,8 @@ export interface TrocaData {
 export interface LeadContexto {
   pending_topics?: string[];
   financiamento?: FinanciamentoData | null;
+  financiamento_bloqueio?: string | null; // motivo do bloqueio de coleta (ex: "financiamento_menor_idade"), null quando resolvido
+  titular_diferente_do_lead?: boolean; // true quando o financiamento acabou coletado em nome de um responsável/terceiro, não do próprio lead
   troca?: TrocaData | null;
   troca_draft?: Partial<TrocaData> | null;
   [key: string]: unknown; // outras chaves já usadas no jsonb (ex: veiculo_interesse) não devem quebrar o tipo

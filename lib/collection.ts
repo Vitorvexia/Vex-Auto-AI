@@ -20,6 +20,22 @@ function isFilled(v: unknown): boolean {
   return v !== undefined && v !== null && v !== "";
 }
 
+const ISO_DATE = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+function calculateAge(dataNascimento: string, now: Date): number | null {
+  const m = ISO_DATE.exec(dataNascimento);
+  if (!m) return null;
+  const birth = new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3])));
+  if (Number.isNaN(birth.getTime())) return null;
+
+  let age = now.getUTCFullYear() - birth.getUTCFullYear();
+  const monthDiff = now.getUTCMonth() - birth.getUTCMonth();
+  if (monthDiff < 0 || (monthDiff === 0 && now.getUTCDate() < birth.getUTCDate())) {
+    age--;
+  }
+  return age;
+}
+
 function trocaComplete(draft: Partial<TrocaData>): boolean {
   return TROCA_REQUIRED_KEYS.every((k) => isFilled(draft[k]));
 }
@@ -42,7 +58,8 @@ function mergeTrocaDraft(
 export function applyCollectionUpdate(
   contexto: LeadContexto,
   collection: CollectionState,
-  collectedData: CollectedData | undefined
+  collectedData: CollectedData | undefined,
+  now: Date = new Date()
 ): CollectionUpdate {
   const next: LeadContexto = { ...contexto };
   const pendingTopics = new Set(next.pending_topics ?? []);
@@ -55,12 +72,27 @@ export function applyCollectionUpdate(
 
   if (collection.collect.includes("financiamento")) {
     const data = collectedData?.financiamento;
-    next.financiamento = {
-      nome_completo: data?.nome_completo ?? null,
-      cpf: data?.cpf ?? null,
-      renda_aproximada: data?.renda_aproximada ?? null,
-      entrada_disposta: data?.entrada_disposta ?? null,
-    };
+    const idade = data?.data_nascimento ? calculateAge(data.data_nascimento, now) : null;
+    const isMinor = idade !== null && idade < 18;
+
+    if (isMinor) {
+      // dado financeiro de menor nunca é persistido — bloqueio garantido em código, não confia só no prompt
+      delete next.financiamento;
+      next.financiamento_bloqueio = "financiamento_menor_idade";
+    } else {
+      if (next.financiamento_bloqueio) {
+        // turno anterior bloqueou por menoridade — esta coleta é de um novo titular (responsável/terceiro)
+        next.titular_diferente_do_lead = true;
+      }
+      delete next.financiamento_bloqueio;
+      next.financiamento = {
+        nome_completo: data?.nome_completo ?? null,
+        cpf: data?.cpf ?? null,
+        renda_aproximada: data?.renda_aproximada ?? null,
+        entrada_disposta: data?.entrada_disposta ?? null,
+        data_nascimento: data?.data_nascimento ?? null,
+      };
+    }
     pendingTopics.delete("financiamento");
     forceHandoff = true;
   }

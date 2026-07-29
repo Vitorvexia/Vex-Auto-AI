@@ -1148,6 +1148,73 @@ Origem — análise competitiva da Thera Company (28/07/2026, via prints de conv
 
 ---
 
+BL-0014
+
+Title
+
+Guarda de idade no fluxo de coleta de financiamento
+
+Problem
+
+`FinanciamentoData` (`lib/ai.ts`) não tem campo de nascimento/idade, e nenhum ponto do fluxo de coleta (`lib/guardrails.ts`, `lib/collection.ts`, `lib/prompts.ts`) checa maioridade antes de persistir CPF/renda em `contexto.financiamento`. Achado durante investigação de compliance (29/07/2026), motivada por análise competitiva da Thera (28/07/2026, ver notas de `BL-0013`) — a Thera coleta CPF/dado financeiro sem checar idade, inclusive de um lead de 19 anos num caso real observado. VEX hoje tem a mesma lacuna estrutural (não foi cópia do bug da Thera — o gap já existia desde o design original do spec de coleta, `2026-07-24-financiamento-troca-collection-design.md`, que nunca mencionou idade nos Edge Cases).
+
+Business Value
+
+Evita risco de compliance/reputacional — coletar CPF e dado financeiro de menor sem checagem é o tipo de falha que uma auditoria ou imprensa usaria contra o produto. Diferencial de maturidade frente ao concorrente mapeado (DL-0007).
+
+Customer Value
+
+Lojista não fica exposto a um financiamento iniciado no nome de um menor de idade — vendedor humano recebe o caso já sinalizado, com motivo explícito, em vez de descobrir tarde na negociação.
+
+Priority
+
+P1 — compliance, não é feature de conversão, mas bloqueia lacuna de risco identificada com evidência externa real.
+
+Status
+
+✔ CONCLUÍDO (29/07/2026) — implementado via TDD na mesma sessão. `lib/ai.ts`/`lib/agent-context.ts` (schema: `data_nascimento`, `financiamento_bloqueio`, `titular_diferente_do_lead`), `lib/prompts.ts` (pergunta única inclui nascimento; instrução de troca de titular), `lib/collection.ts` (`calculateAge` + guarda em `applyCollectionUpdate`). Sem migration (jsonb). 10 testes novos (`ai-validation.test.ts`, `collection.test.ts`, `prompts.test.ts`), suíte completa 688/688 verde, lint e typecheck limpos.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Médio. Toca 3 arquivos sem migration:
+- `lib/ai.ts` — `FinanciamentoData` ganha `data_nascimento` (ISO `YYYY-MM-DD`, consistente com `agendamento_data`/migration 022); `LeadContexto`/estado de coleta ganha `titular_diferente_do_lead: boolean` pra rastreio de troca de titular
+- `lib/prompts.ts` — pergunta única de financiamento passa a incluir nascimento; instrução condicional pra IA propor troca de titular quando detectar menor, reiniciando coleta completa (nome+CPF+renda+entrada) pra nova pessoa, nunca só um CPF solto
+- `lib/collection.ts` (`applyCollectionUpdate`) — calcula idade a partir de `data_nascimento` antes de persistir `cpf`/`renda_aproximada`; bloqueia persistência se <18, sinaliza handoff com motivo específico (`financiamento_menor_idade`, não handoff genérico); mesmo bloqueio se repete se o responsável indicado também for menor
+
+Dependencies
+
+Nenhuma técnica — estende fluxo já implementado (`147f1ef`, spec `2026-07-24-financiamento-troca-collection-design.md`). Sem migration (jsonb, mesmo padrão de `troca_draft`).
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+BL-0013 (notes — origem do achado, análise competitiva Thera 28/07/2026)
+
+Target Version
+
+Fase 0/2 — compliance, não espera fase de escala
+
+Success Metrics
+
+Zero CPF/renda persistido em `contexto.financiamento` para lead sinalizado como menor de idade. Handoff com motivo `financiamento_menor_idade` rastreável no dossiê.
+
+Notes
+
+Fora de escopo: verificação de identidade real (confirmar que quem informou o CPF é de fato quem diz ser) — limitação inerente de qualquer canal de texto, não solucionável neste item. Mesma filosofia do guardrail de margem (`lib/actions.ts`) e da fase collect de financiamento existente (`lib/collection.ts`, `should_handoff` forçado no código): regra inegociável garantida por código, não confia só na instrução do prompt.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

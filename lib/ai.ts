@@ -133,6 +133,7 @@ function validateFinanciamento(raw: unknown): FinanciamentoData | null {
     cpf: coerceStringOrNull(o.cpf),
     renda_aproximada: coerceStringOrNull(o.renda_aproximada),
     entrada_disposta: coerceStringOrNull(o.entrada_disposta),
+    data_nascimento: coerceStringOrNull(o.data_nascimento),
   };
 }
 

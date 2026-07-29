@@ -88,6 +88,7 @@ describe("validateOutput — collected_data", () => {
           cpf: "123.456.789-00",
           renda_aproximada: "3000",
           entrada_disposta: "2000",
+          data_nascimento: "1990-05-20",
         },
       },
     };
@@ -97,7 +98,24 @@ describe("validateOutput — collected_data", () => {
       cpf: "123.456.789-00",
       renda_aproximada: "3000",
       entrada_disposta: "2000",
+      data_nascimento: "1990-05-20",
     });
+  });
+
+  it("collected_data.financiamento sem data_nascimento → campo vem null", () => {
+    const raw = {
+      ...base,
+      collected_data: {
+        financiamento: {
+          nome_completo: "João Silva",
+          cpf: null,
+          renda_aproximada: null,
+          entrada_disposta: null,
+        },
+      },
+    };
+    const result = validateOutput(raw, 0);
+    expect(result.collected_data?.financiamento?.data_nascimento).toBeNull();
   });
 
   it("collected_data.troca parcial preenche campos ausentes com null", () => {

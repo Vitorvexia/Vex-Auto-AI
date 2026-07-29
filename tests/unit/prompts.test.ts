@@ -167,6 +167,15 @@ describe("buildPrompt — coleta de financiamento/troca", () => {
     expect(system).toContain("entrada");
   });
 
+  it("ask financiamento: pergunta única inclui data de nascimento", () => {
+    const guardrail: GuardrailResult = {
+      mode: "normal", reason: "padrão",
+      collection: { ask: ["financiamento"], collect: [], missingTrocaFields: [] },
+    };
+    const { system } = buildPrompt(makeCtx(), guardrail);
+    expect(system).toContain("nascimento");
+  });
+
   it("collect financiamento: instrui should_handoff=true e menciona collected_data", () => {
     const guardrail: GuardrailResult = {
       mode: "normal", reason: "padrão",
@@ -175,6 +184,18 @@ describe("buildPrompt — coleta de financiamento/troca", () => {
     const { system } = buildPrompt(makeCtx(), guardrail);
     expect(system).toContain("should_handoff=true");
     expect(system).toContain("collected_data");
+  });
+
+  it("collect financiamento: instrui extração de data_nascimento e troca de titular se menor de idade", () => {
+    const guardrail: GuardrailResult = {
+      mode: "normal", reason: "padrão",
+      collection: { ask: [], collect: ["financiamento"], missingTrocaFields: [] },
+    };
+    const { system } = buildPrompt(makeCtx(), guardrail);
+    expect(system).toContain("data_nascimento");
+    expect(system).toContain("menor de idade");
+    expect(system).toContain("responsável");
+    expect(system).toContain("nome completo, CPF, renda aproximada e entrada dela");
   });
 
   it("ask troca: instrui pergunta única por vez, começando por modelo/ano", () => {

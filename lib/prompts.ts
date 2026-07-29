@@ -20,14 +20,14 @@ const MODE_INSTRUCTIONS: Record<GuardrailMode, string> = {
 
 const ASK_INSTRUCTIONS: Record<CollectionTopic, string> = {
   financiamento:
-    'O lead demonstrou interesse em financiamento. Nesta resposta, faça UMA única pergunta reunindo, numa mensagem só: nome completo, CPF, renda aproximada, e "quanto você tá disposto a dar de entrada?". Não calcule parcela, taxa ou condição nenhuma — só colete os dados. Um vendedor vai testar em várias financeiras depois.',
+    'O lead demonstrou interesse em financiamento. Nesta resposta, faça UMA única pergunta reunindo, numa mensagem só: nome completo, CPF, data de nascimento, renda aproximada, e "quanto você tá disposto a dar de entrada?". Não calcule parcela, taxa ou condição nenhuma — só colete os dados. Um vendedor vai testar em várias financeiras depois.',
   troca:
     "O lead mencionou moto na troca. Pergunte apenas UM dado por vez — nunca junte tudo numa mensagem só. Você ainda não sabe nada sobre a moto dele: comece perguntando o modelo e o ano.",
 };
 
 const COLLECT_INSTRUCTIONS: Record<CollectionTopic, string> = {
   financiamento:
-    "O lead está respondendo à pergunta de financiamento feita anteriormente. Extraia nome completo, CPF, renda aproximada e quanto ele tá disposto a dar de entrada da resposta, preenchendo collected_data.financiamento (use null pro que não conseguir identificar). Sempre defina should_handoff=true nesta resposta e avise o lead que um vendedor vai continuar o atendimento.",
+    'O lead está respondendo à pergunta de financiamento feita anteriormente. Extraia nome completo, CPF, data de nascimento, renda aproximada e quanto ele tá disposto a dar de entrada da resposta, preenchendo collected_data.financiamento incluindo o campo data_nascimento no formato AAAA-MM-DD (use null pro que não conseguir identificar). Se pela data de nascimento informada a pessoa for menor de idade, NÃO prossiga a coleta pra essa pessoa: diga que esse financiamento precisa estar no nome de alguém maior de idade, pergunte se pode ser um responsável ou familiar que fique com o financiamento, e não defina should_handoff=true ainda — espere a resposta. Se o lead topar, reinicie a coleta do zero pra nova pessoa: peça nome completo, CPF, renda aproximada e entrada dela também, nunca aceite só um CPF solto sem o resto dos dados da nova titular. Fora do caso de menor de idade, sempre defina should_handoff=true nesta resposta e avise o lead que um vendedor vai continuar o atendimento.',
   troca:
     "O lead está no meio da coleta de dados da moto de troca. Extraia da resposta atual o que conseguir pros campos de collected_data.troca (modelo, ano, km, servico_recente, agendamento_data, agendamento_horario — use null pro que ainda não souber). Alguns modelo+ano têm variações relevantes (ex: Honda Titan 2010 pode ser partida elétrica ou pedal/kickstart) — se reconhecer isso pelo seu conhecimento sobre motos, só considere o campo modelo completo depois de perguntar a variação. Quando tiver os 5 campos, avise que um vendedor vai confirmar e defina should_handoff=true.",
 };
