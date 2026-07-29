@@ -131,6 +131,17 @@ describe("buildFollowUpText — templates", () => {
     expect(text).not.toContain("  Ana");
   });
 
+  it("attempt 1: nome só emoji usa 'você' (gap BL-0015)", () => {
+    const text = buildFollowUpText(1, "😊");
+    expect(text).toContain("você");
+    expect(text).not.toContain("😊");
+  });
+
+  it("attempt 1: nome só símbolo usa 'você' (gap BL-0015)", () => {
+    const text = buildFollowUpText(1, "-");
+    expect(text).toContain("você");
+  });
+
   it("attempt 1, 2, 3 têm textos distintos", () => {
     const t1 = buildFollowUpText(1, "X");
     const t2 = buildFollowUpText(2, "X");
@@ -183,6 +194,10 @@ describe("followUpTemplateParams", () => {
 
   it("nome com espaços extras usa trim — mesmo fallback de buildFollowUpText", () => {
     expect(followUpTemplateParams("  Ana  ")).toEqual(["Ana"]);
+  });
+
+  it("nome só emoji vira 'você' (gap BL-0015)", () => {
+    expect(followUpTemplateParams("😊")).toEqual(["você"]);
   });
 });
 

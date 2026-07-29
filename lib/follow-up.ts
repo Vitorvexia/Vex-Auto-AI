@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage, sendWhatsAppTemplateMessage } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { maskPhone } from "@/lib/pii";
+import { getSafeName } from "@/lib/lead-name";
 
 // Envio por template Meta aprovado (follow_up_1/2/3) — desligado por padrão.
 // Template não aprovado retorna erro da Meta; ativar só depois da aprovação
@@ -31,8 +32,7 @@ export function buildFollowUpText(
   attemptNumber: number,
   nome: string | null
 ): string {
-  const safeName = nome?.trim() || "você";
-  return TEMPLATES[clampAttempt(attemptNumber)](safeName);
+  return TEMPLATES[clampAttempt(attemptNumber)](getSafeName(nome));
 }
 
 /** Nome do template Meta aprovado pra essa tentativa (ex: "follow_up_1"). */
@@ -42,7 +42,7 @@ export function followUpTemplateName(attemptNumber: number): string {
 
 /** Parâmetros do template na ordem — {{1}} = nome. Mesmo fallback de buildFollowUpText. */
 export function followUpTemplateParams(nome: string | null): string[] {
-  return [nome?.trim() || "você"];
+  return [getSafeName(nome)];
 }
 
 // ---------------------------------------------------------------------------

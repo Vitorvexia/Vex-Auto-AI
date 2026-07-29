@@ -1221,6 +1221,16 @@ Achado adjacente durante fechamento do item 0.4 (Sentry, 2026-07-29): `AgentPars
 
 ---
 
+BL-0015 — RESOLVIDO (2026-07-29)
+
+Achado durante investigação do fallback de nome nos templates de follow-up/reativação: `nome?.trim() || "você"` (4 ocorrências, `lib/follow-up.ts` + `lib/reactivation.ts`) só cobria `null`/vazio/espaço. Nome tipo `"😊"` ou `"-"` (não-vazio após trim, mas sem letra) passava direto, virando vocativo sem sentido no WhatsApp do lead.
+
+Fix: `lib/lead-name.ts` — `isValidLeadName`/`getSafeName` centralizados, exigindo ao menos 1 letra Unicode (`/\p{L}/u`). As 4 ocorrências substituídas pela chamada única. TDD (`tests/unit/lead-name.test.ts` + casos de integração em `follow-up.test.ts`/`reactivation.test.ts`). Ver detalhe em `27_PROJECT_STATUS.md`.
+
+Fora de escopo (decisão consciente, não gap esquecido): origem do dado (`leads.nome` ← `profile.name` do WhatsApp, capturado sem validação no webhook) não foi tocada — fix é só no ponto de uso do template.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

@@ -136,6 +136,12 @@ describe("buildReactivationText — sem veículo", () => {
     expect(text).not.toContain("  Ana");
   });
 
+  it("attempt 1: nome só emoji usa 'você' (gap BL-0015)", () => {
+    const text = buildReactivationText(1, "😊");
+    expect(text).toContain("você");
+    expect(text).not.toContain("😊");
+  });
+
   it("attempt 1 e 2 têm textos distintos", () => {
     const t1 = buildReactivationText(1, "X");
     const t2 = buildReactivationText(2, "X");
@@ -260,6 +266,10 @@ describe("reactivationTemplateParams", () => {
 
   it("nome null vira 'você' — mesmo fallback de buildReactivationText", () => {
     expect(reactivationTemplateParams(null)).toEqual(["você"]);
+  });
+
+  it("nome só emoji vira 'você' (gap BL-0015)", () => {
+    expect(reactivationTemplateParams("😊")).toEqual(["você"]);
   });
 
   it("veiculo_interesse null/vazio omite o segundo parâmetro", () => {

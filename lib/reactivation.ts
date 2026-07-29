@@ -2,6 +2,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage, sendWhatsAppTemplateMessage } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { maskPhone } from "@/lib/pii";
+import { getSafeName } from "@/lib/lead-name";
 
 // Envio por template Meta aprovado (reactivation_vehicle_1/2/3,
 // reactivation_no_vehicle_1/2/3) — desligado por padrão, mesmo mecanismo de
@@ -53,7 +54,7 @@ export function buildReactivationText(
   nome: string | null,
   leadContext?: LeadReactivationContext | null
 ): string {
-  const safeName = nome?.trim() || "você";
+  const safeName = getSafeName(nome);
   const veiculo = safeVehicle(leadContext);
   const n = clampAttempt(attemptNumber);
 
@@ -78,7 +79,7 @@ export function reactivationTemplateParams(
   nome: string | null,
   leadContext?: LeadReactivationContext | null
 ): string[] {
-  const safeName = nome?.trim() || "você";
+  const safeName = getSafeName(nome);
   const veiculo = safeVehicle(leadContext);
   return veiculo ? [safeName, veiculo] : [safeName];
 }
