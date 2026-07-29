@@ -24,3 +24,8 @@ supabase/.temp/
 
 # Git worktrees (isolated workspaces for subagent-driven implementation)
 .worktrees/
+
+# AGENTS.md — cópia manual desatualizada do CLAUDE.md (find/replace quebrado,
+# ver linha "Codex via Anthropic API"). Não versionar até existir processo
+# real de sincronização — hoje viraria dívida de manutenção duplicada.
+AGENTS.md
