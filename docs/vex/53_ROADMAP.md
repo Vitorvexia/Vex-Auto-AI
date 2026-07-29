@@ -30,7 +30,7 @@ Três fatos moldam este roadmap:
 | # | Item | Por quê | Depende de | Esforço |
 |---|------|---------|------------|---------|
 | 0.1 | ✔ **CONCLUÍDO** (2026-07-27) — **WhatsApp em produção** | B001 resolvido (`27_PROJECT_STATUS.md`): `stores.whatsapp_phone_number_id` da Speed Motos = número real dedicado (`1238597592667311`, WABA `28099462022990346`), não mais sandbox. Mensagens reais processadas com `agent_status: ok` em 27/07 (18:31–22:44). Validação de produção segue acumulando (janela ainda curta) — ver `27_PROJECT_STATUS.md` MVP STATUS. | Chip + WABA (feito) | M |
-| 0.2 | **Templates Meta aprovados** | `lib/follow-up.ts:105` e `lib/reactivation.ts:205` enviam texto livre. Fora da janela de 24h, a Meta rejeita. Follow-up e reativação simplesmente não funcionam em produção hoje. | 0.1 | P |
+| 0.2 | ✔ **CONCLUÍDO** (2026-07-29) — **Templates Meta aprovados** | 9 templates aprovados na Meta, `WHATSAPP_TEMPLATE_SEND_ENABLED=true` em produção, envio real de `follow_up_1` confirmado em aparelho (`{{1}}=Carlos`, copy bate exato com `TEMPLATES[1]` local, `lib/follow-up.ts`) — fecha B006 (`27_PROJECT_STATUS.md`). | 0.1 | P |
 | 0.3 | **RBAC** | Zero hoje: qualquer usuário da loja reatribui ou altera qualquer lead. É critério de escolha declarado no mercado (LGPD, controle de acesso por perfil) e fonte previsível de conflito interno entre vendedores. | — | M |
 | 0.4 | **Monitoramento de erro** (Sentry ou similar) | Não existe nada hoje. Um SaaS cujo core é IA processando conversa em tempo real, sem alerta de falha, é reclamação esperando acontecer. | — | P |
 | 0.5 | **Log de auditoria** (quem fez o quê) | LGPD + rastreabilidade. Vira obrigatório quando RENAVE entrar. | 0.3 | P |
