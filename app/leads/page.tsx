@@ -1,5 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
-import { AuthError } from "@/lib/auth";
+import { AuthError, getServerUserRole } from "@/lib/auth";
 import { OPEN_CONVERSATION_STATUSES, type LeadStatus, type Lead } from "@/types/domain";
 import { calculateLeadPriority, sortLeads, type PriorityTier } from "@/lib/lead-priority";
 import { KanbanColumn } from "@/app/components/KanbanColumn";
@@ -97,6 +97,9 @@ export default async function LeadsPage({
 
   const leads = leadsResult.data ?? [];
   const vendedores = (usersResult.data ?? []) as { id: string; nome: string }[];
+
+  const role = await getServerUserRole();
+  const canReassign = role !== "vendedor";
 
   const enriched: Enriched[] = leads.map((l: { id: string; nome: string | null; phone_normalized: string; score: number; lead_status: string; assigned_to: string | null; updated_at: string; conversations?: { id: string; ultima_mensagem_em: string | null; conversation_status: string | null }[] }) => {
     const openConv = (l.conversations ?? []).find((c) =>
@@ -267,6 +270,7 @@ export default async function LeadsPage({
                     {...l}
                     assignedTo={l.assigned_to}
                     vendedores={vendedores}
+                    canReassign={canReassign}
                   />
                 ))
               )}

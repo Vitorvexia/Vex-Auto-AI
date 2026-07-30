@@ -28,6 +28,7 @@ type Props = {
   priority_label: string;
   assignedTo?: string | null;
   vendedores?: { id: string; nome: string }[];
+  canReassign?: boolean;
 };
 
 type UrgencyLevel = "cooling" | "urgent" | "stale";
@@ -57,6 +58,7 @@ export function LeadCard({
   priority_label,
   assignedTo,
   vendedores,
+  canReassign,
 }: Props) {
   const href        = conversation_id ? `/conversations/${conversation_id}` : "#";
   const sc          = scoreClass(score);
@@ -104,6 +106,7 @@ export function LeadCard({
           leadId={id}
           assignedTo={assignedTo ?? null}
           vendedores={vendedores}
+          canReassign={canReassign}
         />
       )}
     </div>

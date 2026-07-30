@@ -7,9 +7,10 @@ type Props = {
   leadId: string;
   assignedTo: string | null;
   vendedores: { id: string; nome: string }[];
+  canReassign?: boolean;
 };
 
-export function LeadAssignmentSelect({ leadId, assignedTo, vendedores }: Props) {
+export function LeadAssignmentSelect({ leadId, assignedTo, vendedores, canReassign = true }: Props) {
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -56,7 +57,7 @@ export function LeadAssignmentSelect({ leadId, assignedTo, vendedores }: Props) 
       <select
         value={value}
         onChange={handleChange}
-        disabled={isPending}
+        disabled={isPending || !canReassign}
         className="lead-assignment-select"
         aria-label="Atribuir vendedor"
       >
