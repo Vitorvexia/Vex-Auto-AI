@@ -4,7 +4,7 @@
 create table public.audit_logs (
   id            uuid primary key default gen_random_uuid(),
   store_id      uuid not null references public.stores(id) on delete cascade,
-  user_id       uuid references public.users(id) on delete set null,
+  user_id       uuid,
   actor_role    text,
   action        text not null,
   resource_type text not null,

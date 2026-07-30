@@ -210,14 +210,17 @@ export async function updateLeadStatus(
     throw new Error(`Status inválido: ${newStatus}`);
   }
 
+  let vehicleId: string | null = null;
+  let valorFinal = 0;
+
   if (newStatus === "FECHADO") {
-    const vehicleId     = (formData.get("vehicle_id")   as string | null)?.trim() || null;
-    const valorFinalRaw =  formData.get("valor_final")  as string | null;
+    vehicleId = (formData.get("vehicle_id")   as string | null)?.trim() || null;
+    const valorFinalRaw = formData.get("valor_final")  as string | null;
 
     if (!vehicleId) {
       throw new Error("Selecione o veículo vendido para fechar esta venda.");
     }
-    const valorFinal = parseFloat(valorFinalRaw ?? "");
+    valorFinal = parseFloat(valorFinalRaw ?? "");
     if (isNaN(valorFinal) || valorFinal <= 0) {
       throw new Error("Informe o valor de venda para fechar esta negociação.");
     }
@@ -244,7 +247,11 @@ export async function updateLeadStatus(
       .eq("id", leadId)
       .eq("store_id", storeId);
     if (updateError) throw new Error("Erro ao registrar dados da venda.");
+  }
 
+  await transitionLeadStatus(leadId, newStatus as LeadStatus);
+  if (newStatus === "FECHADO") {
+    markReactivationConverted(leadId, storeId).catch(() => {});
     await logAudit({
       storeId,
       userId: actorId,
@@ -254,9 +261,6 @@ export async function updateLeadStatus(
       metadata: { vehicle_id: vehicleId, valor_final: valorFinal },
     });
   }
-
-  await transitionLeadStatus(leadId, newStatus as LeadStatus);
-  if (newStatus === "FECHADO") markReactivationConverted(leadId, storeId).catch(() => {});
   revalidatePath(`/conversations/${conversationId}`);
   revalidatePath("/conversations");
 }

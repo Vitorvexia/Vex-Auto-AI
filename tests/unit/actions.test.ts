@@ -465,6 +465,17 @@ describe("updateLeadStatus — guardrail de margem no fechamento", () => {
 
     expect(mockLogAudit).not.toHaveBeenCalled();
   });
+
+  it("MARGIN-9: transição rejeitada por transitionLeadStatus (mesmo após validação de margem) → logAudit não é chamado", async () => {
+    setupMultiTableMock({ id: "v-1", custo: 70000, margem_minima: 8000 });
+    mockTransitionLead.mockRejectedValue(new Error("transição inválida"));
+
+    await expect(
+      updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ vehicleId: "v-1", valorFinal: 90000 }))
+    ).rejects.toThrow();
+
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
