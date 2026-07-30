@@ -256,7 +256,7 @@ describe("createStoreUser", () => {
     mockFrom.mockReturnValue(chain({ insert: { data: null, error: null } }));
 
     await createStoreUser(
-      makeForm({ email: "u@x.com", nome: "User", role: "admin", store_id: "s-1" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja", store_id: "s-1" })
     );
 
     expect(mockAssertSuperAdmin).toHaveBeenCalledTimes(1);
@@ -271,7 +271,7 @@ describe("createStoreUser", () => {
     mockFrom.mockReturnValue(usersChain);
 
     const result = await createStoreUser(
-      makeForm({ email: "u@x.com", nome: "User", role: "admin", store_id: "s-1" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja", store_id: "s-1" })
     );
 
     expect(result).toEqual({
@@ -291,7 +291,7 @@ describe("createStoreUser", () => {
     });
 
     const result = await createStoreUser(
-      makeForm({ email: "u@x.com", nome: "User", role: "admin", store_id: "s-1" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja", store_id: "s-1" })
     );
 
     expect(result).toEqual({ error: "SMTP not configured" });
@@ -302,7 +302,7 @@ describe("createStoreUser", () => {
     mockInvite.mockResolvedValue({ data: { user: null }, error: null });
 
     const result = await createStoreUser(
-      makeForm({ email: "u@x.com", nome: "User", role: "admin", store_id: "s-1" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja", store_id: "s-1" })
     );
 
     expect(result).toEqual({ error: "invite_failed_no_user_id" });
@@ -320,7 +320,7 @@ describe("createStoreUser", () => {
     mockDeleteUser.mockResolvedValue({ data: null, error: null });
 
     const result = await createStoreUser(
-      makeForm({ email: "u@x.com", nome: "User", role: "admin", store_id: "s-1" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja", store_id: "s-1" })
     );
 
     expect(result).toEqual({ error: "FK violation" });
@@ -339,7 +339,7 @@ describe("createStoreUser", () => {
     const errorSpy = vi.spyOn(console, "error");
 
     const result = await createStoreUser(
-      makeForm({ email: "u@x.com", nome: "User", role: "admin", store_id: "s-1" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja", store_id: "s-1" })
     );
 
     expect(result).toEqual({ error: "FK violation" });
@@ -357,7 +357,7 @@ describe("createStoreUser", () => {
     mockFrom.mockReturnValue(chain({ insert: { data: null, error: null } }));
 
     const result = await createStoreUser(
-      makeForm({ email: "u@x.com", nome: "User", role: "admin", store_id: "s-1" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja", store_id: "s-1" })
     );
 
     expect(result).toMatchObject({ success: true });
@@ -379,7 +379,7 @@ describe("createStoreUser", () => {
 
     await expect(
       createStoreUser(
-        makeForm({ email: "u@x.com", nome: "User", role: "admin", store_id: "s-1" })
+        makeForm({ email: "u@x.com", nome: "User", role: "dono_loja", store_id: "s-1" })
       )
     ).rejects.toThrow("redirect:/leads");
     expect(mockInvite).not.toHaveBeenCalled();
@@ -401,7 +401,7 @@ describe("createStoreUserDirect", () => {
     const result = await createStoreUserDirect(
       "s-1",
       null,
-      makeForm({ email: "u@x.com", nome: "User", role: "admin" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja" })
     );
 
     expect(result).toEqual({
@@ -421,7 +421,7 @@ describe("createStoreUserDirect", () => {
     const result = await createStoreUserDirect(
       "s-1",
       null,
-      makeForm({ email: "u@x.com", nome: "User", role: "admin" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja" })
     );
 
     expect(result).toEqual({ error: "email already taken" });
@@ -442,7 +442,7 @@ describe("createStoreUserDirect", () => {
     const result = await createStoreUserDirect(
       "s-1",
       null,
-      makeForm({ email: "u@x.com", nome: "User", role: "admin" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja" })
     );
 
     expect(result).toEqual({ error: "FK violation" });
@@ -462,7 +462,7 @@ describe("createStoreUserDirect", () => {
     await createStoreUserDirect(
       "s-1",
       null,
-      makeForm({ email: "u@x.com", nome: "User", role: "admin" })
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja" })
     );
 
     expect(logSpy).not.toHaveBeenCalled();

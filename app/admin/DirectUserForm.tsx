@@ -49,7 +49,7 @@ export function DirectUserForm({ storeId }: { storeId: string }) {
             <div>
               <label className="block text-xs font-medium mb-1">Role</label>
               <select name="role" className="border rounded px-2 py-1 text-sm">
-                <option value="admin">admin</option>
+                <option value="dono_loja">dono_loja</option>
                 <option value="vendedor">vendedor</option>
               </select>
             </div>

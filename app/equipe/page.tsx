@@ -230,7 +230,7 @@ export default async function EquipePage() {
               <div className="team-avatar">{s.initials}</div>
               <div className="team-name">{s.nome}</div>
               <div className="team-role" style={{ marginBottom: "6px" }}>
-                {s.role === "admin" ? "Admin" : "Vendedor"}
+                {s.role === "dono_loja" ? "Dono da loja" : "Vendedor"}
               </div>
 
               <div className={`op-badge ${statusBadgeCss(s.status)}`}>

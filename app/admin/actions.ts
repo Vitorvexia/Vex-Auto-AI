@@ -78,14 +78,14 @@ export async function createStoreUser(formData: FormData) {
 
   const email = ((formData.get("email") as string) ?? "").trim();
   const nome = ((formData.get("nome") as string) ?? "").trim();
-  const role = formData.get("role") as "admin" | "vendedor";
+  const role = formData.get("role") as "dono_loja" | "vendedor";
   const storeId = formData.get("store_id") as string;
 
   if (!email || !nome || !storeId)
     return { error: "email, nome e store_id são obrigatórios" };
 
-  if (!["admin", "vendedor"].includes(role))
-    return { error: "role inválido: use 'admin' ou 'vendedor'" };
+  if (!["dono_loja", "vendedor"].includes(role))
+    return { error: "role inválido: use 'dono_loja' ou 'vendedor'" };
 
   const { data: authData, error: authErr } =
     await supabaseAdmin.auth.admin.inviteUserByEmail(email, {
@@ -125,13 +125,13 @@ export async function createStoreUserDirect(
 
   const email = ((formData.get("email") as string) ?? "").trim();
   const nome = ((formData.get("nome") as string) ?? "").trim();
-  const role = formData.get("role") as "admin" | "vendedor";
+  const role = formData.get("role") as "dono_loja" | "vendedor";
 
   if (!email || !nome || !storeId)
     return { error: "email, nome e store_id são obrigatórios" };
 
-  if (!["admin", "vendedor"].includes(role))
-    return { error: "role inválido: use 'admin' ou 'vendedor'" };
+  if (!["dono_loja", "vendedor"].includes(role))
+    return { error: "role inválido: use 'dono_loja' ou 'vendedor'" };
 
   const { randomBytes } = await import("crypto");
   const password = randomBytes(12).toString("base64url").slice(0, 16);
