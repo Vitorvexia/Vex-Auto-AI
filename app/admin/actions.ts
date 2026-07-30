@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { assertSuperAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
+import { logAudit } from "@/lib/audit";
 
 export type CreateStoreState = { success: true } | { error: string } | null;
 
@@ -74,7 +75,7 @@ export async function updateStore(storeId: string, formData: FormData) {
 }
 
 export async function createStoreUser(formData: FormData) {
-  await assertSuperAdmin();
+  const actorId = await assertSuperAdmin();
 
   const email = ((formData.get("email") as string) ?? "").trim();
   const nome = ((formData.get("nome") as string) ?? "").trim();
@@ -112,6 +113,15 @@ export async function createStoreUser(formData: FormData) {
     return { error: userErr.message };
   }
 
+  await logAudit({
+    storeId,
+    userId: actorId,
+    action: "user.created",
+    resourceType: "user",
+    resourceId: authData.user.id,
+    metadata: { role },
+  });
+
   revalidatePath("/admin");
   return { success: true, message: `Convite enviado para ${email}` };
 }
@@ -121,7 +131,7 @@ export async function createStoreUserDirect(
   _prev: CreateUserState,
   formData: FormData
 ): Promise<CreateUserState> {
-  await assertSuperAdmin();
+  const actorId = await assertSuperAdmin();
 
   const email = ((formData.get("email") as string) ?? "").trim();
   const nome = ((formData.get("nome") as string) ?? "").trim();
@@ -162,6 +172,15 @@ export async function createStoreUserDirect(
       });
     return { error: userErr.message };
   }
+
+  await logAudit({
+    storeId,
+    userId: actorId,
+    action: "user.created",
+    resourceType: "user",
+    resourceId: authData.user.id,
+    metadata: { role },
+  });
 
   revalidatePath("/admin");
   return { success: true, password, email };
