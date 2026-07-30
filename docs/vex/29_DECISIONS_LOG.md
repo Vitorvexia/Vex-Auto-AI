@@ -293,6 +293,8 @@ Potential Risks
 
 Se um segundo vendedor ativo entrar em produção antes da revisão, qualquer vendedor continua vendo/respondendo lead do colega — risco operacional baixo (não é falha de segurança entre lojas, é falta de segregação dentro da mesma loja), aceitável até o gatilho de revisão.
 
+Atualização (2026-07-29, review final de branch): o guard de reatribuição implementado em `lib/actions.ts` só cobria o caminho via Server Action. A policy RLS `leads_own_store_update` (migration 005) liberava UPDATE em `leads` pra qualquer usuário autenticado da mesma loja sem checar role — um vendedor com acesso a devtools conseguia reatribuir lead (e também fechar venda pulando o guardrail de margem) via PostgREST direto, usando a anon key + JWT da sessão já expostos no browser. Migration 027 removeu essa policy (confirmado por grep: nenhum código client-side escreve em `leads`, toda escrita passa por `supabaseAdmin`/service_role, que não depende de RLS). RBAC agora é reforçado em dois níveis — Server Action (guard de role) e banco (RLS, sem policy de UPDATE pra roles client-side) — não só no nível de aplicação como o texto original desta decisão registrava implicitamente.
+
 Owner
 
 Founder

@@ -1,0 +1,33 @@
+-- Migration 027: remove a policy RLS de UPDATE em public.leads
+--
+-- Achado durante review final de branch do RBAC (0.3, 2026-07-29): a policy
+-- "leads_own_store_update" (migration 005) libera UPDATE em leads pra
+-- QUALQUER usuário autenticado da mesma loja, sem checar role — o que
+-- permite bypass de dois guardrails só aplicados em nível de Server Action:
+--
+--   1. O guard de RBAC recém-implementado (lib/actions.ts, assignLeadToUser/
+--      removeLeadAssignment) — vendedor consegue reatribuir lead via PATCH
+--      direto no PostgREST (anon key + JWT da sessão, ambos já disponíveis
+--      no browser), pulando o guard de código.
+--   2. O guardrail de margem (lib/actions.ts, updateLeadStatus) — mesma
+--      brecha permite fechar venda (lead_status='FECHADO', valor_final)
+--      direto via PostgREST, ignorando a validação de piso de margem.
+--      CLAUDE.md trata esse guardrail como regra inegociável.
+--
+-- Confirmado via grep sistemático (2026-07-29): nenhum código client-side
+-- (componentes "use client") escreve em leads hoje. Os únicos usos de
+-- createSupabaseBrowserClient()/createBrowserClient() são auth (signIn/
+-- signOut) e a subscription Realtime de mensagens
+-- (app/components/ConversationMessages.tsx) — nenhum .from("leads").update().
+-- Toda escrita em leads passa por lib/actions.ts via supabaseAdmin
+-- (service_role, que já ignora RLS por padrão no Postgres/Supabase —
+-- não depende desta policy pra funcionar). Toda leitura de leads em
+-- Server Components usa o client de sessão do usuário (createSupabaseServerClient)
+-- e continua protegida por "leads_own_store_select" (inalterada, não
+-- removida — leitura por loja continua sendo o modelo de visibilidade
+-- vigente, ver DL-0008).
+--
+-- Sem policy de UPDATE = nenhuma role client-side (anon/authenticated)
+-- consegue atualizar leads via PostgREST — mesmo princípio já documentado
+-- em 001_initial.sql: "Sem policies = acesso apenas via service_role".
+drop policy if exists "leads_own_store_update" on public.leads;
