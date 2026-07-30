@@ -4,10 +4,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRevalidate, mockGetServerStoreId } = vi.hoisted(() => ({
+const { mockFrom, mockRevalidate, mockGetServerStoreId, mockGetServerUserRole } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockRevalidate: vi.fn(),
   mockGetServerStoreId: vi.fn(),
+  mockGetServerUserRole: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -20,6 +21,7 @@ vi.mock("@/lib/supabase", () => ({
 
 vi.mock("@/lib/auth", () => ({
   getServerStoreId: mockGetServerStoreId,
+  getServerUserRole: mockGetServerUserRole,
 }));
 
 vi.mock("next/cache", () => ({
@@ -65,6 +67,7 @@ beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   mockGetServerStoreId.mockResolvedValue("store-1");
+  mockGetServerUserRole.mockResolvedValue("dono_loja");
 });
 
 afterEach(() => {
@@ -136,6 +139,31 @@ describe("assignLeadToUser", () => {
 
     await expect(assignLeadToUser("lead-1", "user-1")).rejects.toThrow("DB update failed");
   });
+
+  it("A6: vendedor não pode reatribuir lead — lança erro sem consultar o banco", async () => {
+    mockGetServerUserRole.mockResolvedValue("vendedor");
+
+    await expect(assignLeadToUser("lead-1", "user-1")).rejects.toThrow(
+      "Apenas o dono da loja pode reatribuir leads"
+    );
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockRevalidate).not.toHaveBeenCalled();
+  });
+
+  it("A7: super_admin pode reatribuir lead normalmente", async () => {
+    mockGetServerUserRole.mockResolvedValue("super_admin");
+    mockFrom
+      .mockReturnValueOnce(
+        makeSelectChain({ data: { id: "lead-1", store_id: "store-1" }, error: null })
+      )
+      .mockReturnValueOnce(
+        makeSelectChain({ data: { id: "user-1" }, error: null })
+      )
+      .mockReturnValueOnce(makeUpdateChain({ error: null }));
+
+    await expect(assignLeadToUser("lead-1", "user-1")).resolves.toBeUndefined();
+    expect(mockRevalidate).toHaveBeenCalledWith("/leads");
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -182,5 +210,27 @@ describe("removeLeadAssignment", () => {
 
     await expect(removeLeadAssignment("lead-1")).rejects.toThrow("DB update failed");
     expect(mockRevalidate).not.toHaveBeenCalled();
+  });
+
+  it("R5: vendedor não pode remover atribuição — lança erro sem consultar o banco", async () => {
+    mockGetServerUserRole.mockResolvedValue("vendedor");
+
+    await expect(removeLeadAssignment("lead-1")).rejects.toThrow(
+      "Apenas o dono da loja pode reatribuir leads"
+    );
+    expect(mockFrom).not.toHaveBeenCalled();
+    expect(mockRevalidate).not.toHaveBeenCalled();
+  });
+
+  it("R6: dono_loja pode remover atribuição normalmente", async () => {
+    mockGetServerUserRole.mockResolvedValue("dono_loja");
+    mockFrom
+      .mockReturnValueOnce(
+        makeSelectChain({ data: { id: "lead-1", store_id: "store-1" }, error: null })
+      )
+      .mockReturnValueOnce(makeUpdateChain({ error: null }));
+
+    await expect(removeLeadAssignment("lead-1")).resolves.toBeUndefined();
+    expect(mockRevalidate).toHaveBeenCalledWith("/leads");
   });
 });

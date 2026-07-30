@@ -8,7 +8,7 @@ import {
 } from "@/lib/status";
 import type { LeadStatus } from "@/types/domain";
 import { ingestLeadManually, type IngestLeadResult } from "@/lib/lead-ingestion";
-import { getServerStoreId, getServerUserId } from "@/lib/auth";
+import { getServerStoreId, getServerUserId, getServerUserRole } from "@/lib/auth";
 import { markReactivationConverted } from "@/lib/reactivation";
 import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
@@ -262,6 +262,10 @@ export async function moveLeadStatus(
 
 export async function assignLeadToUser(leadId: string, userId: string): Promise<void> {
   const storeId = await getServerStoreId();
+  const role = await getServerUserRole();
+  if (role === "vendedor") {
+    throw new Error("Apenas o dono da loja pode reatribuir leads");
+  }
 
   // Guard 1: verify lead belongs to this store
   const { data: lead } = await supabaseAdmin
@@ -293,6 +297,10 @@ export async function assignLeadToUser(leadId: string, userId: string): Promise<
 
 export async function removeLeadAssignment(leadId: string): Promise<void> {
   const storeId = await getServerStoreId();
+  const role = await getServerUserRole();
+  if (role === "vendedor") {
+    throw new Error("Apenas o dono da loja pode reatribuir leads");
+  }
 
   const { data: lead } = await supabaseAdmin
     .from("leads")
