@@ -4,10 +4,11 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — refs compartilhados nas factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockCreateClient, mockGetUser, mockFrom } = vi.hoisted(() => ({
+const { mockCreateClient, mockGetUser, mockFrom, mockIsSuperAdmin } = vi.hoisted(() => ({
   mockCreateClient: vi.fn(),
   mockGetUser: vi.fn(),
   mockFrom: vi.fn(),
+  mockIsSuperAdmin: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -18,11 +19,15 @@ vi.mock("@/lib/supabase-server", () => ({
   createSupabaseServerClient: mockCreateClient,
 }));
 
+vi.mock("@/lib/admin-auth", () => ({
+  isSuperAdmin: mockIsSuperAdmin,
+}));
+
 // ---------------------------------------------------------------------------
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { getServerStoreId, AuthError, StoreNotFoundError } from "@/lib/auth";
+import { getServerStoreId, getServerUserRole, AuthError, StoreNotFoundError } from "@/lib/auth";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -178,5 +183,79 @@ describe("getServerStoreId", () => {
     await getServerStoreId();
 
     expect(mockFrom).toHaveBeenCalledWith("users");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getServerUserRole
+// ---------------------------------------------------------------------------
+
+function mockUsersRoleQuery(role: string | null) {
+  const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+  const methods = ["select", "eq", "single"];
+  for (const m of methods) chain[m] = vi.fn().mockReturnValue(chain);
+  chain.single = vi.fn().mockResolvedValue({
+    data: role ? { role } : null,
+    error: null,
+  });
+  mockFrom.mockReturnValue(chain);
+  return chain;
+}
+
+describe("getServerUserRole", () => {
+  it("R1: email na lista de super-admin -> retorna 'super_admin' sem consultar users", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-1", email: "vitor@vex.com" } },
+      error: null,
+    });
+    mockIsSuperAdmin.mockReturnValue(true);
+
+    const result = await getServerUserRole();
+
+    expect(result).toBe("super_admin");
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("R2: não super-admin, users.role='dono_loja' -> retorna 'dono_loja'", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-2", email: "dono@loja.com" } },
+      error: null,
+    });
+    mockIsSuperAdmin.mockReturnValue(false);
+    mockUsersRoleQuery("dono_loja");
+
+    const result = await getServerUserRole();
+
+    expect(result).toBe("dono_loja");
+  });
+
+  it("R3: não super-admin, users.role='vendedor' -> retorna 'vendedor'", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-3", email: "vendedor@loja.com" } },
+      error: null,
+    });
+    mockIsSuperAdmin.mockReturnValue(false);
+    mockUsersRoleQuery("vendedor");
+
+    const result = await getServerUserRole();
+
+    expect(result).toBe("vendedor");
+  });
+
+  it("R4: sem sessão -> throw AuthError", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+
+    await expect(getServerUserRole()).rejects.toThrow(AuthError);
+  });
+
+  it("R5: autenticado, sem linha em public.users, não super-admin -> throw StoreNotFoundError", async () => {
+    mockGetUser.mockResolvedValue({
+      data: { user: { id: "user-orphan", email: "ninguem@x.com" } },
+      error: null,
+    });
+    mockIsSuperAdmin.mockReturnValue(false);
+    mockUsersRoleQuery(null);
+
+    await expect(getServerUserRole()).rejects.toThrow(StoreNotFoundError);
   });
 });
