@@ -255,6 +255,72 @@ Active
 
 Date
 
+2026-07-29
+
+Decision ID
+
+DL-0008
+
+Title
+
+Escopo reduzido de 0.3 (RBAC) — travar só reatribuição, visibilidade de lead entre vendedores fica para quando houver multi-vendedor real
+
+Category
+
+Technical
+
+Context
+
+Dívida documentada em `27_PROJECT_STATUS.md` é sobre reatribuição sem controle (`assignLeadToUser`/`removeLeadAssignment` só validavam `store_id`). Existe também gap maior (qualquer vendedor vê/responde lead de qualquer colega da mesma loja), mas hoje o piloto (Speed Motos) tem 1 vendedor só — não há caso real pra desenhar a regra de visibilidade restrita com informação de verdade (ex: dono da loja precisa ver tudo mesmo? vendedor cobre colega de férias?).
+
+Decision
+
+Implementar RBAC cobrindo só a reatribuição agora. Visibilidade de lead entre vendedores continua irrestrita dentro da loja.
+
+Reasoning
+
+Desenhar a regra de visibilidade sem uso real de multi-vendedor é apostar no desenho errado. Esperar por um cliente/loja com 2+ vendedores ativos dá dado real pra decidir a forma certa (visibilidade total pro dono, exceções de cobertura, etc.), em vez de suposição.
+
+Alternatives Considered
+
+Implementar visibilidade restrita (vendedor só vê/responde leads atribuídos a si + não-atribuídos) já nesta etapa — descartado por falta de caso de uso real pra validar o desenho.
+
+Expected Impact
+
+Fecha a dívida documentada (reatribuição sem controle) sem expandir escopo pra uma mudança maior (visibilidade) sem dado real.
+
+Potential Risks
+
+Se um segundo vendedor ativo entrar em produção antes da revisão, qualquer vendedor continua vendo/respondendo lead do colega — risco operacional baixo (não é falha de segurança entre lojas, é falta de segregação dentro da mesma loja), aceitável até o gatilho de revisão.
+
+Owner
+
+Founder
+
+Related ADR
+
+None
+
+Related Issue
+
+Roadmap item 0.3 (`53_ROADMAP.md`); dívida técnica em `27_PROJECT_STATUS.md`
+
+Related Runbook
+
+None
+
+Review Date
+
+Primeira loja (piloto ou cliente novo) operando com 2+ vendedores simultâneos e ativos — nesse ponto, reavaliar e desenhar a visibilidade restrita com base em uso real.
+
+Status
+
+Active
+
+---
+
+Date
+
 2026-07-28
 
 Decision ID
