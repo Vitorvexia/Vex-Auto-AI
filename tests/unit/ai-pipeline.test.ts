@@ -99,6 +99,10 @@ vi.mock("@/lib/reactivation", () => ({
   markReactivationResponded: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/timing", () => ({
+  sleep: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Imports após mocks
 // ---------------------------------------------------------------------------
@@ -113,6 +117,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage, WhatsAppSendError } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { calculateLeadScore } from "@/lib/lead-scoring";
+import { sleep } from "@/lib/timing";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -150,7 +155,7 @@ const BASE_CTX = {
 };
 
 const BASE_RESULT = {
-  reply_text: "Olá! Posso ajudar.",
+  reply_texts: ["Olá! Posso ajudar."],
   should_handoff: false,
   score: 15,
   intent_tags: ["greeting"],
@@ -200,6 +205,7 @@ beforeEach(() => {
   vi.mocked(buildPrompt).mockReturnValue({ system: "sys", messages: [] } as any);
   vi.mocked(runAgent).mockResolvedValue(BASE_RESULT as any);
   vi.mocked(sendWhatsAppMessage).mockResolvedValue(undefined);
+  vi.mocked(sleep).mockResolvedValue(undefined);
   vi.mocked(getStoreWhatsAppPhoneId).mockResolvedValue("test-phone-id");
   vi.mocked(calculateLeadScore).mockReturnValue(DEFAULT_SCORE_RESULT as any);
   vi.mocked(supabaseAdmin.from).mockImplementation(defaultSupabaseChain as any);
@@ -222,19 +228,19 @@ describe("runAiPipeline — integração sendWhatsAppMessage", () => {
     expect(result.error).toBeUndefined();
   });
 
-  it("chama sendWhatsAppMessage com phone e reply_text corretos", async () => {
+  it("chama sendWhatsAppMessage com phone e reply_texts[0] corretos", async () => {
     await runAiPipeline(BASE_PARAMS);
     expect(sendWhatsAppMessage).toHaveBeenCalledOnce();
     expect(sendWhatsAppMessage).toHaveBeenCalledWith(
       BASE_CTX.lead.phone_normalized,
-      BASE_RESULT.reply_text,
+      BASE_RESULT.reply_texts[0],
       "test-phone-id"
     );
   });
 
-  it("trunca reply_text acima de 4096 chars antes de enviar e salvar no banco", async () => {
+  it("trunca cada item de reply_texts acima de 4096 chars antes de enviar e salvar no banco", async () => {
     const longText = "x".repeat(5000);
-    vi.mocked(runAgent).mockResolvedValueOnce({ ...BASE_RESULT, reply_text: longText } as any);
+    vi.mocked(runAgent).mockResolvedValueOnce({ ...BASE_RESULT, reply_texts: [longText] } as any);
 
     await runAiPipeline(BASE_PARAMS);
 
@@ -535,6 +541,8 @@ describe("runAiPipeline — PR 15: message_id e sendCategory", () => {
     expect(aiLogsInsertMock).toHaveBeenCalledOnce();
     const aiLogPayload = aiLogsInsertMock.mock.calls[0][0];
     expect(aiLogPayload.message_id).toBe("msg-captured-123");
+    expect(aiLogPayload.message_ids).toEqual(["msg-captured-123"]);
+    expect(aiLogPayload.failed_message_ids).toBeNull();
   });
 
   it("sendCategory da WhatsAppSendError é persistido em ai_logs como last_send_error", async () => {
@@ -573,6 +581,147 @@ describe("runAiPipeline — PR 15: message_id e sendCategory", () => {
     expect(aiLogsInsertMock).toHaveBeenCalledOnce();
     const aiLogPayload = aiLogsInsertMock.mock.calls[0][0];
     expect(aiLogPayload.last_send_error).toBe("invalid_recipient");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Multi-bolha (BL-0008 / DL-0008) — envio sequencial de reply_texts[]
+// ---------------------------------------------------------------------------
+
+function messagesTableSequentialIds(ids: (string | null)[]) {
+  let call = 0;
+  return vi.fn().mockImplementation(() => ({
+    select: vi.fn().mockReturnValue({
+      single: vi.fn().mockResolvedValue({ data: { id: ids[call++] ?? null }, error: null }),
+    }),
+  }));
+}
+
+describe("runAiPipeline — multi-bolha (BL-0008)", () => {
+  it("array com 1 item: 1 insert, 1 send, sem chamar sleep", async () => {
+    await runAiPipeline(BASE_PARAMS);
+    expect(sendWhatsAppMessage).toHaveBeenCalledTimes(1);
+    expect(sleep).not.toHaveBeenCalled();
+  });
+
+  it("envia bolhas em ordem sequencial (insert→send→sleep por item), nunca paralelo, sem sleep após a última", async () => {
+    const callOrder: string[] = [];
+    const messagesInsertMock = messagesTableSequentialIds(["msg-1", "msg-2", "msg-3"]);
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) =>
+      table === "messages" ? ({ insert: messagesInsertMock } as any) : defaultSupabaseChain()
+    );
+    vi.mocked(sendWhatsAppMessage).mockImplementation(async (_to, text) => {
+      callOrder.push(`send:${text}`);
+    });
+    vi.mocked(sleep).mockImplementation(async () => {
+      callOrder.push("sleep");
+    });
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      reply_texts: ["Oi!", "Tudo bem?", "Como posso ajudar?"],
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    expect(messagesInsertMock).toHaveBeenCalledTimes(3);
+    expect(sendWhatsAppMessage).toHaveBeenCalledTimes(3);
+    expect(sleep).toHaveBeenCalledTimes(2); // entre 1→2 e 2→3, nunca após a última
+    expect(callOrder).toEqual([
+      "send:Oi!",
+      "sleep",
+      "send:Tudo bem?",
+      "sleep",
+      "send:Como posso ajudar?",
+    ]);
+  });
+
+  it("cada bolha insere uma linha própria em messages, com o texto correto e na ordem", async () => {
+    const messagesInsertMock = messagesTableSequentialIds(["msg-1", "msg-2"]);
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) =>
+      table === "messages" ? ({ insert: messagesInsertMock } as any) : defaultSupabaseChain()
+    );
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      reply_texts: ["Primeira bolha", "Segunda bolha"],
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    expect(messagesInsertMock.mock.calls[0][0].mensagem).toBe("Primeira bolha");
+    expect(messagesInsertMock.mock.calls[1][0].mensagem).toBe("Segunda bolha");
+    expect(messagesInsertMock.mock.calls[0][0].autor).toBe("ia");
+    expect(messagesInsertMock.mock.calls[1][0].autor).toBe("ia");
+  });
+
+  it("messageIds persistidos em ai_logs.message_ids na ordem de envio; message_id (singular) é o primeiro item", async () => {
+    const aiLogsInsertMock = vi.fn().mockResolvedValue({ data: null, error: null });
+    const messagesInsertMock = messagesTableSequentialIds(["msg-1", "msg-2"]);
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "messages") return { insert: messagesInsertMock } as any;
+      if (table === "ai_logs") return { insert: aiLogsInsertMock } as any;
+      return defaultSupabaseChain();
+    });
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      reply_texts: ["Primeira", "Segunda"],
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    const payload = aiLogsInsertMock.mock.calls[0][0];
+    expect(payload.message_ids).toEqual(["msg-1", "msg-2"]);
+    expect(payload.message_id).toBe("msg-1");
+    expect(payload.failed_message_ids).toBeNull();
+  });
+
+  it("uma bolha falha (retryable) entre duas com sucesso: status ok_send_failed, failed_message_ids só com a que falhou, envio das demais continua", async () => {
+    const aiLogsInsertMock = vi.fn().mockResolvedValue({ data: null, error: null });
+    const messagesInsertMock = messagesTableSequentialIds(["msg-1", "msg-2", "msg-3"]);
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "messages") return { insert: messagesInsertMock } as any;
+      if (table === "ai_logs") return { insert: aiLogsInsertMock } as any;
+      return defaultSupabaseChain();
+    });
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      reply_texts: ["Primeira", "Segunda", "Terceira"],
+    } as any);
+    vi.mocked(sendWhatsAppMessage)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new WhatsAppSendError("service error", 503, "service_error", true))
+      .mockResolvedValueOnce(undefined);
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("ok_send_failed");
+    expect(sendWhatsAppMessage).toHaveBeenCalledTimes(3);
+    const payload = aiLogsInsertMock.mock.calls[0][0];
+    expect(payload.message_ids).toEqual(["msg-1", "msg-2", "msg-3"]);
+    expect(payload.failed_message_ids).toEqual(["msg-2"]);
+    expect(payload.last_send_error).toBe("service_error");
+  });
+
+  it("uma bolha falha com categoria permanente: status ok_send_failed_permanent mesmo com outras tendo sucesso", async () => {
+    const aiLogsInsertMock = vi.fn().mockResolvedValue({ data: null, error: null });
+    const messagesInsertMock = messagesTableSequentialIds(["msg-1", "msg-2"]);
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "messages") return { insert: messagesInsertMock } as any;
+      if (table === "ai_logs") return { insert: aiLogsInsertMock } as any;
+      return defaultSupabaseChain();
+    });
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      reply_texts: ["Primeira", "Segunda"],
+    } as any);
+    vi.mocked(sendWhatsAppMessage)
+      .mockResolvedValueOnce(undefined)
+      .mockRejectedValueOnce(new WhatsAppSendError("invalid", 400, "invalid_recipient", false));
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("ok_send_failed_permanent");
+    const payload = aiLogsInsertMock.mock.calls[0][0];
+    expect(payload.failed_message_ids).toEqual(["msg-2"]);
   });
 });
 
@@ -642,14 +791,14 @@ describe("runAiPipeline — coleta de financiamento/troca", () => {
     expect(loggedOutput).not.toContain("111.222.333-44");
   });
 
-  it("CPF ecoado em summary/reply_text pela LLM nunca aparece no objeto passado a ai_logs.llm_output", async () => {
+  it("CPF ecoado em summary/reply_texts pela LLM nunca aparece no objeto passado a ai_logs.llm_output", async () => {
     vi.mocked(runGuardrails).mockReturnValue({
       mode: "normal", reason: "normal",
       collection: { ask: [], collect: ["financiamento"], missingTrocaFields: [] },
     } as any);
     vi.mocked(runAgent).mockResolvedValueOnce({
       ...BASE_RESULT,
-      reply_text: "Obrigado! Confirmando seu CPF 111.222.333-44 para o financiamento.",
+      reply_texts: ["Obrigado! Confirmando seu CPF 111.222.333-44 para o financiamento."],
       summary: "João, CPF 111.222.333-44, quer financiar uma moto.",
       collected_data: { financiamento: { nome_completo: "João", cpf: "111.222.333-44", renda_aproximada: "3000", entrada_disposta: "2000" } },
     } as any);
@@ -664,7 +813,7 @@ describe("runAiPipeline — coleta de financiamento/troca", () => {
     const loggedOutput = JSON.stringify(insertedPayload.llm_output);
     expect(loggedOutput).not.toContain("111.222.333-44");
     // Placeholder deve substituir o CPF nos campos de texto livre
-    expect((insertedPayload.llm_output as any).reply_text).toContain("[CPF removido]");
+    expect((insertedPayload.llm_output as any).reply_texts[0]).toContain("[CPF removido]");
     expect((insertedPayload.llm_output as any).summary).toContain("[CPF removido]");
   });
 
@@ -758,7 +907,7 @@ describe("runAiPipeline — aviso de IA (item 0.7 parte 2)", () => {
     expect(disclosureArgs.mensagem).toContain(BASE_CTX.store_name);
     expect(disclosureArgs.meta).toEqual({ kind: "ai_disclosure", sent: false });
     expect(replyArgs.autor).toBe("ia");
-    expect(replyArgs.mensagem).toBe(BASE_RESULT.reply_text);
+    expect(replyArgs.mensagem).toBe(BASE_RESULT.reply_texts[0]);
 
     expect(sendWhatsAppMessage).toHaveBeenCalledTimes(2);
     expect(sendWhatsAppMessage).toHaveBeenNthCalledWith(
@@ -770,7 +919,7 @@ describe("runAiPipeline — aviso de IA (item 0.7 parte 2)", () => {
     expect(sendWhatsAppMessage).toHaveBeenNthCalledWith(
       2,
       BASE_CTX.lead.phone_normalized,
-      BASE_RESULT.reply_text,
+      BASE_RESULT.reply_texts[0],
       "test-phone-id"
     );
 
@@ -812,7 +961,7 @@ describe("runAiPipeline — aviso de IA (item 0.7 parte 2)", () => {
     expect(sendWhatsAppMessage).toHaveBeenCalledTimes(1);
     expect(sendWhatsAppMessage).toHaveBeenCalledWith(
       BASE_CTX.lead.phone_normalized,
-      BASE_RESULT.reply_text,
+      BASE_RESULT.reply_texts[0],
       "test-phone-id"
     );
   });
@@ -852,7 +1001,7 @@ describe("runAiPipeline — aviso de IA (item 0.7 parte 2)", () => {
     expect(sendWhatsAppMessage).toHaveBeenCalledTimes(1);
     expect(sendWhatsAppMessage).toHaveBeenCalledWith(
       BASE_CTX.lead.phone_normalized,
-      BASE_RESULT.reply_text,
+      BASE_RESULT.reply_texts[0],
       "test-phone-id"
     );
   });
@@ -888,7 +1037,7 @@ describe("runAiPipeline — aviso de IA (item 0.7 parte 2)", () => {
     expect(messagesInsertMock).toHaveBeenCalledTimes(2);
     expect(messagesInsertMock.mock.calls[0][0].autor).toBe("sistema");
     expect(messagesInsertMock.mock.calls[1][0].autor).toBe("ia");
-    expect(messagesInsertMock.mock.calls[1][0].mensagem).toBe(BASE_RESULT.reply_text);
+    expect(messagesInsertMock.mock.calls[1][0].mensagem).toBe(BASE_RESULT.reply_texts[0]);
 
     // Coleta de financiamento continua persistindo pending_topics normalmente
     const leadsChains = vi.mocked(supabaseAdmin.from).mock.calls

@@ -29,6 +29,7 @@ const PII_KEYS = new Set([
   "nome_completo",
   "incoming_text",
   "reply_text",
+  "reply_texts",
   "mensagem",
   "renda_aproximada",
   "entrada_disposta",

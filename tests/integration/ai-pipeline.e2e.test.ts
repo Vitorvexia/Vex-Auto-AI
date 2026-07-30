@@ -83,7 +83,7 @@ async function runPipeline(
   const payload = buildPrompt(ctx, guardrail);
   const result = await runAgent(payload, ctx, { timeoutMs: 15000 });
 
-  console.log(`\n   📤 reply_text:   "${result.reply_text}"`);
+  console.log(`\n   📤 reply_text:   "${result.reply_texts.join(" | ")}"`);
   console.log(`   🔢 score:         ${result.score}`);
   console.log(`   🏷️  intent_tags:  [${result.intent_tags.join(", ")}]`);
   console.log(`   🤝 should_handoff: ${result.should_handoff}`);
@@ -149,8 +149,8 @@ describe("E2E — Pipeline de IA (cenários reais)", () => {
 
       expect(guardrail.mode).toBe("short_message");
       expect(result).not.toBeNull();
-      expect(typeof result!.reply_text).toBe("string");
-      expect(result!.reply_text.length).toBeGreaterThan(0);
+      expect(Array.isArray(result!.reply_texts)).toBe(true);
+      expect(result!.reply_texts.join(" ").length).toBeGreaterThan(0);
       expect(result!.should_handoff).toBe(false);
     },
     30_000
@@ -172,7 +172,7 @@ describe("E2E — Pipeline de IA (cenários reais)", () => {
 
       expect(guardrail.mode).toBe("normal");
       expect(result).not.toBeNull();
-      expect(result!.reply_text.length).toBeGreaterThan(0);
+      expect(result!.reply_texts.join(" ").length).toBeGreaterThan(0);
       expect(typeof result!.score).toBe("number");
       expect(result!.score).toBeGreaterThanOrEqual(0);
       expect(result!.score).toBeLessThanOrEqual(100);
@@ -195,7 +195,7 @@ describe("E2E — Pipeline de IA (cenários reais)", () => {
 
       expect(guardrail.mode).toBe("off_hours");
       expect(result).not.toBeNull();
-      expect(result!.reply_text.length).toBeGreaterThan(0);
+      expect(result!.reply_texts.join(" ").length).toBeGreaterThan(0);
       // IA deve confirmar recebimento, não prometer resposta imediata
       expect(result!.should_handoff).toBe(false);
     },
@@ -241,7 +241,7 @@ describe("E2E — Pipeline de IA (cenários reais)", () => {
 
       expect(guardrail.mode).toBe("normal");
       expect(result).not.toBeNull();
-      expect(result!.reply_text.length).toBeGreaterThan(0);
+      expect(result!.reply_texts.join(" ").length).toBeGreaterThan(0);
 
       // Logamos o resultado do should_handoff mas não forçamos true —
       // é decisão do modelo. O contrato deve ser válido independente.

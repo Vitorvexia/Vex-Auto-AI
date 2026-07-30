@@ -8,6 +8,7 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
+import { sleep } from "@/lib/timing";
 
 const MAX_WINDOW_HOURS = 72;
 const MAX_LIMIT = 200;
@@ -51,7 +52,7 @@ export async function runRetryFailedJob(opts?: {
   // Buscar candidatos
   const { data: candidates, error: fetchErr } = await supabaseAdmin
     .from("ai_logs")
-    .select("id, conversation_id, lead_id, store_id, message_id, retry_count, last_send_error")
+    .select("id, conversation_id, lead_id, store_id, message_id, retry_count, last_send_error, failed_message_ids")
     .eq("status", "ok_send_failed")
     .lt("retry_count", MAX_RETRY_ATTEMPTS)
     .neq("last_send_error", "invalid_recipient")
@@ -89,7 +90,7 @@ export async function runRetryFailedJob(opts?: {
     .update({ status: "ok_send_failed_retrying" })
     .in("id", candidateIds)
     .eq("status", "ok_send_failed")
-    .select("id, conversation_id, lead_id, store_id, message_id, retry_count, last_send_error");
+    .select("id, conversation_id, lead_id, store_id, message_id, retry_count, last_send_error, failed_message_ids");
 
   if (claimErr) {
     console.error(JSON.stringify({
@@ -119,6 +120,96 @@ export async function runRetryFailedJob(opts?: {
       continue;
     }
 
+    // Multi-bolha (BL-0008 / DL-0008): reenvia só os IDs pendentes de
+    // failed_message_ids, sequencial + delay entre eles — nunca as bolhas
+    // que já foram entregues com sucesso no turno original.
+    const pendingIds = Array.isArray(log.failed_message_ids) ? (log.failed_message_ids as string[]) : [];
+    if (pendingIds.length > 0) {
+      const { data: lead } = await supabaseAdmin
+        .from("leads")
+        .select("phone_normalized")
+        .eq("id", log.lead_id)
+        .maybeSingle();
+
+      if (!lead?.phone_normalized) {
+        await supabaseAdmin
+          .from("ai_logs")
+          .update({ status: "ok_send_failed_permanent", retry_count: (log.retry_count ?? 0) + 1 })
+          .eq("id", log.id);
+        failed++;
+        continue;
+      }
+
+      const stillFailing: string[] = [];
+      let anyPermanent = false;
+      let lastCategory = "unknown";
+
+      for (let i = 0; i < pendingIds.length; i++) {
+        const id = pendingIds[i];
+        const { data: msg } = await supabaseAdmin
+          .from("messages")
+          .select("mensagem")
+          .eq("id", id)
+          .maybeSingle();
+        const bubbleText = msg?.mensagem ?? null;
+
+        if (!bubbleText) {
+          // Mensagem não encontrada (ex: deletada) — nunca vai ser reenviável.
+          stillFailing.push(id);
+          anyPermanent = true;
+          lastCategory = "unknown";
+        } else {
+          try {
+            const phoneId = await getStoreWhatsAppPhoneId(log.store_id);
+            await sendWhatsAppMessage(lead.phone_normalized, bubbleText, phoneId);
+          } catch (sendErr) {
+            stillFailing.push(id);
+            const isPermanent = sendErr instanceof WhatsAppSendError && !sendErr.isRetryable;
+            if (isPermanent) anyPermanent = true;
+            lastCategory = sendErr instanceof WhatsAppSendError ? sendErr.category : "unknown";
+            console.error(JSON.stringify({
+              level: "error",
+              event: "retry_failed_send_error",
+              log_id: log.id,
+              category: lastCategory,
+              status_code: sendErr instanceof WhatsAppSendError ? sendErr.statusCode : undefined,
+              bubble: `${i + 1}/${pendingIds.length}`,
+              ts: new Date().toISOString(),
+            }));
+          }
+        }
+
+        if (i < pendingIds.length - 1) {
+          await sleep(400 + Math.floor(Math.random() * 401)); // 400–800ms
+        }
+      }
+
+      const newRetryCount = (log.retry_count ?? 0) + 1;
+      if (stillFailing.length === 0) {
+        await supabaseAdmin
+          .from("ai_logs")
+          .update({ status: "ok", retry_count: newRetryCount, failed_message_ids: null })
+          .eq("id", log.id);
+        retried++;
+      } else {
+        const isMaxed = newRetryCount >= MAX_RETRY_ATTEMPTS;
+        const finalStatus = anyPermanent || isMaxed ? "ok_send_failed_permanent" : "ok_send_failed";
+        await supabaseAdmin
+          .from("ai_logs")
+          .update({
+            status: finalStatus,
+            retry_count: newRetryCount,
+            last_send_error: lastCategory,
+            failed_message_ids: stillFailing,
+          })
+          .eq("id", log.id);
+        failed++;
+      }
+      continue;
+    }
+
+    // Path legado (rows anteriores ao BL-0008: sem failed_message_ids) —
+    // busca texto por message_id direto ou fallback por conversation_id.
     // Buscar texto da mensagem
     let msgText: string | null = null;
     if (log.message_id) {

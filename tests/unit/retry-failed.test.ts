@@ -53,6 +53,10 @@ vi.mock("@/lib/whatsapp-credentials", () => ({
   getStoreWhatsAppPhoneId: mockGetPhoneId,
 }));
 
+vi.mock("@/lib/timing", () => ({
+  sleep: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---------------------------------------------------------------------------
 // Import após mocks
 // ---------------------------------------------------------------------------
@@ -559,6 +563,173 @@ describe("POST /api/internal/retry-failed — pre-send guard", () => {
     expect(mockSend).not.toHaveBeenCalled();
     const patch = updatePatches.find((p) => p.status === "ok_send_failed_permanent");
     expect(patch).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// failed_message_ids — retry multi-bolha (BL-0008 / DL-0008)
+// ---------------------------------------------------------------------------
+
+describe("POST /api/internal/retry-failed — failed_message_ids (multi-bolha)", () => {
+  it("reenvia só os ids em failed_message_ids (não busca 'mais recente' nem o message_id singular)", async () => {
+    const candidates = [{
+      id: "log-1", conversation_id: "conv-1", lead_id: "lead-1", store_id: "store-1",
+      message_id: "msg-1", retry_count: 0, last_send_error: "service_error",
+      failed_message_ids: ["msg-2", "msg-3"],
+    }];
+    const claimed = [...candidates];
+
+    const queriedMessageIds: string[] = [];
+    const msgChainFor = (text: string) => {
+      const c = chain({ maybeSingle: { data: { mensagem: text } } });
+      const origEq = c.eq;
+      c.eq = vi.fn().mockImplementation((...args: unknown[]) => {
+        if (args[0] === "id") queriedMessageIds.push(args[1] as string);
+        return origEq(...args);
+      });
+      return c;
+    };
+
+    const staleChain = chain();
+    mockFrom
+      .mockReturnValueOnce(staleChain)
+      .mockReturnValueOnce(chain({ limit: { data: candidates, error: null } }))
+      .mockReturnValueOnce(chain({ select: { data: claimed, error: null } }))
+      .mockReturnValueOnce(chain({ maybeSingle: { data: { phone_normalized: "+5511999990000" } } })) // lead
+      .mockReturnValueOnce(msgChainFor("Segunda bolha"))
+      .mockReturnValueOnce(msgChainFor("Terceira bolha"))
+      .mockReturnValue(chain({ eq: { data: null, error: null } })); // update final
+
+    mockSend.mockResolvedValue(undefined);
+
+    await POST(makeReq("valid-secret-key"));
+
+    expect(queriedMessageIds).toEqual(["msg-2", "msg-3"]);
+    expect(queriedMessageIds).not.toContain("msg-1");
+    expect(mockSend).toHaveBeenCalledTimes(2);
+    expect(mockSend).toHaveBeenNthCalledWith(1, "+5511999990000", "Segunda bolha", "123456");
+    expect(mockSend).toHaveBeenNthCalledWith(2, "+5511999990000", "Terceira bolha", "123456");
+  });
+
+  it("todos os ids pendentes têm sucesso → status ok, failed_message_ids limpo (null)", async () => {
+    const candidates = [{
+      id: "log-1", conversation_id: "conv-1", lead_id: "lead-1", store_id: "store-1",
+      message_id: "msg-1", retry_count: 0, last_send_error: "service_error",
+      failed_message_ids: ["msg-2", "msg-3"],
+    }];
+    const claimed = [...candidates];
+
+    const updatePatches: Record<string, unknown>[] = [];
+    const updateChain = chain();
+    updateChain.update = vi.fn().mockImplementation((patch: Record<string, unknown>) => {
+      updatePatches.push(patch);
+      return updateChain;
+    });
+    updateChain.eq.mockResolvedValue({ data: null, error: null });
+
+    const staleChain = chain();
+    mockFrom
+      .mockReturnValueOnce(staleChain)
+      .mockReturnValueOnce(chain({ limit: { data: candidates, error: null } }))
+      .mockReturnValueOnce(chain({ select: { data: claimed, error: null } }))
+      .mockReturnValueOnce(chain({ maybeSingle: { data: { phone_normalized: "+5511999990000" } } }))
+      .mockReturnValueOnce(chain({ maybeSingle: { data: { mensagem: "Segunda" } } }))
+      .mockReturnValueOnce(chain({ maybeSingle: { data: { mensagem: "Terceira" } } }))
+      .mockReturnValue(updateChain);
+
+    mockSend.mockResolvedValue(undefined);
+
+    const res = await POST(makeReq("valid-secret-key"));
+    const body = await res.json();
+
+    expect(body.retried).toBe(1);
+    expect(body.failed).toBe(0);
+    const okPatch = updatePatches.find((p) => p.status === "ok");
+    expect(okPatch).toBeDefined();
+    expect(okPatch!.retry_count).toBe(1);
+    expect(okPatch!.failed_message_ids).toBeNull();
+  });
+
+  it("1 de 2 ids ainda falha (retryable) → ok_send_failed, failed_message_ids só com o que continua falhando", async () => {
+    const candidates = [{
+      id: "log-1", conversation_id: "conv-1", lead_id: "lead-1", store_id: "store-1",
+      message_id: "msg-1", retry_count: 0, last_send_error: "service_error",
+      failed_message_ids: ["msg-2", "msg-3"],
+    }];
+    const claimed = [...candidates];
+
+    const updatePatches: Record<string, unknown>[] = [];
+    const updateChain = chain();
+    updateChain.update = vi.fn().mockImplementation((patch: Record<string, unknown>) => {
+      updatePatches.push(patch);
+      return updateChain;
+    });
+    updateChain.eq.mockResolvedValue({ data: null, error: null });
+
+    const staleChain = chain();
+    mockFrom
+      .mockReturnValueOnce(staleChain)
+      .mockReturnValueOnce(chain({ limit: { data: candidates, error: null } }))
+      .mockReturnValueOnce(chain({ select: { data: claimed, error: null } }))
+      .mockReturnValueOnce(chain({ maybeSingle: { data: { phone_normalized: "+5511999990000" } } }))
+      .mockReturnValueOnce(chain({ maybeSingle: { data: { mensagem: "Segunda" } } }))
+      .mockReturnValueOnce(chain({ maybeSingle: { data: { mensagem: "Terceira" } } }))
+      .mockReturnValue(updateChain);
+
+    const { WhatsAppSendError: WASErr } = await import("@/lib/whatsapp-send");
+    mockSend
+      .mockResolvedValueOnce(undefined) // msg-2 ok
+      .mockRejectedValueOnce(new WASErr("service error", 503, "service_error", true)); // msg-3 falha de novo
+
+    const res = await POST(makeReq("valid-secret-key"));
+    const body = await res.json();
+
+    expect(body.failed).toBe(1);
+    expect(body.retried).toBe(0);
+    const patch = updatePatches.find((p) => p.status === "ok_send_failed");
+    expect(patch).toBeDefined();
+    expect(patch!.failed_message_ids).toEqual(["msg-3"]);
+    expect(patch!.retry_count).toBe(1);
+  });
+
+  it("1 id falha com categoria permanente → ok_send_failed_permanent, failed_message_ids reflete o que restou", async () => {
+    const candidates = [{
+      id: "log-1", conversation_id: "conv-1", lead_id: "lead-1", store_id: "store-1",
+      message_id: "msg-1", retry_count: 0, last_send_error: "service_error",
+      failed_message_ids: ["msg-2", "msg-3"],
+    }];
+    const claimed = [...candidates];
+
+    const updatePatches: Record<string, unknown>[] = [];
+    const updateChain = chain();
+    updateChain.update = vi.fn().mockImplementation((patch: Record<string, unknown>) => {
+      updatePatches.push(patch);
+      return updateChain;
+    });
+    updateChain.eq.mockResolvedValue({ data: null, error: null });
+
+    const staleChain = chain();
+    mockFrom
+      .mockReturnValueOnce(staleChain)
+      .mockReturnValueOnce(chain({ limit: { data: candidates, error: null } }))
+      .mockReturnValueOnce(chain({ select: { data: claimed, error: null } }))
+      .mockReturnValueOnce(chain({ maybeSingle: { data: { phone_normalized: "+5511999990000" } } }))
+      .mockReturnValueOnce(chain({ maybeSingle: { data: { mensagem: "Segunda" } } }))
+      .mockReturnValueOnce(chain({ maybeSingle: { data: { mensagem: "Terceira" } } }))
+      .mockReturnValue(updateChain);
+
+    const { WhatsAppSendError: WASErr } = await import("@/lib/whatsapp-send");
+    mockSend
+      .mockResolvedValueOnce(undefined) // msg-2 ok
+      .mockRejectedValueOnce(new WASErr("invalid", 400, "invalid_recipient", false)); // msg-3 permanente
+
+    const res = await POST(makeReq("valid-secret-key"));
+    const body = await res.json();
+
+    expect(body.failed).toBe(1);
+    const patch = updatePatches.find((p) => p.status === "ok_send_failed_permanent");
+    expect(patch).toBeDefined();
+    expect(patch!.failed_message_ids).toEqual(["msg-3"]);
   });
 });
 

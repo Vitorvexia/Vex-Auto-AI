@@ -49,7 +49,7 @@ Seja direto e natural. Máximo 3 a 4 frases.
 [FORMATO DE RESPOSTA]
 Responda EXCLUSIVAMENTE em JSON válido, sem texto fora do JSON:
 {
-  "reply_text": "string com resposta ao lead",
+  "reply_texts": ["string com resposta ao lead"],
   "should_handoff": false,
   "score": 10,
   "intent_tags": [],
@@ -74,8 +74,9 @@ describeIf("runAgent — integração real Anthropic", () => {
 
       const result = await runAgent(payload, ctx, { timeoutMs: 5000 });
 
-      expect(typeof result.reply_text).toBe("string");
-      expect(result.reply_text.length).toBeGreaterThan(0);
+      expect(Array.isArray(result.reply_texts)).toBe(true);
+      expect(result.reply_texts.length).toBeGreaterThan(0);
+      expect(result.reply_texts.join(" ").length).toBeGreaterThan(0);
       expect(typeof result.should_handoff).toBe("boolean");
       expect(typeof result.score).toBe("number");
       expect(result.score).toBeGreaterThanOrEqual(0);

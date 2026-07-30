@@ -3,7 +3,7 @@ import { validateOutput, AgentOutputError } from "@/lib/ai";
 
 describe("validateOutput", () => {
   const base = {
-    reply_text: "Olá! Posso ajudar com informações sobre nossos veículos.",
+    reply_texts: ["Olá! Posso ajudar com informações sobre nossos veículos."],
     should_handoff: false,
     score: 50,
     intent_tags: ["interesse_suv"],
@@ -12,20 +12,46 @@ describe("validateOutput", () => {
 
   it("retorna AgentResult válido com dados corretos", () => {
     const result = validateOutput(base, 0);
-    expect(result.reply_text).toBe("Olá! Posso ajudar com informações sobre nossos veículos.");
+    expect(result.reply_texts).toEqual(["Olá! Posso ajudar com informações sobre nossos veículos."]);
     expect(result.should_handoff).toBe(false);
     expect(result.score).toBe(50);
     expect(result.intent_tags).toEqual(["interesse_suv"]);
     expect(result.summary).toBe("Lead quer SUV");
   });
 
-  it("reply_text vazio lança AgentOutputError (fatal)", () => {
-    expect(() => validateOutput({ ...base, reply_text: "" }, 0)).toThrow(AgentOutputError);
+  it("reply_texts vazio (array vazio) lança AgentOutputError (fatal)", () => {
+    expect(() => validateOutput({ ...base, reply_texts: [] }, 0)).toThrow(AgentOutputError);
   });
 
-  it("reply_text ausente lança AgentOutputError (fatal)", () => {
-    const { reply_text: _, ...rest } = base;
+  it("reply_texts com só string vazia lança AgentOutputError (fatal)", () => {
+    expect(() => validateOutput({ ...base, reply_texts: [""] }, 0)).toThrow(AgentOutputError);
+  });
+
+  it("reply_texts ausente lança AgentOutputError (fatal)", () => {
+    const { reply_texts: _, ...rest } = base;
     expect(() => validateOutput(rest, 0)).toThrow(AgentOutputError);
+  });
+
+  it("múltiplos itens em reply_texts preservam ordem", () => {
+    const result = validateOutput({ ...base, reply_texts: ["Oi!", "Tudo bem?", "Como posso ajudar?"] }, 0);
+    expect(result.reply_texts).toEqual(["Oi!", "Tudo bem?", "Como posso ajudar?"]);
+  });
+
+  it("mais de 4 itens em reply_texts é truncado a 4 (cap de segurança)", () => {
+    const result = validateOutput({ ...base, reply_texts: ["a", "b", "c", "d", "e", "f"] }, 0);
+    expect(result.reply_texts).toEqual(["a", "b", "c", "d"]);
+  });
+
+  it("itens vazios/whitespace dentro do array são filtrados, mantendo os válidos", () => {
+    const result = validateOutput({ ...base, reply_texts: ["Oi!", "   ", "", "Tudo bem?"] }, 0);
+    expect(result.reply_texts).toEqual(["Oi!", "Tudo bem?"]);
+  });
+
+  it("fallback legado: reply_text string singular (formato antigo) vira array de 1 item", () => {
+    const { reply_texts: _, ...rest } = base;
+    const legacy = { ...rest, reply_text: "Resposta no formato antigo." };
+    const result = validateOutput(legacy, 0);
+    expect(result.reply_texts).toEqual(["Resposta no formato antigo."]);
   });
 
   it("should_handoff não-boolean → fallback false", () => {
@@ -67,7 +93,7 @@ describe("validateOutput", () => {
 
 describe("validateOutput — collected_data", () => {
   const base = {
-    reply_text: "Olá! Posso ajudar com informações sobre nossos veículos.",
+    reply_texts: ["Olá! Posso ajudar com informações sobre nossos veículos."],
     should_handoff: false,
     score: 50,
     intent_tags: ["interesse_suv"],

@@ -6,23 +6,25 @@ const LEAD_SCORE = 30;
 describe("validateOutput — guardrails de saída da IA", () => {
   // Casos base já cobertos em ai-validation.test.ts — aqui focamos nos novos guards
 
-  it("strip de control chars em reply_text", () => {
-    const raw = { reply_text: "Olá!\x00 Como\x07 posso\x1F ajudar?", should_handoff: false, score: 30, intent_tags: [], summary: "" };
+  it("strip de control chars em cada item de reply_texts", () => {
+    const raw = { reply_texts: ["Olá!\x00 Como\x07 posso\x1F ajudar?"], should_handoff: false, score: 30, intent_tags: [], summary: "" };
     const result = validateOutput(raw, LEAD_SCORE);
-    expect(result.reply_text).not.toMatch(/[\x00-\x08\x0E-\x1F]/);
-    expect(result.reply_text).toContain("Olá!");
+    expect(result.reply_texts[0]).not.toMatch(/[\x00-\x08\x0E-\x1F]/);
+    expect(result.reply_texts[0]).toContain("Olá!");
   });
 
-  it("reply_text truncado ao limite de 4096 chars em validateOutput", () => {
-    const raw = { reply_text: "A".repeat(5000), should_handoff: false, score: 30, intent_tags: [], summary: "" };
+  it("cada item de reply_texts truncado ao limite de 4096 chars", () => {
+    const raw = { reply_texts: ["A".repeat(5000), "B".repeat(5000)], should_handoff: false, score: 30, intent_tags: [], summary: "" };
     const result = validateOutput(raw, LEAD_SCORE);
-    expect(result.reply_text.length).toBeLessThanOrEqual(4096);
-    expect(result.reply_text.endsWith("...")).toBe(true);
+    expect(result.reply_texts[0].length).toBeLessThanOrEqual(4096);
+    expect(result.reply_texts[0].endsWith("...")).toBe(true);
+    expect(result.reply_texts[1].length).toBeLessThanOrEqual(4096);
+    expect(result.reply_texts[1].endsWith("...")).toBe(true);
   });
 
   it("intent_tags limitadas a 10 itens", () => {
     const raw = {
-      reply_text: "ok",
+      reply_texts: ["ok"],
       should_handoff: false,
       score: 30,
       intent_tags: Array.from({ length: 20 }, (_, i) => `tag${i}`),
@@ -34,7 +36,7 @@ describe("validateOutput — guardrails de saída da IA", () => {
 
   it("cada intent_tag truncada a 50 chars", () => {
     const raw = {
-      reply_text: "ok",
+      reply_texts: ["ok"],
       should_handoff: false,
       score: 30,
       intent_tags: ["A".repeat(100)],
@@ -45,32 +47,32 @@ describe("validateOutput — guardrails de saída da IA", () => {
   });
 
   it("summary truncado a 1000 chars", () => {
-    const raw = { reply_text: "ok", should_handoff: false, score: 30, intent_tags: [], summary: "X".repeat(2000) };
+    const raw = { reply_texts: ["ok"], should_handoff: false, score: 30, intent_tags: [], summary: "X".repeat(2000) };
     const result = validateOutput(raw, LEAD_SCORE);
     expect(result.summary.length).toBeLessThanOrEqual(1000);
   });
 
   it("summary recebe strip de control chars", () => {
-    const raw = { reply_text: "ok", should_handoff: false, score: 30, intent_tags: [], summary: "Lead interessada\x00\x1F em SUV" };
+    const raw = { reply_texts: ["ok"], should_handoff: false, score: 30, intent_tags: [], summary: "Lead interessada\x00\x1F em SUV" };
     const result = validateOutput(raw, LEAD_SCORE);
     expect(result.summary).not.toMatch(/[\x00-\x08\x0E-\x1F]/);
     expect(result.summary).toContain("Lead interessada");
   });
 
   it("should_handoff sem boolean retorna false (fallback seguro)", () => {
-    const raw = { reply_text: "ok", should_handoff: "yes", score: 30, intent_tags: [], summary: "" };
+    const raw = { reply_texts: ["ok"], should_handoff: "yes", score: 30, intent_tags: [], summary: "" };
     const result = validateOutput(raw, LEAD_SCORE);
     expect(result.should_handoff).toBe(false);
   });
 
   it("score inválido (fora de 0-100) cai back para leadScore", () => {
-    const raw = { reply_text: "ok", should_handoff: false, score: 150, intent_tags: [], summary: "" };
+    const raw = { reply_texts: ["ok"], should_handoff: false, score: 150, intent_tags: [], summary: "" };
     const result = validateOutput(raw, LEAD_SCORE);
     expect(result.score).toBe(LEAD_SCORE);
   });
 
   it("score NaN cai back para leadScore", () => {
-    const raw = { reply_text: "ok", should_handoff: false, score: NaN, intent_tags: [], summary: "" };
+    const raw = { reply_texts: ["ok"], should_handoff: false, score: NaN, intent_tags: [], summary: "" };
     const result = validateOutput(raw, LEAD_SCORE);
     expect(result.score).toBe(LEAD_SCORE);
   });

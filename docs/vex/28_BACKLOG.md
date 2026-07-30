@@ -745,11 +745,11 @@ Lead recebe a conversa no ritmo que já espera de um vendedor real conversando n
 
 Priority
 
-P4 — baixa prioridade agora. Reavaliar depois que o número novo (`1238597592667311`, registrado 2026-07-27) tiver reputação/`quality_rating` estabelecida — ver risco abaixo.
+P1 — priorizado via DL-0009 (2026-07-30), decisão consciente de exceção à ordem de fase.
 
 Status
 
-IDEA — não implementado. Decisão de 2026-07-27: aplicar só o ajuste de tom via prompt por enquanto (quebra de linha dentro de 1 mensagem), adiar o suporte real a múltiplas mensagens.
+IDEA — priorizado via DL-0009 (2026-07-30), spec pronta (prompt gerado), implementação ainda não iniciada.
 
 Owner
 
@@ -783,7 +783,7 @@ None yet
 
 Target Version
 
-Sem agendamento — reavaliar quando o número tiver reputação estabelecida na Meta
+Fase 0 (fora de ordem — ver DL-0009), produção Speed Motos
 
 Success Metrics
 
@@ -795,6 +795,8 @@ Riscos levantados em 2026-07-27, ao decidir adiar:
 - **Rate limit**: irrelevante no volume atual (1 loja) — Cloud API tem limite alto por tier. Vira relevante só em escala de centenas de lojas simultâneas.
 - **Ordem de entrega**: só garantida se o envio for sequencial (`await` cada POST antes do próximo). Implementação errada (paralela) pode entregar fora de ordem — bug sutil, difícil de pegar em teste manual.
 - **Qualidade do número na Meta**: número (`1238597592667311`) saiu do sandbox em 2026-07-27, `quality_rating: UNKNOWN`. Rajada de 2-3 mensagens automáticas sem delay logo no início da vida do número pode ler como comportamento de bot pro sistema de qualidade da Meta — motivo principal pra adiar até o número ter reputação estabelecida. Se implementado, considerar delay de 400-800ms entre envios.
+
+**Reavaliação (DL-0009, 2026-07-30):** cautela acima revista — `quality_rating` é determinado principalmente por feedback do usuário (bloqueio/denúncia de spam), não por ritmo de envio; múltiplas mensagens curtas em sequência é prática comum de negócios reais na API. Risco real não é reputacional, é técnico (ordem de entrega — exige sequencial, nunca `Promise.all`). Motivou priorização P1 e implementação direta em produção da Speed Motos, com delay de 400-800ms entre envios.
 
 ---
 

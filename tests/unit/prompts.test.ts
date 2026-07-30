@@ -102,11 +102,30 @@ describe("buildPrompt", () => {
 
   it("formato JSON exigido no system", () => {
     const { system } = buildPrompt(makeCtx(), guardrailNormal);
-    expect(system).toContain("reply_text");
+    expect(system).toContain("reply_texts");
     expect(system).toContain("should_handoff");
     expect(system).toContain("intent_tags");
     expect(system).toContain("summary");
     expect(system).toContain("score");
+  });
+
+  it("schema de reply_texts é array, não string única", () => {
+    const { system } = buildPrompt(makeCtx(), guardrailNormal);
+    const idx = system.indexOf('"reply_texts"');
+    expect(idx).toBeGreaterThan(-1);
+    // Logo depois da chave, o próximo caractere não-espaço deve ser '[' (array)
+    const afterKey = system.slice(idx + '"reply_texts"'.length).trimStart();
+    expect(afterKey.startsWith(":")).toBe(true);
+    expect(afterKey.replace(/^:\s*/, "").startsWith("[")).toBe(true);
+  });
+
+  it("[TOM DE VOZ] instrui bolhas separadas via itens do array, não quebra de linha dentro de uma string", () => {
+    const { system } = buildPrompt(makeCtx(), guardrailNormal);
+    const idx = system.indexOf("[TOM DE VOZ]");
+    expect(idx).toBeGreaterThan(-1);
+    const tomDeVoz = system.slice(idx, system.indexOf("[DATA ATUAL]"));
+    expect(tomDeVoz).toContain("reply_texts");
+    expect(tomDeVoz).not.toContain("linha em branco");
   });
 
   it("messages[] mapeia histórico corretamente (entrada→user, saida→assistant)", () => {

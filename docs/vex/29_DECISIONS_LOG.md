@@ -323,6 +323,72 @@ Active
 
 Date
 
+2026-07-30
+
+Decision ID
+
+DL-0009
+
+Title
+
+Priorizar Multi-Bolha (BL-0008) em Produção Real (Speed Motos) Antes da Fase 1
+
+Category
+
+Product
+
+Context
+
+BL-0008 (28_BACKLOG.md) estava registrado como "sem agendamento — reavaliar quando o número tiver reputação estabelecida", motivado por cautela sobre quality_rating da Meta. Reavaliação técnica (2026-07-30): quality_rating é determinado principalmente por feedback do usuário (bloqueio/denúncia de spam), não por ritmo de envio — múltiplas mensagens curtas em sequência é prática comum de negócios reais na API. O risco real não é reputacional, é técnico: ordem de entrega (exige envio sequencial, nunca paralelo) e esforço de implementação (schema, retry, testes).
+
+Decision
+
+Implementar BL-0008 agora, em produção real da Speed Motos (não atrás de flag restrita à demo), com envio estritamente sequencial e delay de 400-800ms entre mensagens.
+
+Reasoning
+
+Motivado por replicar o padrão de conversa fragmentada usado por concorrente (Thera, print de conversa real 28/07/2026) — ritmo humano de bolhas curtas em sequência, em vez de uma mensagem única longa. Speed Motos é o piloto ativo, onde toda validação de comportamento de IA já acontece.
+
+Alternatives Considered
+
+Esperar a landing/demo (BL-0013, Fase 1) existir antes de implementar, testando primeiro em ambiente de menor risco antes de mudar o comportamento em produção real com o único cliente piloto.
+
+Expected Impact
+
+Atendimento da Speed Motos passa a responder em múltiplas mensagens por turno, mais próximo do padrão de vendedor humano. Reaproveitável depois pela demo (BL-0013) sem trabalho adicional.
+
+Potential Risks
+
+Muda comportamento de produção com o único cliente piloto ativo, sem passar antes por ambiente de menor risco. Mitigação: envio sequencial obrigatório (nunca Promise.all) para evitar mensagens fora de ordem — esse é o risco técnico real, não o ritmo em si.
+
+Owner
+
+Founder (aprovação) / Engineering (implementação)
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0008 (28_BACKLOG.md)
+
+Related Runbook
+
+None
+
+Review Date
+
+Quando o resultado em produção (Speed Motos) tiver volume suficiente para avaliar impacto real em quality_rating — se degradar, reverter para 1 mensagem por turno e reabrir a cautela original.
+
+Status
+
+Active
+
+---
+
+Date
+
 2026-07-28
 
 Decision ID

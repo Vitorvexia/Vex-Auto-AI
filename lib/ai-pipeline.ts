@@ -22,6 +22,7 @@ import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
 import { markReactivationResponded } from "@/lib/reactivation";
 import { maskPhone } from "@/lib/pii";
 import { applyCollectionUpdate } from "@/lib/collection";
+import { sleep } from "@/lib/timing";
 import * as Sentry from "@sentry/nextjs";
 
 // ============================================================================
@@ -46,7 +47,7 @@ export type AgentStatus =
 // CPF: 11 dígitos, tipicamente XXX.XXX.XXX-XX mas pode aparecer com pontuação
 // parcial ou ausente. Escaneia qualquer string do objeto logado — a estrutura
 // (collected_data.financiamento.cpf) não é o único lugar onde pode vazar: a
-// LLM pode ecoar o CPF em texto livre (summary, reply_text).
+// LLM pode ecoar o CPF em texto livre (summary, reply_texts).
 const CPF_PATTERN = /\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g;
 const CPF_PLACEHOLDER = "[CPF removido]";
 
@@ -77,7 +78,7 @@ function redactCpfFromLog(result: AgentResult): unknown {
           const { cpf: _cpf, ...finRest } = fin;
           return { ...result, collected_data: { ...result.collected_data, financiamento: finRest } };
         })();
-  // ...e depois escaneia todo o objeto (inclusive summary/reply_text, texto
+  // ...e depois escaneia todo o objeto (inclusive summary/reply_texts, texto
   // livre autorado pela LLM) por qualquer substring com formato de CPF.
   return scrubCpfDeep(withoutStructuredCpf);
 }
@@ -174,7 +175,8 @@ export async function logAi(params: {
   model: string | null;
   output?: unknown;
   error?: string;
-  messageId?: string | null;
+  messageIds?: string[] | null;
+  failedMessageIds?: string[] | null;
   sendCategory?: SendErrorCategory | null;
 }) {
   try {
@@ -188,7 +190,10 @@ export async function logAi(params: {
       status: params.status,
       error_code: params.error ?? null,
       llm_output: params.output ?? null,
-      message_id: params.messageId ?? null,
+      // message_id (singular) mantido por retrocompat — primeiro item do turno.
+      message_id: params.messageIds?.[0] ?? null,
+      message_ids: params.messageIds?.length ? params.messageIds : null,
+      failed_message_ids: params.failedMessageIds?.length ? params.failedMessageIds : null,
       last_send_error: params.sendCategory ?? null,
     });
   } catch (e) {
@@ -302,65 +307,101 @@ export async function runAiPipeline(params: {
       }
     }
 
-    // Truncar reply ao limite da WA Cloud API antes de qualquer persistência
+    // Truncar cada bolha ao limite da WA Cloud API antes de qualquer persistência
     const WA_TEXT_LIMIT = 4096;
-    const replyText =
-      result.reply_text.length > WA_TEXT_LIMIT
-        ? result.reply_text.slice(0, WA_TEXT_LIMIT - 3) + "..."
-        : result.reply_text;
+    const replyTexts = result.reply_texts.map((t) =>
+      t.length > WA_TEXT_LIMIT ? t.slice(0, WA_TEXT_LIMIT - 3) + "..." : t
+    );
 
-    // Gravar reply (saida/ia) — texto já truncado, igual ao que será enviado
-    // Capturar message_id para link direto no retry — elimina risco de double-send
-    const { data: savedMsg } = await supabaseAdmin
-      .from("messages")
-      .insert({
-        store_id: params.storeId,
-        conversation_id: params.conversationId,
-        lead_id: params.leadId,
-        direcao: "saida",
-        autor: "ia",
-        mensagem: replyText,
-        received_at: new Date().toISOString(),
-      })
-      .select("id")
-      .single();
-    const messageId = savedMsg?.id ?? null;
-
-    // Enviar reply via WhatsApp Cloud API (não-fatal: reply já salvo no banco)
     const phone = ctx.lead.phone_normalized ?? "";
     const phoneMasked = phone ? maskPhone(phone) : "****";
+
+    // Credencial resolvida uma única vez e reaproveitada por todas as bolhas
+    // do turno (mesma loja) — erro (ou sucesso) é cacheado pra não repetir a
+    // chamada a cada item.
+    let cachedPhoneId: string | null = null;
+    let phoneIdError: unknown = null;
+    async function resolvePhoneId(): Promise<string> {
+      if (cachedPhoneId) return cachedPhoneId;
+      if (phoneIdError) throw phoneIdError;
+      try {
+        cachedPhoneId = await getStoreWhatsAppPhoneId(params.storeId);
+        return cachedPhoneId;
+      } catch (e) {
+        phoneIdError = e;
+        throw e;
+      }
+    }
+
+    const messageIds: string[] = [];
+    const failedMessageIds: string[] = [];
     let sendFailed = false;
     let sendPermanent = false;
     let sendCategory: SendErrorCategory | null = null;
-    try {
-      const phoneId = await getStoreWhatsAppPhoneId(params.storeId);
-      await sendWhatsAppMessage(ctx.lead.phone_normalized, replyText, phoneId);
-      console.log(`[whatsapp-send] mensagem enviada para ${phoneMasked}`);
-    } catch (sendErr) {
-      sendFailed = true;
-      if (sendErr instanceof WhatsAppSendError) {
-        sendCategory = sendErr.category;
-        sendPermanent = PERMANENT_CATEGORIES.includes(sendErr.category);
-        // Logar apenas categoria e status_code — nunca sendErr.message (pode conter PII da Meta)
-        console.error(JSON.stringify({
-          level: "error",
-          event: "whatsapp_send_failed",
-          category: sendErr.category,
-          status_code: sendErr.statusCode,
-          phone: phoneMasked,
-          ts: new Date().toISOString(),
-        }));
-        // Mensagem sintética, nunca sendErr diretamente — sendErr.message pode
-        // conter texto vindo da resposta da Meta (mesma cautela do log acima).
-        Sentry.captureMessage(
-          `whatsapp_send_failed category=${sendErr.category} status=${sendErr.statusCode ?? "?"}`,
-          { level: "error", tags: { pipeline_stage: "whatsapp_reply_send", category: sendErr.category } }
-        );
-      } else {
-        console.error("[whatsapp-send] erro inesperado:", sendErr);
-        Sentry.captureException(sendErr, { tags: { pipeline_stage: "whatsapp_reply_send" } });
+
+    // Envio SEQUENCIAL obrigatório — nunca Promise.all. A Meta não garante
+    // ordem de entrega entre requests concorrentes, e bolhas fora de ordem
+    // quebram a leitura da conversa pelo lead (DL-0008).
+    for (let i = 0; i < replyTexts.length; i++) {
+      const text = replyTexts[i];
+
+      // Gravar bolha (saida/ia) — uma linha própria por mensagem, antes do
+      // envio: falha de envio nunca perde a mensagem
+      const { data: savedMsg } = await supabaseAdmin
+        .from("messages")
+        .insert({
+          store_id: params.storeId,
+          conversation_id: params.conversationId,
+          lead_id: params.leadId,
+          direcao: "saida",
+          autor: "ia",
+          mensagem: text,
+          received_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+      const msgId: string | null = savedMsg?.id ?? null;
+      if (msgId) messageIds.push(msgId);
+
+      try {
+        const phoneId = await resolvePhoneId();
+        await sendWhatsAppMessage(ctx.lead.phone_normalized, text, phoneId);
+        console.log(`[whatsapp-send] bolha ${i + 1}/${replyTexts.length} enviada para ${phoneMasked}`);
+      } catch (sendErr) {
+        sendFailed = true;
+        if (msgId) failedMessageIds.push(msgId);
+        if (sendErr instanceof WhatsAppSendError) {
+          sendCategory = sendErr.category;
+          if (PERMANENT_CATEGORIES.includes(sendErr.category)) sendPermanent = true;
+          // Logar apenas categoria e status_code — nunca sendErr.message (pode conter PII da Meta)
+          console.error(JSON.stringify({
+            level: "error",
+            event: "whatsapp_send_failed",
+            category: sendErr.category,
+            status_code: sendErr.statusCode,
+            phone: phoneMasked,
+            bubble: `${i + 1}/${replyTexts.length}`,
+            ts: new Date().toISOString(),
+          }));
+          // Mensagem sintética, nunca sendErr diretamente — sendErr.message pode
+          // conter texto vindo da resposta da Meta (mesma cautela do log acima).
+          Sentry.captureMessage(
+            `whatsapp_send_failed category=${sendErr.category} status=${sendErr.statusCode ?? "?"}`,
+            { level: "error", tags: { pipeline_stage: "whatsapp_reply_send", category: sendErr.category } }
+          );
+        } else {
+          sendCategory = sendCategory ?? "unknown";
+          console.error("[whatsapp-send] erro inesperado:", sendErr);
+          Sentry.captureException(sendErr, { tags: { pipeline_stage: "whatsapp_reply_send" } });
+        }
+        // Não propaga: bolhas já salvas no banco, pipeline continua (inclusive as próximas bolhas)
       }
-      // Não propaga: reply já está no banco, pipeline continua
+
+      // Delay entre bolhas (nunca depois da última) — ritmo humano de digitação,
+      // não rajada instantânea que a Meta pode interpretar como bot (DL-0008).
+      if (i < replyTexts.length - 1) {
+        await sleep(400 + Math.floor(Math.random() * 401)); // 400–800ms
+      }
     }
 
     // should_handoff=true → reply já gravado → transicionar sem nova resposta
@@ -446,7 +487,8 @@ export async function runAiPipeline(params: {
       latencyMs: Date.now() - start,
       model,
       output: redactCpfFromLog(result),
-      messageId,
+      messageIds,
+      failedMessageIds,
       sendCategory,
     });
 

@@ -12,7 +12,7 @@ export interface CollectedData {
 }
 
 export interface AgentResult {
-  reply_text: string;
+  reply_texts: string[];
   should_handoff: boolean;
   score: number;
   intent_tags: string[];
@@ -159,18 +159,43 @@ function validateCollectedData(raw: unknown): CollectedData | undefined {
   return { financiamento, troca };
 }
 
+// Cap de segurança — bolhas por turno. Alinhado à orientação de tom em
+// lib/prompts.ts (padrão 2, máximo 3-4 na saudação inicial); aqui é só a
+// rede de segurança contra a LLM devolver uma lista anormalmente longa.
+const MAX_REPLY_ITEMS = 4;
+const WA_TEXT_LIMIT = 4096;
+
+function validateReplyTexts(obj: Record<string, unknown>): string[] {
+  // Formato atual: reply_texts (array). Fallback: reply_text singular
+  // (formato anterior a este BL-0008) — trata como array de 1 item pra não
+  // quebrar se algum caminho ainda devolver o schema antigo.
+  const rawArray = Array.isArray(obj?.reply_texts)
+    ? (obj.reply_texts as unknown[])
+    : typeof obj?.reply_text === "string"
+      ? [obj.reply_text]
+      : [];
+
+  const cleaned = rawArray
+    .filter((t): t is string => typeof t === "string")
+    .map((t) => t.trim())
+    .filter((t) => t.length > 0)
+    .map((t) => truncate(strip(t), WA_TEXT_LIMIT))
+    .slice(0, MAX_REPLY_ITEMS);
+
+  if (cleaned.length === 0) {
+    throw new AgentOutputError("reply_texts ausente ou vazio");
+  }
+
+  return cleaned;
+}
+
 export function validateOutput(raw: unknown, leadScore: number): AgentResult {
   if (raw === null || typeof raw !== "object" || Array.isArray(raw)) {
     throw new AgentOutputError("resposta não é um objeto JSON válido");
   }
   const obj = raw as Record<string, unknown>;
 
-  let reply_text =
-    typeof obj?.reply_text === "string" ? obj.reply_text.trim() : "";
-  if (!reply_text) {
-    throw new AgentOutputError("reply_text ausente ou vazio");
-  }
-  reply_text = truncate(strip(reply_text), 4096);
+  const reply_texts = validateReplyTexts(obj);
 
   const should_handoff =
     typeof obj?.should_handoff === "boolean" ? obj.should_handoff : false;
@@ -196,7 +221,7 @@ export function validateOutput(raw: unknown, leadScore: number): AgentResult {
   const collected_data = validateCollectedData(obj?.collected_data);
 
   return {
-    reply_text,
+    reply_texts,
     should_handoff,
     score,
     intent_tags,

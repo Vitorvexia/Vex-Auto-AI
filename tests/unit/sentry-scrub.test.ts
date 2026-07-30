@@ -43,6 +43,16 @@ describe("scrubSentryEvent", () => {
     expect(result.extra.reply_text).toBe("[removido]");
   });
 
+  it("redige reply_texts (array de bolhas) inteiro, mesma disciplina de reply_text", () => {
+    const event = {
+      extra: {
+        reply_texts: ["Obrigado, João!", "Vamos verificar seu financiamento."],
+      },
+    };
+    const result = scrubSentryEvent(event) as { extra: { reply_texts: unknown } };
+    expect(result.extra.reply_texts).toBe("[removido]");
+  });
+
   it("preserva mensagem de erro/stack trace sem PII intactos", () => {
     const event = {
       exception: { values: [{ value: "TypeError: Cannot read property 'x' of undefined", stacktrace: { frames: [{ filename: "lib/ai.ts", lineno: 42 }] } }] },
