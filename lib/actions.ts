@@ -12,6 +12,7 @@ import { getServerStoreId, getServerUserId, getServerUserRole } from "@/lib/auth
 import { markReactivationConverted } from "@/lib/reactivation";
 import { sendWhatsAppMessage } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
+import { logAudit } from "@/lib/audit";
 
 const VALID_LEAD_STATUSES = new Set<string>([
   "NOVO",
@@ -270,7 +271,7 @@ export async function assignLeadToUser(leadId: string, userId: string): Promise<
   // Guard 1: verify lead belongs to this store
   const { data: lead } = await supabaseAdmin
     .from("leads")
-    .select("id")
+    .select("id, assigned_to")
     .eq("id", leadId)
     .eq("store_id", storeId)
     .maybeSingle();
@@ -292,6 +293,16 @@ export async function assignLeadToUser(leadId: string, userId: string): Promise<
     .eq("store_id", storeId);
   if (error) throw error;
 
+  const actorId = await getServerUserId();
+  await logAudit({
+    storeId,
+    userId: actorId,
+    action: "lead.reassigned",
+    resourceType: "lead",
+    resourceId: leadId,
+    metadata: { previous_assigned_to: lead.assigned_to ?? null, new_assigned_to: userId },
+  });
+
   revalidatePath("/leads");
 }
 
@@ -304,7 +315,7 @@ export async function removeLeadAssignment(leadId: string): Promise<void> {
 
   const { data: lead } = await supabaseAdmin
     .from("leads")
-    .select("id")
+    .select("id, assigned_to")
     .eq("id", leadId)
     .eq("store_id", storeId)
     .maybeSingle();
@@ -316,6 +327,16 @@ export async function removeLeadAssignment(leadId: string): Promise<void> {
     .eq("id", leadId)
     .eq("store_id", storeId);
   if (error) throw error;
+
+  const actorId = await getServerUserId();
+  await logAudit({
+    storeId,
+    userId: actorId,
+    action: "lead.unassigned",
+    resourceType: "lead",
+    resourceId: leadId,
+    metadata: { previous_assigned_to: lead.assigned_to ?? null },
+  });
 
   revalidatePath("/leads");
 }

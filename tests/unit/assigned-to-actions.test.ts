@@ -4,12 +4,15 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRevalidate, mockGetServerStoreId, mockGetServerUserRole } = vi.hoisted(() => ({
-  mockFrom: vi.fn(),
-  mockRevalidate: vi.fn(),
-  mockGetServerStoreId: vi.fn(),
-  mockGetServerUserRole: vi.fn(),
-}));
+const { mockFrom, mockRevalidate, mockGetServerStoreId, mockGetServerUserRole, mockGetServerUserId, mockLogAudit } =
+  vi.hoisted(() => ({
+    mockFrom: vi.fn(),
+    mockRevalidate: vi.fn(),
+    mockGetServerStoreId: vi.fn(),
+    mockGetServerUserRole: vi.fn(),
+    mockGetServerUserId: vi.fn(),
+    mockLogAudit: vi.fn(),
+  }));
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -22,6 +25,11 @@ vi.mock("@/lib/supabase", () => ({
 vi.mock("@/lib/auth", () => ({
   getServerStoreId: mockGetServerStoreId,
   getServerUserRole: mockGetServerUserRole,
+  getServerUserId: mockGetServerUserId,
+}));
+
+vi.mock("@/lib/audit", () => ({
+  logAudit: mockLogAudit,
 }));
 
 vi.mock("next/cache", () => ({
@@ -68,6 +76,8 @@ beforeEach(() => {
   vi.spyOn(console, "error").mockImplementation(() => {});
   mockGetServerStoreId.mockResolvedValue("store-1");
   mockGetServerUserRole.mockResolvedValue("dono_loja");
+  mockGetServerUserId.mockResolvedValue("actor-1");
+  mockLogAudit.mockResolvedValue(undefined);
 });
 
 afterEach(() => {
@@ -164,6 +174,36 @@ describe("assignLeadToUser", () => {
     await expect(assignLeadToUser("lead-1", "user-1")).resolves.toBeUndefined();
     expect(mockRevalidate).toHaveBeenCalledWith("/leads");
   });
+
+  it("A8: chama logAudit com previous_assigned_to e new_assigned_to corretos", async () => {
+    mockFrom
+      .mockReturnValueOnce(
+        makeSelectChain({ data: { id: "lead-1", store_id: "store-1", assigned_to: "user-old" }, error: null })
+      )
+      .mockReturnValueOnce(
+        makeSelectChain({ data: { id: "user-1" }, error: null })
+      )
+      .mockReturnValueOnce(makeUpdateChain({ error: null }));
+
+    await assignLeadToUser("lead-1", "user-1");
+
+    expect(mockLogAudit).toHaveBeenCalledWith({
+      storeId: "store-1",
+      userId: "actor-1",
+      action: "lead.reassigned",
+      resourceType: "lead",
+      resourceId: "lead-1",
+      metadata: { previous_assigned_to: "user-old", new_assigned_to: "user-1" },
+    });
+  });
+
+  it("A9: vendedor bloqueado → logAudit não é chamado", async () => {
+    mockGetServerUserRole.mockResolvedValue("vendedor");
+
+    await expect(assignLeadToUser("lead-1", "user-1")).rejects.toThrow();
+
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -232,5 +272,32 @@ describe("removeLeadAssignment", () => {
 
     await expect(removeLeadAssignment("lead-1")).resolves.toBeUndefined();
     expect(mockRevalidate).toHaveBeenCalledWith("/leads");
+  });
+
+  it("R7: chama logAudit com previous_assigned_to correto", async () => {
+    mockFrom
+      .mockReturnValueOnce(
+        makeSelectChain({ data: { id: "lead-1", store_id: "store-1", assigned_to: "user-old" }, error: null })
+      )
+      .mockReturnValueOnce(makeUpdateChain({ error: null }));
+
+    await removeLeadAssignment("lead-1");
+
+    expect(mockLogAudit).toHaveBeenCalledWith({
+      storeId: "store-1",
+      userId: "actor-1",
+      action: "lead.unassigned",
+      resourceType: "lead",
+      resourceId: "lead-1",
+      metadata: { previous_assigned_to: "user-old" },
+    });
+  });
+
+  it("R8: vendedor bloqueado → logAudit não é chamado", async () => {
+    mockGetServerUserRole.mockResolvedValue("vendedor");
+
+    await expect(removeLeadAssignment("lead-1")).rejects.toThrow();
+
+    expect(mockLogAudit).not.toHaveBeenCalled();
   });
 });
