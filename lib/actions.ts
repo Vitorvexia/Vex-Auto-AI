@@ -27,7 +27,10 @@ const VALID_LEAD_STATUSES = new Set<string>([
 export async function assignConversationToHuman(
   conversationId: string
 ): Promise<void> {
-  const storeId = await getServerStoreId();
+  const [storeId, actorId] = await Promise.all([
+    getServerStoreId(),
+    getServerUserId(),
+  ]);
   const { data: check } = await supabaseAdmin
     .from("conversations")
     .select("id, lead_id")
@@ -48,13 +51,26 @@ export async function assignConversationToHuman(
     autor: "sistema",
     mensagem: "Conversa assumida por humano",
   });
+
+  await logAudit({
+    storeId,
+    userId: actorId,
+    action: "conversation.handoff_to_human",
+    resourceType: "conversation",
+    resourceId: conversationId,
+    metadata: { lead_id: check.lead_id },
+  });
+
   revalidatePath(`/conversations/${conversationId}`);
 }
 
 export async function returnConversationToAI(
   conversationId: string
 ): Promise<void> {
-  const storeId = await getServerStoreId();
+  const [storeId, actorId] = await Promise.all([
+    getServerStoreId(),
+    getServerUserId(),
+  ]);
   const { data: check } = await supabaseAdmin
     .from("conversations")
     .select("id, lead_id")
@@ -75,6 +91,16 @@ export async function returnConversationToAI(
     autor: "sistema",
     mensagem: "Conversa retornada para IA",
   });
+
+  await logAudit({
+    storeId,
+    userId: actorId,
+    action: "conversation.handoff_to_ai",
+    resourceType: "conversation",
+    resourceId: conversationId,
+    metadata: { lead_id: check.lead_id },
+  });
+
   revalidatePath(`/conversations/${conversationId}`);
 }
 
@@ -150,6 +176,15 @@ export async function sendManualReply(
     console.error("[manual-reply] falha ao enviar mensagem manual:", e);
   }
 
+  await logAudit({
+    storeId,
+    userId,
+    action: "message.manual_reply",
+    resourceType: "conversation",
+    resourceId: conversationId,
+    metadata: messageId ? { lead_id: conv.lead_id, message_id: messageId } : { lead_id: conv.lead_id },
+  });
+
   revalidatePath(`/conversations/${conversationId}`);
 }
 
@@ -158,7 +193,10 @@ export async function updateLeadStatus(
   conversationId: string,
   formData: FormData
 ): Promise<void> {
-  const storeId = await getServerStoreId();
+  const [storeId, actorId] = await Promise.all([
+    getServerStoreId(),
+    getServerUserId(),
+  ]);
   const { data: check } = await supabaseAdmin
     .from("leads")
     .select("id")
@@ -206,6 +244,15 @@ export async function updateLeadStatus(
       .eq("id", leadId)
       .eq("store_id", storeId);
     if (updateError) throw new Error("Erro ao registrar dados da venda.");
+
+    await logAudit({
+      storeId,
+      userId: actorId,
+      action: "lead.closed",
+      resourceType: "lead",
+      resourceId: leadId,
+      metadata: { vehicle_id: vehicleId, valor_final: valorFinal },
+    });
   }
 
   await transitionLeadStatus(leadId, newStatus as LeadStatus);
