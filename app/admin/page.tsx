@@ -211,7 +211,7 @@ export default async function AdminPage() {
                         name="role"
                         className="border rounded px-2 py-1 text-sm"
                       >
-                        <option value="admin">admin</option>
+                        <option value="dono_loja">dono_loja</option>
                         <option value="vendedor">vendedor</option>
                       </select>
                     </div>
