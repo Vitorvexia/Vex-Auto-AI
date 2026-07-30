@@ -294,6 +294,14 @@ describe("updateLeadStatus", () => {
     expect(mockTransitionLead).toHaveBeenCalledWith("lead-1", "NEGOCIACAO");
   });
 
+  it("T5b: transição bem-sucedida pra status != FECHADO não chama logAudit", async () => {
+    mockTransitionLead.mockResolvedValue({ from: "QUENTE", to: "NEGOCIACAO", changed: true });
+
+    await updateLeadStatus("lead-1", "conv-1", makeFormData("NEGOCIACAO"));
+
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
+
   it("T6: status inválido (não pertence ao enum) → lança Error antes de chamar transitionLeadStatus", async () => {
     await expect(
       updateLeadStatus("lead-1", "conv-1", makeFormData("STATUS_INVENTADO"))
@@ -612,6 +620,21 @@ describe("sendManualReply", () => {
       resourceType: "conversation",
       resourceId: "conv-1",
       metadata: { lead_id: "lead-1", message_id: "msg-42" },
+    });
+  });
+
+  it("messageId null → logAudit metadata só tem lead_id, sem message_id", async () => {
+    setupManualReplyMocks({ conv: HANDOFF_CONV, lead: LEAD, savedMessageId: null });
+
+    await sendManualReply("conv-1", makeReplyFormData("Oi, tudo bem?"));
+
+    expect(mockLogAudit).toHaveBeenCalledWith({
+      storeId: "store-test",
+      userId: "user-1",
+      action: "message.manual_reply",
+      resourceType: "conversation",
+      resourceId: "conv-1",
+      metadata: { lead_id: "lead-1" },
     });
   });
 });
