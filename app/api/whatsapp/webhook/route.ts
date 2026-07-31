@@ -3,7 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { normalizePhone } from "@/lib/phone";
 import { verifyMetaSignature } from "@/lib/whatsapp-signature";
 import { ingestMessage } from "@/lib/ingest";
-import { runAiPipeline } from "@/lib/ai-pipeline";
+import { dispatchAiPipeline } from "@/lib/pipeline-dispatch";
 import { isReplayedMessage } from "@/lib/replay-guard";
 import { maskPhone } from "@/lib/pii";
 import * as Sentry from "@sentry/nextjs";
@@ -209,15 +209,26 @@ export async function POST(req: NextRequest) {
           };
 
           if (!r.duplicate) {
-            const { agent_status, error: agentError } = await runAiPipeline({
+            // dispatchAiPipeline faz claim atômico por conversation_id antes de
+            // rodar o pipeline — evita 2 runAiPipeline concorrentes pra mesma
+            // conversa quando mensagens do mesmo lead chegam em requests
+            // próximos (bug de produção 2026-07-30). Se o claim falhar, esta
+            // mensagem já está salva (ingestMessage já rodou) e será pega no
+            // dreno de quem detém o lock — não perde a mensagem, só não gera
+            // agent_status próprio aqui.
+            const dispatch = await dispatchAiPipeline({
               storeId: store.id,
               leadId: r.lead_id,
               conversationId: r.conversation_id,
-              incomingText: text,
               isNewConversation: r.is_new_conversation,
             });
-            result.agent_status = agent_status;
-            if (agentError) result.error = agentError;
+            if (!dispatch.ran) {
+              result.agent_status = "skipped_locked";
+            } else {
+              const last = dispatch.results[dispatch.results.length - 1];
+              result.agent_status = last?.agent_status ?? "error";
+              if (last?.error) result.error = last.error;
+            }
           } else {
             result.agent_status = "skipped_duplicate";
           }
