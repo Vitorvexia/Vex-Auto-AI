@@ -1,4 +1,4 @@
--- Migration 028: tabela de auditoria (roadmap 0.5) — quem fez o quê, quando,
+-- Migration 029: tabela de auditoria (roadmap 0.5) — quem fez o quê, quando,
 -- em ações sensíveis do sistema. Não é observability de erro (isso é Sentry,
 -- 0.4) — é trilha de ações humanas.
 create table public.audit_logs (
