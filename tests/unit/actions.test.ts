@@ -115,6 +115,41 @@ function makeFormData(leadStatus: string): FormData {
   return fd;
 }
 
+function setupAssignHumanMocks(opts: {
+  leadAssignedTo?: string | null;
+  convData?: { id: string; lead_id: string } | null;
+} = {}) {
+  const convChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({
+      data: opts.convData !== undefined ? opts.convData : { id: "conv-1", lead_id: "lead-x" },
+      error: null,
+    }),
+  };
+  const leadsUpdateEq2 = vi.fn().mockResolvedValue({ error: null });
+  const leadsUpdateEq1 = vi.fn().mockReturnValue({ eq: leadsUpdateEq2 });
+  const leadsChain = {
+    select: vi.fn().mockReturnThis(),
+    eq: vi.fn().mockReturnThis(),
+    maybeSingle: vi.fn().mockResolvedValue({
+      data: { assigned_to: opts.leadAssignedTo ?? null },
+      error: null,
+    }),
+    update: vi.fn().mockReturnValue({ eq: leadsUpdateEq1 }),
+  };
+  const messagesChain = {
+    insert: vi.fn().mockResolvedValue({ error: null }),
+  };
+  mockFrom.mockImplementation((table: string) => {
+    if (table === "conversations") return convChain;
+    if (table === "leads") return leadsChain;
+    if (table === "messages") return messagesChain;
+    throw new Error(`tabela inesperada em assignConversationToHuman: ${table}`);
+  });
+  return { convChain, leadsChain, messagesChain, leadsUpdateEq2 };
+}
+
 // ---------------------------------------------------------------------------
 // Setup
 // ---------------------------------------------------------------------------
@@ -149,26 +184,41 @@ afterEach(() => {
 // ---------------------------------------------------------------------------
 
 describe("assignConversationToHuman", () => {
-  it("T1: chama transitionConversationStatus com AGUARDANDO_HUMANO + handoff_to=HUMANO + assigned_to=null", async () => {
+  it("T1: lead já tinha dono → handoff preserva assigned_to (não zera) em conversations e leads", async () => {
     mockTransitionConv.mockResolvedValue({ from: "ATIVA", to: "AGUARDANDO_HUMANO", changed: true });
-    chainInsert();
+    const { leadsChain } = setupAssignHumanMocks({ leadAssignedTo: "seller-9" });
 
     await assignConversationToHuman("conv-1");
 
     expect(mockTransitionConv).toHaveBeenCalledWith("conv-1", "AGUARDANDO_HUMANO", {
       handoff_to: "HUMANO",
-      assigned_to: null,
+      assigned_to: "seller-9",
     });
+    expect(leadsChain.update).toHaveBeenCalledWith({ assigned_to: "seller-9" });
+  });
+
+  it("T1b: lead sem dono → handoff atribui ao usuário autenticado que executou a ação", async () => {
+    mockTransitionConv.mockResolvedValue({ from: "ATIVA", to: "AGUARDANDO_HUMANO", changed: true });
+    mockGetServerUserId.mockResolvedValue("user-42");
+    const { leadsChain } = setupAssignHumanMocks({ leadAssignedTo: null });
+
+    await assignConversationToHuman("conv-1");
+
+    expect(mockTransitionConv).toHaveBeenCalledWith("conv-1", "AGUARDANDO_HUMANO", {
+      handoff_to: "HUMANO",
+      assigned_to: "user-42",
+    });
+    expect(leadsChain.update).toHaveBeenCalledWith({ assigned_to: "user-42" });
   });
 
   it("T4: insere message de sistema após assumir", async () => {
     mockTransitionConv.mockResolvedValue({ from: "ATIVA", to: "AGUARDANDO_HUMANO", changed: true });
-    const insertChain = chainInsert();
+    const { messagesChain } = setupAssignHumanMocks({ leadAssignedTo: "seller-9" });
 
     await assignConversationToHuman("conv-1");
 
     expect(mockFrom).toHaveBeenCalledWith("messages");
-    expect(insertChain.insert).toHaveBeenCalledWith(
+    expect(messagesChain.insert).toHaveBeenCalledWith(
       expect.objectContaining({
         conversation_id: "conv-1",
         autor: "sistema",
@@ -177,22 +227,22 @@ describe("assignConversationToHuman", () => {
     );
   });
 
-  it("T7: conversa ENCERRADA → erro propagado (InvalidTransitionError)", async () => {
+  it("T7: conversa ENCERRADA → erro propagado (InvalidTransitionError), sem escrever lead nem message", async () => {
     const err = new Error("Transicao invalida em conversation_status: ENCERRADA -> AGUARDANDO_HUMANO");
     err.name = "InvalidTransitionError";
     mockTransitionConv.mockRejectedValue(err);
-    const chain = chainInsert();
+    const { leadsChain, messagesChain } = setupAssignHumanMocks({ leadAssignedTo: "seller-9" });
 
     await expect(assignConversationToHuman("conv-encerrada")).rejects.toMatchObject(
       { name: "InvalidTransitionError" }
     );
-    // Ownership check runs (mockFrom called), but insert never happens (error thrown by transition)
-    expect(chain.insert).not.toHaveBeenCalled();
+    expect(leadsChain.update).not.toHaveBeenCalled();
+    expect(messagesChain.insert).not.toHaveBeenCalled();
   });
 
-  it("T8: chama logAudit com action conversation.handoff_to_human e lead_id", async () => {
+  it("T8: chama logAudit com action conversation.handoff_to_human, lead_id e assigned_to real", async () => {
     mockTransitionConv.mockResolvedValue({ from: "ATIVA", to: "AGUARDANDO_HUMANO", changed: true });
-    chainInsert();
+    setupAssignHumanMocks({ leadAssignedTo: "seller-9" });
 
     await assignConversationToHuman("conv-1");
 
@@ -202,7 +252,7 @@ describe("assignConversationToHuman", () => {
       action: "conversation.handoff_to_human",
       resourceType: "conversation",
       resourceId: "conv-1",
-      metadata: { lead_id: "lead-x" },
+      metadata: { lead_id: "lead-x", assigned_to: "seller-9" },
     });
   });
 });
@@ -260,14 +310,15 @@ describe("returnConversationToAI", () => {
 // ---------------------------------------------------------------------------
 
 describe("assigned_to = null", () => {
-  it("T3: assignConversationToHuman sempre passa assigned_to=null", async () => {
+  it("T3: assignConversationToHuman nunca zera assigned_to (BL-1.9) — conversations e leads ficam consistentes", async () => {
     mockTransitionConv.mockResolvedValue({ from: "ATIVA", to: "AGUARDANDO_HUMANO", changed: true });
-    chainInsert();
+    const { leadsChain } = setupAssignHumanMocks({ leadAssignedTo: "seller-9" });
 
     await assignConversationToHuman("conv-1");
 
     const [, , opts] = mockTransitionConv.mock.calls[0] as [string, string, { assigned_to: unknown }];
-    expect(opts.assigned_to).toBeNull();
+    expect(opts.assigned_to).not.toBeNull();
+    expect(leadsChain.update).toHaveBeenCalledWith({ assigned_to: opts.assigned_to });
   });
 
   it("T3b: returnConversationToAI sempre passa assigned_to=null", async () => {

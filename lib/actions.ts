@@ -39,10 +39,25 @@ export async function assignConversationToHuman(
     .maybeSingle();
   if (!check) throw new Error("Conversa não encontrada");
 
+  // Handoff nunca deve deixar o lead sem dono (BL-1.9): preserva assigned_to
+  // existente ou atribui a quem está assumindo a conversa agora.
+  const { data: leadRow } = await supabaseAdmin
+    .from("leads")
+    .select("assigned_to")
+    .eq("id", check.lead_id)
+    .eq("store_id", storeId)
+    .maybeSingle();
+  const ownerId = leadRow?.assigned_to ?? actorId;
+
   await transitionConversationStatus(conversationId, "AGUARDANDO_HUMANO", {
     handoff_to: "HUMANO",
-    assigned_to: null,
+    assigned_to: ownerId,
   });
+  await supabaseAdmin
+    .from("leads")
+    .update({ assigned_to: ownerId })
+    .eq("id", check.lead_id)
+    .eq("store_id", storeId);
   await supabaseAdmin.from("messages").insert({
     conversation_id: conversationId,
     store_id: storeId,
@@ -58,7 +73,7 @@ export async function assignConversationToHuman(
     action: "conversation.handoff_to_human",
     resourceType: "conversation",
     resourceId: conversationId,
-    metadata: { lead_id: check.lead_id },
+    metadata: { lead_id: check.lead_id, assigned_to: ownerId },
   });
 
   revalidatePath(`/conversations/${conversationId}`);

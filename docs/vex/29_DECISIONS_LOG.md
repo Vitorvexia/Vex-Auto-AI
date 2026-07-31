@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering Leadership
 
-Last Updated: 2026-07-20
+Last Updated: 2026-07-31
 
 ---
 
@@ -252,6 +252,72 @@ Active
 ---
 
 # REAL DECISIONS
+
+Date
+
+2026-07-31
+
+Decision ID
+
+DL-0010
+
+Title
+
+Handoff (assignConversationToHuman) escreve leads.assigned_to sem guard de RBAC — self-claim-only por construção, não precisa do guard de assignLeadToUser/removeLeadAssignment
+
+Category
+
+Security
+
+Context
+
+Fix do item 1.9 do roadmap (`53_ROADMAP.md`) — `assignConversationToHuman` (`lib/actions.ts`) zerava `assigned_to` no handoff pra humano, fazendo o lead sumir da métrica de vendedor (`team-metrics.ts` lê `leads.assigned_to`). Fix: `ownerId = leadRow.assigned_to ?? actorId` — preserva dono existente, ou autoatribui a quem está assumindo a conversa. Esse write em `leads.assigned_to` não tem o guard de RBAC (`role === "vendedor"` bloqueado) que existe em `assignLeadToUser`/`removeLeadAssignment` — decisão consciente, não gap esquecido.
+
+Decision
+
+Não adicionar guard de RBAC no write de `leads.assigned_to` dentro de `assignConversationToHuman`.
+
+Reasoning
+
+`ownerId = leadRow.assigned_to ?? actorId` só escreve um valor novo quando o campo atual é `null` (autoatribuição do próprio ator) — nunca sobrescreve um dono já existente com outro `actorId`. Não existe caminho, por esse código, pra um vendedor tomar lead de outro. Isso é estruturalmente diferente do que `assignLeadToUser` bloqueia: reatribuição explícita de um lead que já tem dono, escolhendo livremente qualquer `userId` da loja. O guard de `assignLeadToUser`/`removeLeadAssignment` protege contra essa reatribuição arbitrária; o handoff não tem essa superfície porque o único destino possível é o próprio ator autenticado.
+
+Alternatives Considered
+
+Aplicar o mesmo guard (`role === "vendedor"` bloqueado) no write de `leads.assigned_to` dentro do handoff, por consistência de padrão com `assignLeadToUser`/`removeLeadAssignment`.
+
+Expected Impact
+
+Vendedor consegue assumir handoff de lead sem dono e virar o dono automaticamente, sem depender do dono da loja pra reatribuir manualmente primeiro — reduz fricção operacional no piloto (1 loja, poucos vendedores).
+
+Potential Risks
+
+Nenhum risco de reassignment indevido — analisado e descartado (ver Reasoning). Risco residual é só de leitura futura: se alguém no futuro "corrigir" isso adicionando o guard achando que é gap de segurança, quebra o caso de uso de autoatribuição em handoff sem entender a diferença estrutural. Registrado aqui pra prevenir isso.
+
+Owner
+
+Engineering
+
+Related ADR
+
+None
+
+Related Issue
+
+Item 1.9 do `53_ROADMAP.md`, `lib/actions.ts:assignConversationToHuman`
+
+Related Runbook
+
+None
+
+Review Date
+
+Revisitar se RBAC por papel (vendedor só toca os próprios leads) virar decisão de produto real — hoje é dívida documentada e aceita (ver `CLAUDE.md`, "Atribuição sem RBAC").
+
+Status
+
+Active
+
+---
 
 Date
 

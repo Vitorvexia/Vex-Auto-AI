@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Product & Engineering
 
-Last Updated: 2026-07-24
+Last Updated: 2026-07-31
 
 ---
 
@@ -1299,6 +1299,72 @@ Horário de atendimento presencial configurável por loja sem variável de ambie
 Notes
 
 Nenhum dos dois pontos bloqueou o fix de 2026-07-30 (bug era comportamento, não schema) — registrados aqui só pra não repetir o padrão de descoberta tardia.
+
+---
+
+BL-0017
+
+Title
+
+Decidir modelo de dado de conversations.assigned_to vs leads.assigned_to (returnConversationToAI zera um, preserva o outro)
+
+Problem
+
+Achado durante o fix do item 1.9 do roadmap (handoff que zerava o dono do lead, `lib/actions.ts:assignConversationToHuman`, 2026-07-31). O fix corrigiu `assignConversationToHuman` para nunca zerar `assigned_to` — preserva o dono existente em `leads.assigned_to` ou atribui ao usuário que assume a conversa, mantendo `conversations.assigned_to` e `leads.assigned_to` consistentes entre si nesse fluxo. `returnConversationToAI` (mesmo arquivo) não foi tocado — fora de escopo do 1.9 — e continua zerando `conversations.assigned_to` quando a conversa volta pra IA, enquanto `leads.assigned_to` permanece preservado. Resultado: as duas colunas ficam inconsistentes fora do fluxo de handoff (uma null, outra não) assim que a IA retoma uma conversa que já teve dono.
+
+Business Value
+
+Evita ambiguidade de dado que pode virar bug de métrica ou confusão de UI no futuro (ex: se algum dia `conversations.assigned_to` passar a ser lido em algum lugar, vai contradizer `leads.assigned_to`). Decisão registrada agora, achado fresco, em vez de redescoberta tardia — mesmo padrão de DL-0003/BL-0016.
+
+Customer Value
+
+Nenhum impacto direto hoje — `conversations.assigned_to` não é lido em nenhuma tela nem métrica (`team-metrics.ts`/`app/equipe`/`app/leads` usam só `leads.assigned_to`). Valor é evitar dívida de modelo de dado silenciosa.
+
+Priority
+
+P3 — não bloqueia nada hoje (coluna não lida em produção). Vira relevante se `conversations.assigned_to` ganhar algum consumidor novo, ou se o modelo de posse do lead for revisitado.
+
+Status
+
+IDEA — não implementado, registrado no momento do achado (2026-07-31)
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixa-Média. Duas direções possíveis, a decidir:
+- Remover `conversations.assigned_to` como coluna separada — fonte única de verdade vira `leads.assigned_to` (migration de drop de coluna + remoção do parâmetro `assigned_to` de `transitionConversationStatus`)
+- Manter as duas, mas definir semântica distinta explícita (ex: `conversations.assigned_to` = quem está atendendo esta sessão agora, reseta ao voltar pra IA; `leads.assigned_to` = dono permanente do lead, nunca resetado por handoff) e fazer `returnConversationToAI` respeitar essa semântica de forma documentada, não por omissão
+
+Dependencies
+
+Nenhuma técnica imediata. Depende só de decisão de produto/arquitetura sobre o que "dono do lead" significa quando a IA retoma a conversa.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Item 1.9 do `53_ROADMAP.md` (origem do achado), `lib/actions.ts:returnConversationToAI`
+
+Target Version
+
+Não definida — aguardando decisão de modelo de dado
+
+Success Metrics
+
+`conversations.assigned_to` e `leads.assigned_to` nunca ficam em estados contraditórios (um preenchido, outro null) em nenhum ponto do fluxo de conversa, não só no handoff pra humano.
+
+Notes
+
+Não corrigido de propósito durante o 1.9 — expandir esse fix pra decisão de modelo de dado maior no meio de um bugfix pontual foi considerado risco de escopo, não economia de tempo.
 
 ---
 
