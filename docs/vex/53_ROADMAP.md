@@ -146,7 +146,8 @@ Três fatos moldam este roadmap:
 | Branch `feat/onboarding-wizard` abandonada | Fase 1.6 | — |
 | Branches remotas nunca limpas | Auditoria antes da v-final | — |
 | `package.json` versão `0.0.2.0` (não-semver) | Cosmético | — |
-| Multi-bolha (BL-0008) implementado direto em produção real, sem passar por ambiente de menor risco antes — envio sequencial obrigatório, nunca paralelo, sob risco de mensagens fora de ordem | Em implementação (piloto Speed Motos) | DL-0009, BL-0008 |
+| Multi-bolha (BL-0008) implementado direto em produção real, sem passar por ambiente de menor risco antes — envio sequencial obrigatório, nunca paralelo, sob risco de mensagens fora de ordem | ✔ Concluído e validado (2026-07-31) — bolhas em ordem confirmadas em teste manual real, risco assumido não se materializou | DL-0009, BL-0008 |
+| Horário de atendimento presencial é env var global (`BUSINESS_HOURS_START`/`END`), não config por loja — mesma classe de dívida do `WHATSAPP_ACCESS_TOKEN` global | Backlog, não bloqueia piloto (1 loja) | BL-0016, DL-0002/DL-0003 |
 
 ---
 

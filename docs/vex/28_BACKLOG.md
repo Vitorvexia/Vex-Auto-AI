@@ -749,7 +749,7 @@ P1 — priorizado via DL-0009 (2026-07-30), decisão consciente de exceção à 
 
 Status
 
-IDEA — priorizado via DL-0009 (2026-07-30), spec pronta (prompt gerado), implementação ainda não iniciada.
+✔ CONCLUÍDO E VALIDADO (2026-07-31) — implementado via TDD (commit `2922e7d`), validado por teste manual real na Speed Motos (bolhas chegando em ordem, com delay perceptível). Validação também expôs 2 bugs pré-existentes não relacionados ao BL-0008 em si (concorrência entre processos serverless, IA soando como fechada fora do horário) — ambos corrigidos e validados separadamente, ver `27_PROJECT_STATUS.md` RECENT COMPLETED WORK.
 
 Owner
 
