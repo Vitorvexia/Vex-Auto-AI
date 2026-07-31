@@ -1233,6 +1233,75 @@ Fora de escopo (decisão consciente, não gap esquecido): origem do dado (`leads
 
 ---
 
+BL-0016
+
+Title
+
+Horário de atendimento presencial por loja (hoje env var global) + parser determinístico de agendamento_horario
+
+Problem
+
+Achado durante o fix do bug "IA soa como fechada fora do horário" (2026-07-30, ver `27_PROJECT_STATUS.md`). Dois pontos relacionados, registrados juntos porque tocam a mesma peça de dado (horário de expediente presencial):
+
+1. `BUSINESS_HOURS_START`/`BUSINESS_HOURS_END` (`lib/ai-pipeline.ts`) são env vars globais, a mesma janela pra qualquer loja — não existe coluna de horário de funcionamento em `stores`. Contradiz o padrão per-tenant já fechado em DL-0002 (credencial de WhatsApp é por loja, não global) — funciona "por acaso" hoje porque só existe 1 loja (Speed Motos), mesma classe de dívida que `WHATSAPP_ACCESS_TOKEN` global já é (documentada em DL-0003).
+2. A validação de horário pro agendamento presencial (implementada no mesmo fix, `lib/prompts.ts`) é guiada por instrução de prompt, não determinística em código — porque `leads.agendamento_horario`/`troca_draft.agendamento_horario` (`lib/collection.ts`) é texto livre (ex: "sábado de manhã"), sem parser pra hora estruturada. Isso é exceção consciente ao padrão do projeto (guardrail de margem, guarda de idade BL-0014: "regra inegociável garantida por código, nunca confia só na instrução do prompt") — aceito porque a consequência de errar aqui é baixa (pior caso: vendedor reagenda manualmente), diferente de compliance/margem. Se `agendamento_horario` virar campo estruturado no futuro, essa validação deveria migrar pra guardrail em código, junto com o item 1 acima.
+
+Business Value
+
+Evita repetir o padrão de "descoberta tardia quando o segundo cliente chegar" que já aconteceu com o WhatsApp token global (DL-0003) — registrar agora, com o achado fresco, em vez de redescobrir na hora de onboardar o cliente 2.
+
+Customer Value
+
+Cada loja configura seu próprio horário de atendimento presencial sem depender de variável de ambiente/deploy — igual já vale pro número de WhatsApp por loja.
+
+Priority
+
+P3/P4 — não bloqueia o piloto atual (1 loja, `BUSINESS_HOURS_START`/`END` funciona hoje). Vira bloqueante técnico junto com `WHATSAPP_ACCESS_TOKEN` per-loja quando o segundo cliente for onboardado (mesma dependência raiz de multi-tenant real).
+
+Status
+
+IDEA — não implementado, registrado no momento do achado (2026-07-30)
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Médio. Dois sub-itens que podem ser feitos juntos ou separados:
+- Horário por loja: coluna nova em `stores` (ex: `horario_atendimento_inicio`/`fim`), `lib/guardrails.ts` passa a receber config por `store_id` em vez de env var global — migration nova
+- Parser determinístico de agendamento: exigiria `agendamento_horario` virar campo estruturado (hora, não texto livre) — mudança de schema (`leads`/`troca_draft`) e de prompt (LLM extrai hora estruturada em vez de texto livre), reabre a coleta de troca inteira
+
+Dependencies
+
+Nenhuma técnica imediata. Mesma dependência raiz de CNPJ próprio/BM do Vex (BL-0001) que já bloqueia o padrão per-tenant completo do WhatsApp — natural fazer junto quando o segundo cliente for onboardado.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+DL-0002 (credencial por tenant, não global — mesmo princípio), DL-0003 (WHATSAPP_ACCESS_TOKEN global como dívida documentada, mesma classe), BL-0014 (padrão "regra inegociável em código" que a validação de horário conscientemente não segue)
+
+Target Version
+
+Fase 2/3 — junto de outras migrações multi-tenant, antes do 2º cliente pagante
+
+Success Metrics
+
+Horário de atendimento presencial configurável por loja sem variável de ambiente. Se revisitado: validação de agendamento vira guardrail determinístico em código, não mais dependente só da LLM interpretar texto livre corretamente.
+
+Notes
+
+Nenhum dos dois pontos bloqueou o fix de 2026-07-30 (bug era comportamento, não schema) — registrados aqui só pra não repetir o padrão de descoberta tardia.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

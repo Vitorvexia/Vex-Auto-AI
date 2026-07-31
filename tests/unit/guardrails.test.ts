@@ -40,7 +40,7 @@ describe("runGuardrails", () => {
     expect(r.mode).toBe("normal");
   });
 
-  it("prioridade 1: conversa ENCERRADA => reopen (prevalece sobre off_hours)", () => {
+  it("prioridade 1: conversa ENCERRADA => reopen (prevalece mesmo fora do horário)", () => {
     const ctx = makeCtx({
       conversation: {
         id: "conv-1",
@@ -97,13 +97,19 @@ describe("runGuardrails", () => {
     expect(r.mode).toBe("human_handoff");
   });
 
-  it("prioridade 3: fora do horário => off_hours (engloba mensagem curta)", () => {
-    const ctx = makeCtx({ incoming_text: "oi" });
+  it("fora do horário comercial: IA continua respondendo normal — mode normal, não um modo 'fechado'", () => {
+    const ctx = makeCtx({ incoming_text: "quanto custa esse carro?" });
     const r = runGuardrails(ctx, { now: OFF_HOURS_NOW });
-    expect(r.mode).toBe("off_hours");
+    expect(r.mode).toBe("normal");
   });
 
-  it("prioridade 4: mensagem curta dentro do horário => short_message", () => {
+  it("mensagem curta fora do horário ainda vira short_message (hora não interfere nesse gate)", () => {
+    const ctx = makeCtx({ incoming_text: "oi" });
+    const r = runGuardrails(ctx, { now: OFF_HOURS_NOW });
+    expect(r.mode).toBe("short_message");
+  });
+
+  it("prioridade 3 (agora): mensagem curta dentro do horário => short_message", () => {
     const ctx = makeCtx({ incoming_text: "oi" });
     const r = runGuardrails(ctx, { now: BUSINESS_NOW });
     expect(r.mode).toBe("short_message");
@@ -115,7 +121,26 @@ describe("runGuardrails", () => {
     expect(r.mode).toBe("normal");
   });
 
-  it("horário configurável: start=9 exclui hora 8 BRT", () => {
+  it("reason nunca é vazio", () => {
+    const r = runGuardrails(makeCtx(), { now: BUSINESS_NOW });
+    expect(r.reason.length).toBeGreaterThan(0);
+  });
+});
+
+describe("runGuardrails — outsideBusinessHours (campo ortogonal ao mode)", () => {
+  it("dentro do horário: outsideBusinessHours=false", () => {
+    const r = runGuardrails(makeCtx(), { now: BUSINESS_NOW });
+    expect(r.outsideBusinessHours).toBe(false);
+  });
+
+  it("fora do horário: outsideBusinessHours=true, mesmo com mode normal", () => {
+    const ctx = makeCtx({ incoming_text: "quanto custa esse carro?" });
+    const r = runGuardrails(ctx, { now: OFF_HOURS_NOW });
+    expect(r.outsideBusinessHours).toBe(true);
+    expect(r.mode).toBe("normal");
+  });
+
+  it("horário configurável: start=9 marca 8h BRT como fora do horário", () => {
     // 11h UTC = 8h BRT
     const atHour8Brt = new Date("2025-01-15T11:00:00.000Z");
     const r = runGuardrails(makeCtx(), {
@@ -123,12 +148,23 @@ describe("runGuardrails", () => {
       businessHoursEnd: 17,
       now: atHour8Brt,
     });
-    expect(r.mode).toBe("off_hours");
+    expect(r.outsideBusinessHours).toBe(true);
+    expect(r.mode).toBe("normal");
   });
 
-  it("reason nunca é vazio", () => {
-    const r = runGuardrails(makeCtx(), { now: BUSINESS_NOW });
-    expect(r.reason.length).toBeGreaterThan(0);
+  it("businessHoursStart e businessHoursEnd são expostos no resultado (pra frase de handoff/agendamento no prompt)", () => {
+    const r = runGuardrails(makeCtx(), { now: OFF_HOURS_NOW, businessHoursStart: 9, businessHoursEnd: 17 });
+    expect(r.businessHoursStart).toBe(9);
+    expect(r.businessHoursEnd).toBe(17);
+  });
+
+  it("outsideBusinessHours=true também em ENCERRADA/human_handoff/reopen (campo sempre computado)", () => {
+    const ctxHandoff = makeCtx({
+      conversation: { id: "conv-1", conversation_status: "AGUARDANDO_HUMANO", handoff_to: "IA", summary: null, ultima_mensagem_em: new Date().toISOString() },
+    });
+    const r = runGuardrails(ctxHandoff, { now: OFF_HOURS_NOW });
+    expect(r.mode).toBe("human_handoff");
+    expect(r.outsideBusinessHours).toBe(true);
   });
 });
 

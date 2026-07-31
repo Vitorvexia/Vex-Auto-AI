@@ -36,7 +36,19 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
   };
 }
 
-const guardrailNormal: GuardrailResult = { mode: "normal", reason: "padrão", collection: null };
+function makeGuardrail(overrides: Partial<GuardrailResult> = {}): GuardrailResult {
+  return {
+    mode: "normal",
+    reason: "padrão",
+    collection: null,
+    outsideBusinessHours: false,
+    businessHoursStart: 8,
+    businessHoursEnd: 18,
+    ...overrides,
+  };
+}
+
+const guardrailNormal: GuardrailResult = makeGuardrail();
 
 describe("buildPrompt", () => {
   it("system contém nome da store", () => {
@@ -93,11 +105,6 @@ describe("buildPrompt", () => {
   it("modo normal presente no system", () => {
     const { system } = buildPrompt(makeCtx(), guardrailNormal);
     expect(system).toContain("[MODO ATUAL: normal]");
-  });
-
-  it("modo off_hours refletido no system", () => {
-    const { system } = buildPrompt(makeCtx(), { mode: "off_hours", reason: "tarde", collection: null });
-    expect(system).toContain("[MODO ATUAL: off_hours]");
   });
 
   it("formato JSON exigido no system", () => {
@@ -179,6 +186,7 @@ describe("buildPrompt — coleta de financiamento/troca", () => {
     const guardrail: GuardrailResult = {
       mode: "normal", reason: "padrão",
       collection: { ask: ["financiamento"], collect: [], missingTrocaFields: [] },
+      outsideBusinessHours: false, businessHoursStart: 8, businessHoursEnd: 18,
     };
     const { system } = buildPrompt(makeCtx(), guardrail);
     expect(system).toContain("[COLETA DE DADOS]");
@@ -190,6 +198,7 @@ describe("buildPrompt — coleta de financiamento/troca", () => {
     const guardrail: GuardrailResult = {
       mode: "normal", reason: "padrão",
       collection: { ask: ["financiamento"], collect: [], missingTrocaFields: [] },
+      outsideBusinessHours: false, businessHoursStart: 8, businessHoursEnd: 18,
     };
     const { system } = buildPrompt(makeCtx(), guardrail);
     expect(system).toContain("nascimento");
@@ -199,6 +208,7 @@ describe("buildPrompt — coleta de financiamento/troca", () => {
     const guardrail: GuardrailResult = {
       mode: "normal", reason: "padrão",
       collection: { ask: [], collect: ["financiamento"], missingTrocaFields: [] },
+      outsideBusinessHours: false, businessHoursStart: 8, businessHoursEnd: 18,
     };
     const { system } = buildPrompt(makeCtx(), guardrail);
     expect(system).toContain("should_handoff=true");
@@ -209,6 +219,7 @@ describe("buildPrompt — coleta de financiamento/troca", () => {
     const guardrail: GuardrailResult = {
       mode: "normal", reason: "padrão",
       collection: { ask: [], collect: ["financiamento"], missingTrocaFields: [] },
+      outsideBusinessHours: false, businessHoursStart: 8, businessHoursEnd: 18,
     };
     const { system } = buildPrompt(makeCtx(), guardrail);
     expect(system).toContain("data_nascimento");
@@ -221,6 +232,7 @@ describe("buildPrompt — coleta de financiamento/troca", () => {
     const guardrail: GuardrailResult = {
       mode: "normal", reason: "padrão",
       collection: { ask: ["troca"], collect: [], missingTrocaFields: [] },
+      outsideBusinessHours: false, businessHoursStart: 8, businessHoursEnd: 18,
     };
     const { system } = buildPrompt(makeCtx(), guardrail);
     expect(system).toContain("modelo");
@@ -230,6 +242,7 @@ describe("buildPrompt — coleta de financiamento/troca", () => {
     const guardrail: GuardrailResult = {
       mode: "normal", reason: "padrão",
       collection: { ask: [], collect: ["troca"], missingTrocaFields: ["quantos km rodados"] },
+      outsideBusinessHours: false, businessHoursStart: 8, businessHoursEnd: 18,
     };
     const { system } = buildPrompt(makeCtx(), guardrail);
     expect(system).toContain("quantos km rodados");
@@ -245,5 +258,61 @@ describe("buildPrompt — coleta de financiamento/troca", () => {
     const { system } = buildPrompt(makeCtx(), guardrailNormal, fixedNow);
     expect(system).toContain("[DATA ATUAL]");
     expect(system).toContain("2026-07-24");
+  });
+});
+
+describe("buildPrompt — fora do horário comercial (bugfix 24/7, 2026-07-30)", () => {
+  it("dentro do horário: nenhuma instrução de handoff-fora-do-horário aparece", () => {
+    const { system } = buildPrompt(makeCtx(), makeGuardrail({ outsideBusinessHours: false }));
+    expect(system).not.toContain("horário de atendimento presencial");
+  });
+
+  it("fora do horário: instrui a IA a nunca soar como fechada e a atender normalmente", () => {
+    const { system } = buildPrompt(makeCtx(), makeGuardrail({ outsideBusinessHours: true, businessHoursStart: 9 }));
+    expect(system).toMatch(/continue (respondendo|atendendo) normalmente/i);
+  });
+
+  it("fora do horário: instrui que, em handoff real, quem retoma é o vendedor humano (não a IA)", () => {
+    const { system } = buildPrompt(makeCtx(), makeGuardrail({ outsideBusinessHours: true, businessHoursStart: 9 }));
+    expect(system).toContain("vendedor");
+    expect(system).toMatch(/9h/);
+  });
+
+  it("modo human_handoff fora do horário também recebe a instrução (mode não filtra isso)", () => {
+    const { system } = buildPrompt(
+      makeCtx(),
+      makeGuardrail({ mode: "human_handoff", outsideBusinessHours: true, businessHoursStart: 9 })
+    );
+    expect(system).toContain("vendedor");
+  });
+});
+
+describe("buildPrompt — agendamento presencial respeita horário configurado (bugfix 24/7, 2026-07-30)", () => {
+  it("coleta de troca ativa (ask ou collect) menciona a janela de horário presencial configurada", () => {
+    const guardrail = makeGuardrail({
+      collection: { ask: ["troca"], collect: [], missingTrocaFields: [] },
+      businessHoursStart: 9,
+    });
+    const { system } = buildPrompt(makeCtx(), guardrail);
+    expect(system).toContain("9h");
+    expect(system).toMatch(/horário de atendimento presencial/i);
+  });
+
+  it("sem coleta de troca ativa: nenhuma menção à janela de horário presencial", () => {
+    const { system } = buildPrompt(makeCtx(), guardrailNormal);
+    expect(system).not.toMatch(/horário de atendimento presencial/i);
+  });
+
+  it("instrui a orientar outro horário sem soar como recusa geral de atendimento", () => {
+    const guardrail = makeGuardrail({
+      collection: { ask: [], collect: ["troca"], missingTrocaFields: [] },
+      businessHoursStart: 9,
+      businessHoursEnd: 18,
+    });
+    const { system } = buildPrompt(makeCtx(), guardrail);
+    const idx = system.indexOf("[COLETA DE DADOS]");
+    const collectionSection = system.slice(idx, idx + 1500);
+    expect(collectionSection).toMatch(/fora dess[ae] faixa|fora do horário/i);
+    expect(collectionSection).toMatch(/escolh|outro horário/i);
   });
 });

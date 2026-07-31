@@ -181,23 +181,28 @@ describe("E2E — Pipeline de IA (cenários reais)", () => {
   );
 
   itReal(
-    "Cenário 3: mensagem fora do horário → off_hours",
+    "Cenário 3: mensagem fora do horário comercial → IA atende normal (24/7, bugfix 2026-07-30)",
     async () => {
       const ctx = makeCtx({
         incoming_text: "Boa noite, quero saber sobre financiamento para o HB20.",
       });
 
       const { guardrail, result } = await runPipeline(
-        "3 — Fora do horário",
+        "3 — Fora do horário (atendimento normal, não 'fechado')",
         ctx,
         { now: OFF_HOURS }
       );
 
-      expect(guardrail.mode).toBe("off_hours");
+      // off_hours não existe mais como mode que suprime atendimento —
+      // fora do horário segue o fluxo normal (mode normal, já que a
+      // mensagem não é curta e não há handoff ativo).
+      expect(guardrail.mode).toBe("normal");
+      expect(guardrail.outsideBusinessHours).toBe(true);
       expect(result).not.toBeNull();
       expect(result!.reply_texts.join(" ").length).toBeGreaterThan(0);
-      // IA deve confirmar recebimento, não prometer resposta imediata
-      expect(result!.should_handoff).toBe(false);
+      // IA não deve soar como fechada/indisponível — sem menção a horário de retorno
+      const fullReply = result!.reply_texts.join(" ").toLowerCase();
+      expect(fullReply).not.toMatch(/fora do horário|estamos fechad|retornamos amanhã/);
     },
     30_000
   );

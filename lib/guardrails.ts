@@ -4,7 +4,6 @@ import { detectSignals } from "@/lib/lead-scoring";
 export type GuardrailMode =
   | "normal"
   | "short_message"
-  | "off_hours"
   | "reopen"
   | "human_handoff";
 
@@ -20,6 +19,13 @@ export interface GuardrailResult {
   mode: GuardrailMode;
   reason: string;
   collection: CollectionState | null;
+  // Ortogonal ao mode — a IA atende normalmente a qualquer hora (24/7 é a
+  // proposta de valor central do produto). Isso só informa lib/prompts.ts
+  // pra frasear corretamente um handoff real que aconteça fora do horário
+  // (quem retoma é o vendedor humano, não a IA — ela continua disponível).
+  outsideBusinessHours: boolean;
+  businessHoursStart: number;
+  businessHoursEnd: number;
 }
 
 export interface GuardrailConfig {
@@ -89,12 +95,22 @@ export function runGuardrails(
   const tz    = config?.timezone           ?? "America/Sao_Paulo";
   const now   = config?.now                ?? new Date();
 
+  // Calculado sempre, independente do mode — NUNCA suprime atendimento
+  // normal. IA responde 24/7, qualquer assunto, qualquer hora; isso só
+  // habilita lib/prompts.ts a frasear corretamente um handoff real que
+  // aconteça fora do horário (vendedor humano retoma, não a IA).
+  const hour = getHourInTimezone(now, tz);
+  const outsideBusinessHours = hour < start || hour >= end;
+
   // 1. Conversa encerrada → reavaliar contexto (prioridade máxima)
   if (ctx.conversation.conversation_status === "ENCERRADA") {
     return {
       mode: "reopen",
       reason: "conversa encerrada — tratar como novo contato",
       collection: detectCollection(ctx),
+      outsideBusinessHours,
+      businessHoursStart: start,
+      businessHoursEnd: end,
     };
   }
 
@@ -103,27 +119,34 @@ export function runGuardrails(
     ctx.conversation.handoff_to === "HUMANO" ||
     ctx.conversation.conversation_status === "AGUARDANDO_HUMANO"
   ) {
-    return { mode: "human_handoff", reason: "conversa sob controle humano", collection: null };
-  }
-
-  // 3. Fora do horário comercial (engloba mensagem curta fora do horário)
-  const hour = getHourInTimezone(now, tz);
-  if (hour < start || hour >= end) {
     return {
-      mode: "off_hours",
-      reason: `fora do horário comercial (${hour}h, esperado ${start}h–${end}h BRT)`,
-      collection: detectCollection(ctx),
+      mode: "human_handoff",
+      reason: "conversa sob controle humano",
+      collection: null,
+      outsideBusinessHours,
+      businessHoursStart: start,
+      businessHoursEnd: end,
     };
   }
 
-  // 4. Mensagem muito curta
+  // 3. Mensagem muito curta
   if (ctx.incoming_text.trim().length < 10) {
     return {
       mode: "short_message",
       reason: "mensagem muito curta — estimular continuação",
       collection: detectCollection(ctx),
+      outsideBusinessHours,
+      businessHoursStart: start,
+      businessHoursEnd: end,
     };
   }
 
-  return { mode: "normal", reason: "atendimento comercial padrão", collection: detectCollection(ctx) };
+  return {
+    mode: "normal",
+    reason: "atendimento comercial padrão",
+    collection: detectCollection(ctx),
+    outsideBusinessHours,
+    businessHoursStart: start,
+    businessHoursEnd: end,
+  };
 }

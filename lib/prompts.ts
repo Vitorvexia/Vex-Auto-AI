@@ -11,8 +11,6 @@ const MODE_INSTRUCTIONS: Record<GuardrailMode, string> = {
     "Atendimento comercial completo. Qualifique o interesse do lead e apresente as opções mais relevantes do catálogo.",
   short_message:
     "O lead enviou uma mensagem muito curta. Responda de forma simples e aberta. Estimule-o a continuar a conversa.",
-  off_hours:
-    "Estamos fora do horário de atendimento. Confirme o recebimento da mensagem, informe quando retornamos e mantenha um tom acolhedor.",
   reopen:
     "Esta conversa estava encerrada. Trate como um novo contato, resgate o contexto com cuidado e inicie um novo ciclo de atendimento.",
   human_handoff: "",
@@ -44,7 +42,28 @@ function buildCollectionSection(guardrail: GuardrailResult): string {
       lines.push(`Campos que ainda faltam: ${c.missingTrocaFields.join(", ")}. Pergunte apenas o próximo campo que falta.`);
     }
   }
+  // Único gate real de horário que resta no sistema: agendamento de visita
+  // presencial (trazer a moto na loja). Guiado no prompt, não bloqueado em
+  // código — o campo é texto livre (ex: "sábado de manhã"), sem parser
+  // determinístico confiável pra validar contra a janela configurada.
+  if (c.ask.includes("troca") || c.collect.includes("troca")) {
+    lines.push(
+      `O horário de atendimento presencial da loja é das ${guardrail.businessHoursStart}h às ${guardrail.businessHoursEnd}h. Se o lead pedir um horário fora dessa faixa pra trazer a moto, avise que esse horário não é possível e peça pra escolher outro dentro do expediente — sem soar como recusa de atendimento, é só uma restrição de agenda presencial.`
+    );
+  }
   return lines.join("\n");
+}
+
+// Fora do horário comercial NUNCA suprime atendimento — a IA responde 24/7,
+// qualquer assunto (proposta de valor central do produto). O único efeito
+// de estar fora do horário é frasear corretamente um handoff real (por
+// margem, coleta completa de financiamento/troca, etc.): quem retoma é o
+// vendedor humano, não a IA — ela segue disponível.
+function buildOffHoursHandoffSection(guardrail: GuardrailResult): string {
+  if (!guardrail.outsideBusinessHours) return "";
+  return `[FORA DO HORÁRIO DE ATENDIMENTO PRESENCIAL]
+Agora é fora do horário de atendimento presencial da loja. Isso não muda como você atende: continue respondendo normalmente, qualquer assunto, a qualquer hora — nunca diga que está fechada, parada ou fora do ar.
+Só use esta informação se, por outro motivo, você decidir should_handoff=true nesta resposta: nesse caso, deixe claro que é o vendedor humano que retoma no próximo horário de atendimento (a partir das ${guardrail.businessHoursStart}h) — você continua disponível pro lead enquanto isso.`;
 }
 
 function formatToday(now: Date): string {
@@ -69,6 +88,7 @@ function buildSystem(ctx: AgentContext, guardrail: GuardrailResult, now: Date): 
     ctx.conversation.summary ?? "Primeiro contato ou sem resumo disponível.";
 
   const collectionSection = buildCollectionSection(guardrail);
+  const offHoursSection = buildOffHoursHandoffSection(guardrail);
 
   return `[IDENTIDADE]
 Você é o atendente virtual da ${ctx.store_name}.
@@ -102,6 +122,7 @@ ${formatVehicles(ctx.vehicles)}
 [MODO ATUAL: ${guardrail.mode}]
 ${MODE_INSTRUCTIONS[guardrail.mode]}
 ${collectionSection ? "\n" + collectionSection + "\n" : ""}
+${offHoursSection ? "\n" + offHoursSection + "\n" : ""}
 [FORMATO DE RESPOSTA]
 Responda EXCLUSIVAMENTE em JSON válido, sem texto fora do JSON:
 {
