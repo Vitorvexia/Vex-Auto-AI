@@ -4,7 +4,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — refs compartilhados nas factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockInvite, mockCreateUser, mockDeleteUser, mockAssertSuperAdmin, mockRevalidatePath } =
+const { mockFrom, mockInvite, mockCreateUser, mockDeleteUser, mockAssertSuperAdmin, mockRevalidatePath, mockLogAudit } =
   vi.hoisted(() => ({
     mockFrom: vi.fn(),
     mockInvite: vi.fn(),
@@ -12,6 +12,7 @@ const { mockFrom, mockInvite, mockCreateUser, mockDeleteUser, mockAssertSuperAdm
     mockDeleteUser: vi.fn(),
     mockAssertSuperAdmin: vi.fn(),
     mockRevalidatePath: vi.fn(),
+    mockLogAudit: vi.fn(),
   }));
 
 // ---------------------------------------------------------------------------
@@ -37,6 +38,10 @@ vi.mock("@/lib/admin-auth", () => ({
 
 vi.mock("next/cache", () => ({
   revalidatePath: mockRevalidatePath,
+}));
+
+vi.mock("@/lib/audit", () => ({
+  logAudit: mockLogAudit,
 }));
 
 // ---------------------------------------------------------------------------
@@ -80,6 +85,7 @@ function chain(overrides: Record<string, unknown> = {}) {
 
 beforeEach(() => {
   mockAssertSuperAdmin.mockResolvedValue("user-admin-id");
+  mockLogAudit.mockResolvedValue(undefined);
   vi.spyOn(console, "error").mockImplementation(() => {});
 });
 
@@ -384,6 +390,44 @@ describe("createStoreUser", () => {
     ).rejects.toThrow("redirect:/leads");
     expect(mockInvite).not.toHaveBeenCalled();
   });
+
+  it("sucesso → chama logAudit com action user.created, resourceId do usuário criado, role em metadata", async () => {
+    mockInvite.mockResolvedValue({
+      data: { user: { id: "auth-id" } },
+      error: null,
+    });
+    mockFrom.mockReturnValue(chain({ insert: { data: null, error: null } }));
+
+    await createStoreUser(
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja", store_id: "s-1" })
+    );
+
+    expect(mockLogAudit).toHaveBeenCalledWith({
+      storeId: "s-1",
+      userId: "user-admin-id",
+      action: "user.created",
+      resourceType: "user",
+      resourceId: "auth-id",
+      metadata: { role: "dono_loja" },
+    });
+  });
+
+  it("insert em users falha → logAudit não é chamado", async () => {
+    mockInvite.mockResolvedValue({
+      data: { user: { id: "auth-id" } },
+      error: null,
+    });
+    mockFrom.mockReturnValue(
+      chain({ insert: { data: null, error: { message: "FK violation" } } })
+    );
+    mockDeleteUser.mockResolvedValue({ data: null, error: null });
+
+    await createStoreUser(
+      makeForm({ email: "u@x.com", nome: "User", role: "dono_loja", store_id: "s-1" })
+    );
+
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -480,5 +524,28 @@ describe("createStoreUserDirect", () => {
     expect(result).toEqual({ error: expect.stringContaining("role inválido") });
     expect(mockCreateUser).not.toHaveBeenCalled();
     expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("sucesso → chama logAudit com action user.created", async () => {
+    mockCreateUser.mockResolvedValue({
+      data: { user: { id: "auth-id-2" } },
+      error: null,
+    });
+    mockFrom.mockReturnValue(chain({ insert: { data: null, error: null } }));
+
+    await createStoreUserDirect(
+      "s-1",
+      null,
+      makeForm({ email: "u2@x.com", nome: "User2", role: "vendedor" })
+    );
+
+    expect(mockLogAudit).toHaveBeenCalledWith({
+      storeId: "s-1",
+      userId: "user-admin-id",
+      action: "user.created",
+      resourceType: "user",
+      resourceId: "auth-id-2",
+      metadata: { role: "vendedor" },
+    });
   });
 });

@@ -14,6 +14,7 @@ const {
   mockMarkReactivationConverted,
   mockSendWhatsAppMessage,
   mockGetStoreWhatsAppPhoneId,
+  mockLogAudit,
 } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockTransitionConv: vi.fn(),
@@ -24,6 +25,7 @@ const {
   mockMarkReactivationConverted: vi.fn(),
   mockSendWhatsAppMessage: vi.fn(),
   mockGetStoreWhatsAppPhoneId: vi.fn(),
+  mockLogAudit: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -76,6 +78,10 @@ vi.mock("@/lib/reactivation", () => ({
   markReactivationConverted: mockMarkReactivationConverted,
 }));
 
+vi.mock("@/lib/audit", () => ({
+  logAudit: mockLogAudit,
+}));
+
 // ---------------------------------------------------------------------------
 // Import após mocks
 // ---------------------------------------------------------------------------
@@ -121,6 +127,7 @@ beforeEach(() => {
   mockMarkReactivationConverted.mockResolvedValue(undefined);
   mockSendWhatsAppMessage.mockResolvedValue(undefined);
   mockGetStoreWhatsAppPhoneId.mockResolvedValue("phone-id-1");
+  mockLogAudit.mockResolvedValue(undefined);
 
   // Default: ownership checks pass. Tests that need specific insert chains call chainInsert().
   const defaultChain = {
@@ -182,6 +189,22 @@ describe("assignConversationToHuman", () => {
     // Ownership check runs (mockFrom called), but insert never happens (error thrown by transition)
     expect(chain.insert).not.toHaveBeenCalled();
   });
+
+  it("T8: chama logAudit com action conversation.handoff_to_human e lead_id", async () => {
+    mockTransitionConv.mockResolvedValue({ from: "ATIVA", to: "AGUARDANDO_HUMANO", changed: true });
+    chainInsert();
+
+    await assignConversationToHuman("conv-1");
+
+    expect(mockLogAudit).toHaveBeenCalledWith({
+      storeId: "store-test",
+      userId: "user-1",
+      action: "conversation.handoff_to_human",
+      resourceType: "conversation",
+      resourceId: "conv-1",
+      metadata: { lead_id: "lead-x" },
+    });
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -213,6 +236,22 @@ describe("returnConversationToAI", () => {
         mensagem: "Conversa retornada para IA",
       })
     );
+  });
+
+  it("T8b: chama logAudit com action conversation.handoff_to_ai e lead_id", async () => {
+    mockTransitionConv.mockResolvedValue({ from: "AGUARDANDO_HUMANO", to: "ATIVA", changed: true });
+    chainInsert();
+
+    await returnConversationToAI("conv-1");
+
+    expect(mockLogAudit).toHaveBeenCalledWith({
+      storeId: "store-test",
+      userId: "user-1",
+      action: "conversation.handoff_to_ai",
+      resourceType: "conversation",
+      resourceId: "conv-1",
+      metadata: { lead_id: "lead-x" },
+    });
   });
 });
 
@@ -253,6 +292,14 @@ describe("updateLeadStatus", () => {
     await updateLeadStatus("lead-1", "conv-1", makeFormData("NEGOCIACAO"));
 
     expect(mockTransitionLead).toHaveBeenCalledWith("lead-1", "NEGOCIACAO");
+  });
+
+  it("T5b: transição bem-sucedida pra status != FECHADO não chama logAudit", async () => {
+    mockTransitionLead.mockResolvedValue({ from: "QUENTE", to: "NEGOCIACAO", changed: true });
+
+    await updateLeadStatus("lead-1", "conv-1", makeFormData("NEGOCIACAO"));
+
+    expect(mockLogAudit).not.toHaveBeenCalled();
   });
 
   it("T6: status inválido (não pertence ao enum) → lança Error antes de chamar transitionLeadStatus", async () => {
@@ -391,6 +438,43 @@ describe("updateLeadStatus — guardrail de margem no fechamento", () => {
     ).rejects.toThrow("Veículo não encontrado");
 
     expect(mockTransitionLead).not.toHaveBeenCalled();
+  });
+
+  it("MARGIN-7: fechamento bem-sucedido chama logAudit com action lead.closed", async () => {
+    setupMultiTableMock({ id: "v-1", custo: 70000, margem_minima: 8000 });
+    mockTransitionLead.mockResolvedValue({ from: "NEGOCIACAO", to: "FECHADO", changed: true });
+
+    await updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ vehicleId: "v-1", valorFinal: 90000 }));
+
+    expect(mockLogAudit).toHaveBeenCalledWith({
+      storeId: "store-test",
+      userId: "user-1",
+      action: "lead.closed",
+      resourceType: "lead",
+      resourceId: "lead-1",
+      metadata: { vehicle_id: "v-1", valor_final: 90000 },
+    });
+  });
+
+  it("MARGIN-8: fechamento bloqueado (abaixo do piso) → logAudit não é chamado", async () => {
+    setupMultiTableMock({ id: "v-1", custo: 70000, margem_minima: 8000 });
+
+    await expect(
+      updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ vehicleId: "v-1", valorFinal: 77999 }))
+    ).rejects.toThrow();
+
+    expect(mockLogAudit).not.toHaveBeenCalled();
+  });
+
+  it("MARGIN-9: transição rejeitada por transitionLeadStatus (mesmo após validação de margem) → logAudit não é chamado", async () => {
+    setupMultiTableMock({ id: "v-1", custo: 70000, margem_minima: 8000 });
+    mockTransitionLead.mockRejectedValue(new Error("transição inválida"));
+
+    await expect(
+      updateLeadStatus("lead-1", "conv-1", makeCloseFormData({ vehicleId: "v-1", valorFinal: 90000 }))
+    ).rejects.toThrow();
+
+    expect(mockLogAudit).not.toHaveBeenCalled();
   });
 });
 
@@ -533,6 +617,36 @@ describe("sendManualReply", () => {
       sendManualReply("conv-1", makeReplyFormData("   "))
     ).rejects.toThrow("Digite uma mensagem");
     expect(messagesInsertMock).not.toHaveBeenCalled();
+  });
+
+  it("chama logAudit com action message.manual_reply, lead_id e message_id", async () => {
+    setupManualReplyMocks({ conv: HANDOFF_CONV, lead: LEAD, savedMessageId: "msg-42" });
+
+    await sendManualReply("conv-1", makeReplyFormData("Oi, tudo bem?"));
+
+    expect(mockLogAudit).toHaveBeenCalledWith({
+      storeId: "store-test",
+      userId: "user-1",
+      action: "message.manual_reply",
+      resourceType: "conversation",
+      resourceId: "conv-1",
+      metadata: { lead_id: "lead-1", message_id: "msg-42" },
+    });
+  });
+
+  it("messageId null → logAudit metadata só tem lead_id, sem message_id", async () => {
+    setupManualReplyMocks({ conv: HANDOFF_CONV, lead: LEAD, savedMessageId: null });
+
+    await sendManualReply("conv-1", makeReplyFormData("Oi, tudo bem?"));
+
+    expect(mockLogAudit).toHaveBeenCalledWith({
+      storeId: "store-test",
+      userId: "user-1",
+      action: "message.manual_reply",
+      resourceType: "conversation",
+      resourceId: "conv-1",
+      metadata: { lead_id: "lead-1" },
+    });
   });
 });
 
