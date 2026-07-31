@@ -63,7 +63,8 @@ function buildOffHoursHandoffSection(guardrail: GuardrailResult): string {
   if (!guardrail.outsideBusinessHours) return "";
   return `[FORA DO HORÁRIO DE ATENDIMENTO PRESENCIAL]
 Agora é fora do horário de atendimento presencial da loja. Isso não muda como você atende: continue respondendo normalmente, qualquer assunto, a qualquer hora — nunca diga que está fechada, parada ou fora do ar.
-Só use esta informação se, por outro motivo, você decidir should_handoff=true nesta resposta: nesse caso, deixe claro que é o vendedor humano que retoma no próximo horário de atendimento (a partir das ${guardrail.businessHoursStart}h) — você continua disponível pro lead enquanto isso.`;
+Só use esta informação se, por outro motivo, você decidir should_handoff=true nesta resposta: nesse caso, deixe claro que é o vendedor humano que retoma no próximo horário de atendimento (a partir das ${guardrail.businessHoursStart}h) — você continua disponível pro lead enquanto isso.
+Mesmo comentando sobre horário, sua resposta inteira continua sendo APENAS o JSON do [FORMATO DE RESPOSTA] abaixo — nunca escreva nenhuma palavra fora do JSON, nem antes nem depois dele.`;
 }
 
 function formatToday(now: Date): string {

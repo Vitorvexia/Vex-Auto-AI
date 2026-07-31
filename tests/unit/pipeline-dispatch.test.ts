@@ -189,8 +189,8 @@ describe("dispatchAiPipeline — guarda contra loop apertado quando pipeline fal
     expect(mockRelease).toHaveBeenCalledWith("conv-1");
   });
 
-  it.each(["parse_error", "output_error", "error", "skipped_handoff"] as const)(
-    "status %s também não continua o dreno",
+  it.each(["error", "skipped_handoff"] as const)(
+    "status %s (não-retriável) também não continua o dreno — roda 1x só",
     async (status) => {
       mockClaim.mockResolvedValue(true);
       mockFrom
@@ -203,6 +203,62 @@ describe("dispatchAiPipeline — guarda contra loop apertado quando pipeline fal
       expect(mockRunAiPipeline).toHaveBeenCalledTimes(1);
     }
   );
+});
+
+describe("dispatchAiPipeline — retry pra parse_error/output_error (bugfix silêncio 8h30, 2026-07-31)", () => {
+  it.each(["parse_error", "output_error"] as const)(
+    "status %s retenta 1x com o MESMO incomingText antes de desistir",
+    async (status) => {
+      mockClaim.mockResolvedValue(true);
+      mockFrom
+        .mockReturnValueOnce(lastSaidaChain(null))
+        .mockReturnValueOnce(pendingChain([{ mensagem: "Olá", created_at: "t1" }]));
+      mockRunAiPipeline.mockResolvedValue({ agent_status: status });
+
+      const result = await dispatchAiPipeline(BASE_PARAMS);
+
+      expect(mockRunAiPipeline).toHaveBeenCalledTimes(2);
+      expect(mockRunAiPipeline).toHaveBeenNthCalledWith(1, expect.objectContaining({ incomingText: "Olá" }));
+      expect(mockRunAiPipeline).toHaveBeenNthCalledWith(2, expect.objectContaining({ incomingText: "Olá" }));
+      expect(result.results).toEqual([{ agent_status: status }]);
+      expect(mockRelease).toHaveBeenCalledWith("conv-1");
+    }
+  );
+
+  it("parse_error na 1ª tentativa, sucesso na 2ª (retry) — dispatch continua normalmente depois", async () => {
+    mockClaim.mockResolvedValue(true);
+    mockFrom
+      .mockReturnValueOnce(lastSaidaChain(null))
+      .mockReturnValueOnce(pendingChain([{ mensagem: "Olá", created_at: "t1" }]))
+      // recheck pós-sucesso: nada mais pendente → dreno para
+      .mockReturnValueOnce(lastSaidaChain("t-reply"))
+      .mockReturnValueOnce(pendingChain([]));
+    mockRunAiPipeline
+      .mockResolvedValueOnce({ agent_status: "parse_error" })
+      .mockResolvedValueOnce({ agent_status: "ok" });
+
+    const result = await dispatchAiPipeline(BASE_PARAMS);
+
+    expect(mockRunAiPipeline).toHaveBeenCalledTimes(2);
+    expect(result.results).toEqual([{ agent_status: "ok" }]);
+  });
+
+  it("retry não repete mensagens novas que chegaram nesse meio-tempo — usa o mesmo lote da tentativa original", async () => {
+    mockClaim.mockResolvedValue(true);
+    mockFrom
+      .mockReturnValueOnce(lastSaidaChain(null))
+      .mockReturnValueOnce(pendingChain([{ mensagem: "Olá", created_at: "t1" }]));
+    mockRunAiPipeline
+      .mockResolvedValueOnce({ agent_status: "output_error" })
+      .mockResolvedValueOnce({ agent_status: "output_error" });
+
+    await dispatchAiPipeline(BASE_PARAMS);
+
+    // getUnansweredIncomingText só foi chamado 1x (1 par de chains) — retry
+    // não re-consulta o banco, reusa o mesmo incomingText já obtido
+    const calls = mockRunAiPipeline.mock.calls;
+    expect(calls[0][0].incomingText).toBe(calls[1][0].incomingText);
+  });
 });
 
 describe("dispatchAiPipeline — cap de iterações (defesa contra loop infinito)", () => {

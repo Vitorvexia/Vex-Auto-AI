@@ -39,6 +39,20 @@ const REPLY_PRODUCED_STATUSES = new Set<AgentStatus>([
 // anterior), mas evita loop sem limite em qualquer cenário não previsto.
 const MAX_DRAIN_ITERATIONS = 10;
 
+// parse_error/output_error são falhas de FORMATAÇÃO da LLM (ela respondeu,
+// só não respeitou o schema JSON) — evidência real de produção (2026-07-31)
+// mostra o mesmo texto de entrada tendo sucesso numa tentativa seguinte.
+// Achado: sem NENHUM retry em lugar nenhum do sistema (nem aqui, nem no cron
+// retry-failed.ts, que só cobre ok_send_failed), uma falha de formatação
+// deixava o lead mudo até ele mandar mensagem nova — 8h30 de silêncio num
+// caso real. timeout/error/skipped_handoff ficam de fora do retry: timeout
+// já consumiu ~8s (AGENT_TIMEOUT_MS) do orçamento apertado da Vercel Hobby
+// (~10s), repetir arriscaria estourar o request; error é genérico demais
+// pra assumir que é transitório; skipped_handoff é decisão intencional do
+// guardrail, não falha.
+const RETRIABLE_STATUSES = new Set<AgentStatus>(["parse_error", "output_error"]);
+const MAX_FORMAT_RETRIES = 1; // 1 retry = 2 tentativas totais por lote
+
 export interface DispatchResult {
   ran: boolean;
   results: Array<{ agent_status: AgentStatus; error?: string }>;
@@ -90,13 +104,23 @@ export async function dispatchAiPipeline(params: {
       const incomingText = await getUnansweredIncomingText(params.conversationId);
       if (!incomingText) break;
 
-      const result = await runAiPipeline({
+      const runArgs = {
         storeId: params.storeId,
         leadId: params.leadId,
         conversationId: params.conversationId,
         incomingText,
         isNewConversation: i === 0 && params.isNewConversation,
-      });
+      };
+
+      let result = await runAiPipeline(runArgs);
+      let formatRetries = 0;
+      // Retenta com o MESMO incomingText — nunca re-consulta o banco no
+      // meio da tentativa, pra não misturar mensagem nova que chegou
+      // durante o retry com o lote que já estava em processamento.
+      while (RETRIABLE_STATUSES.has(result.agent_status) && formatRetries < MAX_FORMAT_RETRIES) {
+        formatRetries++;
+        result = await runAiPipeline(runArgs);
+      }
       results.push(result);
 
       // Sem reply produzida (timeout/parse/output/erro genérico/handoff) —

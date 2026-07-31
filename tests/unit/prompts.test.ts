@@ -285,6 +285,16 @@ describe("buildPrompt — fora do horário comercial (bugfix 24/7, 2026-07-30)",
     );
     expect(system).toContain("vendedor");
   });
+
+  it("fora do horário: reforça formato JSON estrito, dentro da própria seção (bugfix silêncio 8h30, 2026-07-31 — taxa de parse_error subiu de 7,6% pra 67% em produção depois dessa seção existir sem esse reforço)", () => {
+    const { system } = buildPrompt(makeCtx(), makeGuardrail({ outsideBusinessHours: true, businessHoursStart: 9 }));
+    const idx = system.indexOf("[FORA DO HORÁRIO DE ATENDIMENTO PRESENCIAL]");
+    expect(idx).toBeGreaterThan(-1);
+    const nextSectionIdx = system.indexOf("[FORMATO DE RESPOSTA]");
+    const offHoursSection = system.slice(idx, nextSectionIdx);
+    expect(offHoursSection).toMatch(/JSON/);
+    expect(offHoursSection).toMatch(/nunca|sempre/i);
+  });
 });
 
 describe("buildPrompt — agendamento presencial respeita horário configurado (bugfix 24/7, 2026-07-30)", () => {
