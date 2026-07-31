@@ -1,5 +1,5 @@
 -- =============================================================================
--- Vex Auto  Migration 029 — lock de conversa pro pipeline de IA
+-- Vex Auto  Migration 030 — lock de conversa pro pipeline de IA
 --
 -- Aditiva: zero breaking change, sem alter de colunas existentes.
 -- Corrige bug de produção (Speed Motos, 2026-07-30): duas mensagens do mesmo
