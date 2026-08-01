@@ -9,9 +9,10 @@ export type AuditAction =
   | "conversation.handoff_to_ai"
   | "message.manual_reply"
   | "lead.closed"
-  | "user.created";
+  | "user.created"
+  | "vehicle.renave_stage_advanced";
 
-export type AuditResourceType = "lead" | "conversation" | "user";
+export type AuditResourceType = "lead" | "conversation" | "user" | "vehicle";
 
 export interface LogAuditParams {
   storeId: string;
