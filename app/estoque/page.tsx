@@ -3,6 +3,9 @@ import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthError } from "@/lib/auth";
 import { createVehicle, updateVehicle, archiveVehicle, unarchiveVehicle } from "@/lib/vehicle-actions";
+import { uploadVehiclePhotos } from "@/lib/vehicle-photo-actions";
+import { MAX_PHOTOS_PER_VEHICLE } from "@/lib/vehicle-photos";
+import { VehiclePhotoUpload } from "@/app/components/VehiclePhotoUpload";
 
 type Vehicle = {
   id: string;
@@ -14,6 +17,7 @@ type Vehicle = {
   margem_minima: number;
   disponivel: boolean;
   created_at: string;
+  photo_url: string[];
 };
 
 function margin(preco: number, custo: number) {
@@ -75,7 +79,7 @@ export default async function EstoquePage({ searchParams }: PageProps) {
 
   const { data: vehicles, error } = await supabase
     .from("vehicles")
-    .select("id, marca, modelo, ano, preco, custo, margem_minima, disponivel, created_at")
+    .select("id, marca, modelo, ano, preco, custo, margem_minima, disponivel, created_at, photo_url")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -142,6 +146,41 @@ export default async function EstoquePage({ searchParams }: PageProps) {
               <Link href="/estoque" className="btn-secondary">Cancelar</Link>
             </div>
           </form>
+
+          <div style={{ marginTop: "20px", paddingTop: "16px", borderTop: "1px solid var(--border)" }}>
+            <h3 style={{ fontSize: "13px", fontWeight: 700, marginBottom: "8px" }}>Fotos</h3>
+
+            {vehicleToEdit.photo_url.length > 0 && (
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", marginBottom: "8px" }}>
+                {vehicleToEdit.photo_url.map((url, i) => (
+                  <div key={url} style={{ position: "relative" }}>
+                    {/* eslint-disable-next-line @next/next/no-img-element -- URL pública do Storage, host dinâmico por ambiente */}
+                    <img
+                      src={url}
+                      alt={`Foto ${i + 1} de ${vehicleToEdit.marca} ${vehicleToEdit.modelo}`}
+                      style={{ width: "72px", height: "72px", objectFit: "cover", borderRadius: "6px", border: "1px solid var(--border)" }}
+                    />
+                    {i === 0 && (
+                      <span
+                        style={{
+                          position: "absolute", top: "2px", left: "2px",
+                          fontSize: "9px", fontWeight: 700, padding: "1px 5px", borderRadius: "999px",
+                          background: "rgba(34,197,94,.85)", color: "#fff",
+                        }}
+                      >
+                        Capa
+                      </span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <VehiclePhotoUpload
+              action={uploadVehiclePhotos.bind(null, editId)}
+              remainingSlots={MAX_PHOTOS_PER_VEHICLE - vehicleToEdit.photo_url.length}
+            />
+          </div>
         </div>
       )}
 
@@ -211,7 +250,16 @@ export default async function EstoquePage({ searchParams }: PageProps) {
                   ) : (
                     <span className="giro-badge slow">arquivado</span>
                   )}
-                  <span style={{ color: "var(--muted)", fontSize: "12px" }}>Sem foto</span>
+                  {v.photo_url.length > 0 ? (
+                    // eslint-disable-next-line @next/next/no-img-element -- URL pública do Storage, host dinâmico por ambiente
+                    <img
+                      src={v.photo_url[0]}
+                      alt={`${v.marca} ${v.modelo}`}
+                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
+                    />
+                  ) : (
+                    <span style={{ color: "var(--muted)", fontSize: "12px" }}>Sem foto</span>
+                  )}
                 </div>
                 <div className="vehicle-info">
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px", marginBottom: "2px" }}>

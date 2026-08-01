@@ -1688,6 +1688,134 @@ Achado durante fechamento de `B007` (pendência de migration 024), 2026-08-01.
 
 ---
 
+BL-0023
+
+Title
+
+Sem exclusão/reordenação de foto de veículo
+
+Problem
+
+Upload de foto (roadmap 1.2, `lib/vehicle-photo-actions.ts`) é append-only — sem capacidade de excluir foto ruim ou trocar qual é a capa (sempre a 1ª posição do array `vehicles.photo_url`). Lojista vai sentir isso rápido no uso real: foto tremida ou do ângulo errado sobe e fica lá, sem forma de tirar pela UI.
+
+Business Value
+
+Evita foto ruim/desatualizada pesando contra a venda no site da loja (1.4, consumidor direto de `photo_url`) — primeira impressão do veículo é a capa, e hoje não dá pra trocar sem intervenção manual no banco.
+
+Customer Value
+
+Lojista controla a apresentação do próprio estoque sem depender de suporte técnico pra corrigir uma foto errada.
+
+Priority
+
+Considerar logo após validação do 1.2 em uso real — não é P0 mas tende a virar reclamação de usuário rápido.
+
+Status
+
+IDEA — não implementado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixo-médio. Exclusão: Server Action que remove a URL do array (`vehicles.photo_url`) e do objeto no Storage (`supabaseAdmin.storage.from("vehicle-photos").remove([path])` — path precisa ser extraído da URL pública ou guardado à parte). Reordenação/trocar capa: mover posição dentro do array, sem novo upload — mais simples que exclusão, não mexe no Storage.
+
+Dependencies
+
+1.2 (upload de foto) — concluído, este item é extensão direta.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Decisão consciente de escopo durante 1.2, 2026-08-01 — ver resumo de implementação do item na sessão.
+
+Target Version
+
+Sem agendamento.
+
+Success Metrics
+
+Não definido.
+
+Notes
+
+Escopo original do 1.2 (roadmap `53_ROADMAP.md`) não pedia exclusão/reordenação — cortado deliberadamente pra manter o item fechado no que foi especificado.
+
+---
+
+BL-0024
+
+Title
+
+Upload de foto não disponível na criação do veículo
+
+Problem
+
+`vehicles.id` é gerado pelo banco (`gen_random_uuid()`) no momento do insert (`lib/vehicle-actions.ts`, `createVehicle`), então o path de Storage (`{store_id}/{vehicle_id}/{filename}`) só existe depois que o veículo já foi criado. Fluxo hoje é em 2 passos: cadastrar veículo (sem foto) → editar → adicionar foto. Resolver pra 1 passo só exigiria gerar UUID client-side antes do insert e passá-lo explicitamente — mudança maior em `createVehicle` (`lib/vehicle-actions.ts`), fora do escopo do 1.2.
+
+Business Value
+
+Fluxo de cadastro mais rápido pro lojista — 1 tela em vez de 2 pra ter o veículo completo (dados + foto) no estoque.
+
+Customer Value
+
+Menos fricção no cadastro, especialmente pra quem cadastra vários veículos seguidos.
+
+Priority
+
+Baixa — fluxo em 2 passos é aceitável, não bloqueia 1.4.
+
+Status
+
+IDEA — não implementado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Médio. `createVehicle` passaria a aceitar (ou gerar) um UUID antes do insert — trocar `id uuid primary key default gen_random_uuid()` por inserir o `id` explicitamente vindo do form (client gera via `crypto.randomUUID()`, campo hidden). Precisa validar que não colide com o default atual em nenhum outro fluxo que insere vehicle sem passar `id` (nenhum hoje, mas checar). Upload viraria parte do mesmo form de criação, reaproveitando `VehiclePhotoUpload`/`uploadVehiclePhotos`.
+
+Dependencies
+
+1.2 (upload de foto) — concluído, este item é extensão direta.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Decisão consciente de escopo durante 1.2, 2026-08-01 — ver resumo de implementação do item na sessão.
+
+Target Version
+
+Sem agendamento.
+
+Success Metrics
+
+Não definido.
+
+Notes
+
+Fluxo em 2 passos (criar → editar → foto) é o padrão mais simples e mais próximo do que já existia (CRUD sem foto) — trade-off consciente pra não inflar o escopo do 1.2 com geração de UUID client-side.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
