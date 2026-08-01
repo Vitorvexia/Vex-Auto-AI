@@ -375,6 +375,8 @@ Risco de mercado: concorrente com distribuição em escala (AEG Media/Venda.IA �
 
 Risco de mercado adicional (31/07/2026): AutoPilot CRM (site.autopilotcrm.com.br) é o concorrente vertical automotivo mais próximo do VEX identificado até agora — mesma tese, mesmo fluxo de IA, GTM mais rápido (pricing público self-serve, portais já integrados — Webmotors/OLX/Shopcar —, demo self-booking via Calendly). Diferencial deles (Modo Shadow — vendedor nunca sai do próprio WhatsApp) ataca a mesma objeção de adoção que o VEX resolve via WhatsApp oficial da loja, sem ter equivalente hoje. Análise completa em `53_ROADMAP.md` (Concorrentes mapeados). Não altera prioridade de Fase 0; monitorar se eles avançarem pra RENAVE/site próprio (fechando o gap do posicionamento B+).
 
+**Confirmado em reunião de vendas (31/07/2026)** — AutoPilot CRM NÃO tem RENAVE. Reforça item 1.1 do roadmap (`53_ROADMAP.md`, "Controle de RENAVE sem API") como diferencial real e ainda aberto no mercado vertical automotivo, não hipotético — o concorrente estruturalmente mais próximo do VEX não fechou esse gap. Aumenta urgência de priorizar 1.1 dentro da janela de mercado (prazo RENAVE: setembro/2026). Perfil competitivo completo em `53_ROADMAP.md`.
+
 LLM timeout under heavy load.
 
 Cron execution time.

@@ -259,6 +259,72 @@ Date
 
 Decision ID
 
+DL-0011
+
+Title
+
+VEX não vai construir dashboard de tráfego/anúncios (investimento, CPL, CPA, criativos) — fronteira do posicionamento B+ reforçada, não gap a fechar
+
+Category
+
+Product
+
+Context
+
+Reunião de vendas com AutoPilot CRM (31/07/2026, ver `53_ROADMAP.md`, perfil competitivo completo). AutoPilot opera dashboard de tráfego em tempo real (investimento, alcance, conversas iniciadas, leads, qualificados, visitas agendadas, vendas, taxa de qualificação/desqualificação/fechamento, custo por lead, custo por aquisição, criativos rodando com métricas estilo Meta Ads) porque atua como meio-agência — cobre uma camada de gestão de mídia paga que o VEX conscientemente decidiu não ocupar (`DL-0007`, posicionamento B+: camada de inteligência operacional plugada no sistema de gestão que o lojista já tem, sem terceirizar o funil de marketing nem competir por distribuição de mídia paga).
+
+Decision
+
+Não construir dashboard de tráfego/anúncios/mídia paga no VEX. Manter fronteira do `DL-0007` como está.
+
+Reasoning
+
+Ver a AutoPilot operando essa camada na prática (não só declarada em página de vendas) confirma que é uma escolha estrutural de modelo de negócio (agência/meio-agência), não uma feature isolada e barata de replicar — exige integração com Meta Ads/Google Ads, gestão de investimento de terceiro e responsabilidade sobre performance de mídia, fora do escopo de "infraestrutura operacional" que é a tese central do VEX. Construir isso dilui o B+ e puxa o VEX pra concorrer com agência, não com CRM/operação.
+
+Alternatives Considered
+
+Construir versão simplificada do dashboard de tráfego pra fechar paridade percebida de feature contra a AutoPilot.
+
+Expected Impact
+
+Nenhuma mudança de roadmap — decisão de manter escopo, não de expandir. Argumento de posicionamento fica mais forte em conversa de venda: "VEX não é agência disfarçada de CRM" vira resposta direta e informada, não genérica.
+
+Potential Risks
+
+Se o mercado consolidar em torno de "CRM+mídia integrados" como padrão mínimo (do jeito que IA de atendimento virou padrão mínimo em 2026, ver `53_ROADMAP.md`), o VEX fica de fora dessa expectativa. Mitigação: monitorar, mesmo gatilho de revisão do `DL-0007`.
+
+Owner
+
+Founder
+
+Related ADR
+
+None
+
+Related Issue
+
+`53_ROADMAP.md` (Concorrentes mapeados, perfil AutoPilot CRM)
+
+Related Runbook
+
+None
+
+Review Date
+
+Mesmo gatilho do `DL-0007`: revisar se inteligência competitiva independente mostrar isso virando padrão mínimo de mercado, não só feature de um concorrente meio-agência.
+
+Status
+
+Active
+
+---
+
+Date
+
+2026-07-31
+
+Decision ID
+
 DL-0010
 
 Title

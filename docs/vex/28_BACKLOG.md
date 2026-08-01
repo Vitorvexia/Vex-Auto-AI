@@ -1368,6 +1368,262 @@ Não corrigido de propósito durante o 1.9 — expandir esse fix pra decisão de
 
 ---
 
+BL-0018
+
+Title
+
+Desempenho de vendedores — nota por atendimento, semáforo, tempo médio de resposta, drill-down
+
+Problem
+
+`/equipe` hoje mostra métricas agregadas por vendedor (`calculateSellerMetrics`: total, ativos, fechados, score médio) mas não tem visão de qualidade/velocidade de atendimento por lead individual nem sinal visual rápido de quem está atendendo bem ou mal.
+
+Business Value
+
+OBSERVADO NO CONCORRENTE (AutoPilot CRM, reunião de vendas 31/07/2026) — avaliar, não é compromisso de build. Eles têm: tempo médio de resposta, nota pro atendimento, vendedores listados com nota separada, resposta de cada cliente em semáforo (verde/amarelo/vermelho), e ao clicar no vendedor vê quais leads ele atendeu e a nota de cada lead. Dá visibilidade gerencial de quem precisa de coaching/atenção sem precisar abrir conversa por conversa.
+
+Customer Value
+
+Dono da loja identifica rápido qual vendedor está deixando lead esfriar, sem precisar auditar conversa por conversa manualmente.
+
+Priority
+
+Não definida — sujeita ao filtro de posicionamento B+ (`DL-0007`) antes de entrar em fase.
+
+Status
+
+IDEA — observado no concorrente, avaliar. Não é decisão de construir.
+
+Owner
+
+Não definido
+
+Estimated Complexity
+
+Não estimado. Tempo médio de resposta e nota por lead exigem definir metodologia de cálculo (o que conta como "resposta", qual fórmula gera a nota) antes de estimar.
+
+Dependencies
+
+`leads.assigned_to` (já existe, `/equipe`), dados de timestamp de mensagens já existentes em `messages`.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Intel competitiva AutoPilot CRM, reunião de vendas 31/07/2026 — perfil completo em `53_ROADMAP.md` (Concorrentes mapeados)
+
+Target Version
+
+Não definida
+
+Success Metrics
+
+Não definida — depende de decisão de construir
+
+Notes
+
+Origem: reunião de vendas com AutoPilot CRM (31/07/2026). Decisão de construir depende de avaliação futura contra o posicionamento B+ (`DL-0007`) — cópia de feature de concorrente sem passar por esse filtro é risco consciente a evitar.
+
+---
+
+BL-0019
+
+Title
+
+Kanban de pipeline com estágios de negócio nomeados (coleta → interesse → troca → visita → proposta enviada → aprovada → negociação)
+
+Problem
+
+Kanban atual do VEX é baseado em `lead_status` (NOVO → ENGAJADO → INTERESSADO → QUENTE → NEGOCIAÇÃO → FECHADO/PERDIDO) — estágios de qualificação, não de processo de venda propriamente dito (não distingue "visita agendada" de "proposta enviada" de "proposta aprovada", por exemplo).
+
+Business Value
+
+OBSERVADO NO CONCORRENTE (AutoPilot CRM, reunião de vendas 31/07/2026) — avaliar, não é compromisso de build. Estágios deles: coleta nome e cidade → interesse veículo → identificar troca → visita → proposta enviada → proposta aprovada → em negociação. Granularidade de processo comercial mais fina que o `lead_status` atual do VEX.
+
+Customer Value
+
+Vendedor/gerente enxerga exatamente em que etapa do processo comercial (não só de qualificação) cada lead está.
+
+Priority
+
+Não definida — sujeita ao filtro de posicionamento B+ (`DL-0007`) antes de entrar em fase.
+
+Status
+
+IDEA — observado no concorrente, avaliar. Não é decisão de construir.
+
+Owner
+
+Não definido
+
+Estimated Complexity
+
+Não estimado. Requer decidir se substitui `lead_status` ou convive como campo separado (`lead_status` já é usado por guardrail de margem e Kanban existente — mudança não é cosmética).
+
+Dependencies
+
+Kanban existente (`app/leads` ou equivalente), `lead_status` (schema atual).
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Intel competitiva AutoPilot CRM, reunião de vendas 31/07/2026 — perfil completo em `53_ROADMAP.md` (Concorrentes mapeados)
+
+Target Version
+
+Não definida
+
+Success Metrics
+
+Não definida — depende de decisão de construir
+
+Notes
+
+Origem: reunião de vendas com AutoPilot CRM (31/07/2026). Decisão de construir depende de avaliação futura contra o posicionamento B+ (`DL-0007`).
+
+---
+
+BL-0020
+
+Title
+
+Modo "shadow-like" — notificação com resumo da conversa no WhatsApp do vendedor + captura automática da resposta
+
+Problem
+
+Hoje handoff pra humano exige o vendedor entrar no Vex Auto (`sendManualReply`, BL-0009) pra responder o lead — sem opção de responder direto do WhatsApp pessoal com captura automática.
+
+Business Value
+
+OBSERVADO NO CONCORRENTE (AutoPilot CRM, reunião de vendas 31/07/2026) — avaliar, não é compromisso de build. Modo Shadow deles (plano MAX) foi desmistificado na call: NÃO é espelhamento mágico, é notificação estruturada — vendedor recebe no próprio WhatsApp um resumo completo da conversa, responde de lá, CRM captura tudo automaticamente. Ataca objeção de adoção (vendedor não quer sair do WhatsApp pessoal) sem exigir número dedicado por vendedor.
+
+Customer Value
+
+Vendedor resistente a mudar de ferramenta consegue atender pelo canal que já usa, sem o VEX perder visibilidade/histórico do atendimento.
+
+Priority
+
+Não definida — sujeita ao filtro de posicionamento B+ (`DL-0007`) antes de entrar em fase. Avaliar também se colide com "credencial de integração externa é por tenant" (`CLAUDE.md`) e com o modelo de handoff atual (`assignConversationToHuman`).
+
+Status
+
+IDEA — observado no concorrente, avaliar. Não é decisão de construir.
+
+Owner
+
+Não definido
+
+Estimated Complexity
+
+Não estimado. Viabilidade técnica não confirmada — depende de avaliar se dá pra replicar via API oficial da Meta (WhatsApp Cloud API não tem primitiva nativa de "notificar número pessoal + capturar resposta de volta pro sistema" — precisa investigar se é webhook duplo, número de notificação separado, ou outro mecanismo). Pode não ser viável sem workaround fora da API oficial.
+
+Dependencies
+
+Investigação técnica de viabilidade via API oficial (não feita ainda). Modelo de handoff atual (`lib/actions.ts:assignConversationToHuman`).
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Intel competitiva AutoPilot CRM, reunião de vendas 31/07/2026 — perfil completo em `53_ROADMAP.md` (Concorrentes mapeados)
+
+Target Version
+
+Não definida
+
+Success Metrics
+
+Não definida — depende de decisão de construir
+
+Notes
+
+Origem: reunião de vendas com AutoPilot CRM (31/07/2026). Decisão de construir depende de avaliação futura contra o posicionamento B+ (`DL-0007`) e de investigação de viabilidade técnica via API oficial.
+
+---
+
+BL-0021
+
+Title
+
+Dashboard de origem de lead — funil por canal (tráfego, OLX, Instagram, etc)
+
+Problem
+
+VEX hoje não mostra de onde cada lead veio de forma agregada em dashboard — origem existe como dado (`leads`, campo de origem) mas sem visualização de funil por canal.
+
+Business Value
+
+OBSERVADO NO CONCORRENTE (AutoPilot CRM, reunião de vendas 31/07/2026) — avaliar, não é compromisso de build. IA deles identifica origem de cada lead e entrega funil no dashboard mostrando de onde a pessoa veio (tráfego, OLX, Instagram, etc). ATENÇÃO: avaliar se cabe no B+ sem virar gestão de mídia — este item é distinto do dashboard de tráfego/anúncios/investimento/CPL/CPA deles, que o VEX conscientemente decidiu NÃO construir (`DL-0011`). Funil de origem (de onde o lead veio) é dado operacional; dashboard de investimento/criativos é gestão de mídia paga — a linha entre os dois precisa ficar clara antes de avaliar este item.
+
+Customer Value
+
+Dono da loja entende qual canal traz mais lead/lead de qualidade sem precisar de ferramenta de mídia separada.
+
+Priority
+
+Não definida — sujeita ao filtro de posicionamento B+ (`DL-0007`) antes de entrar em fase. Avaliar explicitamente contra `DL-0011` (fronteira de não construir gestão de mídia).
+
+Status
+
+IDEA — observado no concorrente, avaliar. Não é decisão de construir.
+
+Owner
+
+Não definido
+
+Estimated Complexity
+
+Não estimado.
+
+Dependencies
+
+Campo de origem em `leads` (já existe). Nenhuma dependência de integração com Meta Ads/Google Ads se ficar restrito a "canal declarado", diferente do dashboard de investimento (`DL-0011`).
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Intel competitiva AutoPilot CRM, reunião de vendas 31/07/2026 — perfil completo em `53_ROADMAP.md` (Concorrentes mapeados). Ver também `DL-0011` (fronteira de não construir dashboard de mídia).
+
+Target Version
+
+Não definida
+
+Success Metrics
+
+Não definida — depende de decisão de construir
+
+Notes
+
+Origem: reunião de vendas com AutoPilot CRM (31/07/2026). Decisão de construir depende de avaliação futura contra o posicionamento B+ (`DL-0007`) e de manter a fronteira do `DL-0011` (não virar gestão de mídia).
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

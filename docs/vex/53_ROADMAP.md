@@ -201,7 +201,35 @@ A mesma feature era obrigatória em (A) e desperdício em (B) — decisão fecha
 | **AEG Media / Venda.IA** | Agência de growth/aquisição full-service (+700 lojas alegadas, 9+ anos), NÃO plataforma de software. Serviços: tráfego pago, landing pages, implementação de CRM de terceiros, social media, chatbot, consultoria comercial. IA de atendimento vendida também avulsa (~R$800/mês, estimado não confirmado). Parceria de financiamento C6 Bank. Sem RENAVE, sem site próprio da loja, sem estoque integrado. Foco parcial em associações/adesão. Onboarding manual (~15 dias). |
 | **Thera Company / THERA.IA** | IA de atendimento WhatsApp+Instagram pura (não CRM, "só pré-atendimento" — palavras da própria call, 29/07/2026). Integra com estoque em tempo real, negociação com piso configurável por loja, atende motos. Volume alegado: clientes com 3mil leads/mês sem gargalo. Pricing real: R$450 implementação + R$850/mês até 600 leads/mês (reajuste contratual acima disso). Contrato flexível (sem fidelidade mínima obrigatória, cancelamento sem multa). Fraquezas confirmadas na call: sem resposta clara sobre tratamento de CPF/dado pessoal ("vai pros atendimentos" — vago), sem resposta sobre comportamento de fallback quando foge do escopo da IA ("não sei dizer"), áudio de IA genérico sem voz própria do cliente. |
 | **Azul360 CRM** | CRM omnichannel genérico (WhatsApp+Instagram+Messenger+IA), SEM vertical automotiva — zero estoque, zero FIPE, zero RENAVE, zero site. Não é concorrente direto, é referência de pricing de mercado: R$745–R$2.980/mês (5 a 20 usuários), IA cobrada por quota de resposta (100 a 1000/mês conforme plano). |
-| **AutoPilot CRM** (site.autopilotcrm.com.br, análise 31/07/2026) | Concorrente vertical automotivo mais próximo do VEX até agora — mesma tese ("CRM que funciona mesmo que o vendedor nunca abra"), mesmo fluxo (IA atende→qualifica→apresenta estoque→follow-up→handoff só quando pronto). Diferencial deles: **Modo Shadow** (plano MAX) — vendedor nunca sai do WhatsApp pessoal, IA manda resumo do lead lá, ele responde de lá, CRM captura tudo automático; ataca direto a objeção de adoção. Portais **já integrados** (Webmotors, OLX Autos, Shopcar, Meta Ads) — item que no VEX ainda é `Planejado` (Fase 4). Pricing público self-serve: setup R$500 único; Standard R$418,53/mês c/IA (R$207,90 sem IA, 1 WhatsApp); MAX R$557,90/mês c/IA (R$347,90 sem IA, 3 WhatsApp+shadow); anual −30%, sem fidelidade mensal; demo 30min via Calendly embutido. Sem menção a guardrail de margem determinístico, lead scoring auditável, coleta estruturada financiamento/troca, ou RLS/multi-tenant — pontos onde o VEX é estruturalmente mais rigoroso, mas que não aparecem numa página de vendas (precisam ser argumento ativo, não se vendem sozinhos). |
+| **AutoPilot CRM** (site.autopilotcrm.com.br, análise 31/07/2026 + reunião de vendas 31/07/2026) | Concorrente vertical automotivo mais próximo do VEX até agora — mesma tese ("CRM que funciona mesmo que o vendedor nunca abra"), mesmo fluxo (IA atende→qualifica→apresenta estoque→follow-up→handoff só quando pronto). Diferencial deles: **Modo Shadow** (plano MAX) — vendedor nunca sai do WhatsApp pessoal, IA manda resumo do lead lá, ele responde de lá, CRM captura tudo automático; ataca direto a objeção de adoção. Portais **já integrados** (Webmotors, OLX Autos, Shopcar, Meta Ads) — item que no VEX ainda é `Planejado` (Fase 4). Pricing público self-serve: setup R$500 único; Standard R$418,53/mês c/IA (R$207,90 sem IA, 1 WhatsApp); MAX R$557,90/mês c/IA (R$347,90 sem IA, 3 WhatsApp+shadow); anual −30%, sem fidelidade mensal; demo 30min via Calendly embutido. Sem menção a guardrail de margem determinístico, lead scoring auditável, coleta estruturada financiamento/troca, ou RLS/multi-tenant — pontos onde o VEX é estruturalmente mais rigoroso, mas que não aparecem numa página de vendas (precisam ser argumento ativo, não se vendem sozinhos). **Perfil completo da reunião de vendas (31/07/2026) abaixo.** |
+
+### AutoPilot CRM — perfil competitivo completo (reunião de vendas, 31/07/2026)
+
+Concorrente estruturalmente mais próximo do VEX. Intel bruta da call, organizada por área — nenhum ponto abaixo é decisão de construir, é observação a avaliar contra o posicionamento B+ (`DL-0007`).
+
+**Layout/navegação:** ícones na lateral esquerda. Features visíveis: conversa, agendamento, registro de número, análise de desempenho dos vendedores, análise de desempenho de anúncios, registro de usuário, entre outros.
+
+**Feature de conversa:** espelham o WhatsApp da pessoa, conversas em tempo real. Botões acima da conversa espelhada: Iniciar IA, Transferir para vendedor, Não lida, Encerrar. Painel lateral com dados do lead: nome, telefone, cidade, origem, veículo de interesse, tags (status), qualificação (botão de qualificar manual E automático), estágio, vendedor responsável.
+
+**IA deles — limitações confirmadas:** NÃO negocia. NÃO puxa dados de simulação de financiamento. Só responde, manda foto, pergunta se tem carro pra troca, encaminha endereço via Google Maps. Áudio com voz genérica — soa robótico, ponto fraco de percepção confirmado na call.
+
+**Planos:** Standard = 1 número. MAX = 3 números + Modo Shadow.
+
+**Modo Shadow desmistificado:** não é espelhamento mágico. Voltado pra vendedor com WhatsApp único — ele recebe NOTIFICAÇÃO no próprio WhatsApp com resumo completo da conversa, responde de lá, CRM captura tudo automaticamente. É notificação estruturada + captura, não mágica — replicável em tese via API oficial (avaliar viabilidade, ver `BL-0020`).
+
+**Login/RBAC:** login separado pra gerente e pra vendedores.
+
+**Sistema/plataforma:** app próprio em desenvolvimento; site já com bom suporte a celular. IA identifica origem de cada lead e entrega funil no dashboard mostrando de onde a pessoa veio (tráfego, OLX, Instagram, etc).
+
+**Dashboard de tráfego em tempo real:** investimento, alcance, conversas iniciadas, leads, qualificados, visitas agendadas, vendas realizadas. Relatórios: total de leads, taxa de qualificação, taxa de desqualificação, taxa de fechamento, custo por lead, custo por aquisição. Mostra criativos rodando e métricas no estilo do próprio Meta. **Confirma fronteira do `DL-0007` — ver `DL-0011`.**
+
+**Pipeline de vendas (Kanban):** com dados do cliente. Estágios: coleta nome e cidade → interesse veículo → identificar troca → visita → proposta enviada → proposta aprovada → em negociação.
+
+**Menu de desempenho de vendedores:** tempo médio de resposta, nota pro atendimento, vendedores listados com nota separada, resposta de cada cliente em semáforo (verde/amarelo/vermelho), drill-down por vendedor → leads atendidos → nota de cada lead.
+
+**Follow-up:** a partir de 6 horas. Primeira mensagem: "Oi [[1]] Imagino que o dia correu por ai.. você ainda está interessado?"
+
+**RENAVE:** confirmado que NÃO têm. Reforça `27_PROJECT_STATUS.md` (CURRENT KNOWN RISKS) e item 1.1 do roadmap como diferencial real, não hipotético.
 
 **Padrão mínimo declarado pelo mercado em 2026:** IA deixou de ser diferencial e virou critério de seleção — descrição automática de veículo, respostas inteligentes no WhatsApp, sugestão de precificação. Somado a: estoque, CRM, portais, NF-e, site próprio, FIPE, RENAVE e controle de acesso por perfil.
 
