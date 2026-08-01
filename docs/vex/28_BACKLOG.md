@@ -1624,6 +1624,70 @@ Origem: reunião de vendas com AutoPilot CRM (31/07/2026). Decisão de construir
 
 ---
 
+BL-0022
+
+Title
+
+Observabilidade de erro incompleta em reactivation_logs/follow_up_logs
+
+Problem
+
+Coluna `reactivation_logs.error_message` existe no schema (migration 024, confirmada aplicada em produção — ver `B007` em `27_PROJECT_STATUS.md`) mas nunca é populada pelo código (`lib/reactivation.ts`). `error_category` também está ausente do schema. Sem isso, falha de follow-up/reativação não tem causa raiz rastreável — só "falhou", sem saber por quê.
+
+Business Value
+
+Diagnóstico mais rápido quando follow-up/reativação falha silenciosamente — hoje um job com `status: failed` não diz se foi rate limit, número inválido, erro de auth ou falha transitória de rede, obrigando investigação manual em outra fonte (logs de aplicação, se ainda existirem) pra descobrir a causa.
+
+Customer Value
+
+Nenhum direto — é observabilidade interna, não visível pro lead ou pro vendedor.
+
+Priority
+
+Não bloqueante hoje (volume baixo, 1 loja piloto) — mas cresce em importância conforme volume de follow-up/reativação aumentar.
+
+Status
+
+IDEA — não implementado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixo-médio. `error_message`: sem migration, só popular nos catch blocks relevantes de `lib/reactivation.ts` (e replicar em `lib/follow-up.ts`, que já tem a coluna desde a migration 009 e também nunca escreve nela). `error_category`: exige nova migration adicionando a coluna em `reactivation_logs`, mais classificação do erro nos mesmos catch blocks (mesma lógica de categoria já usada em `lib/whatsapp-send.ts` — `rate_limited`/`invalid_recipient`/`service_error`/`auth_error`/`unknown` — reaproveitável, não inventar categoria nova).
+
+Dependencies
+
+Nenhuma.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+`B007` (`27_PROJECT_STATUS.md`, ACTIVE BLOCKERS) — confirmação de que a migration 024 está aplicada em produção deixou explícito que a coluna existe mas o código não a usa.
+
+Target Version
+
+Sem agendamento.
+
+Success Metrics
+
+Não definido.
+
+Notes
+
+Achado durante fechamento de `B007` (pendência de migration 024), 2026-08-01.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
