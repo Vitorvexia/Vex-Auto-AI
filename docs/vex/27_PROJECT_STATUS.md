@@ -311,6 +311,22 @@ Residual note: only `follow_up_1` was live-tested. `follow_up_2/3` and all 6 rea
 
 ---
 
+B007
+
+~~Migration 024 (`024_reactivation_logs_error_message.sql`) not confirmed applied in production.~~ RESOLVED — confirmed 2026-08-01 by Vitor via direct check in Supabase Studio: `reactivation_logs.error_message` column present in the production schema.
+
+Note: the column existing in production does not close the observability gap — `lib/reactivation.ts` does not populate it yet, and `error_category` is still entirely absent from `reactivation_logs`. That gap remains open, tracked under `# CURRENT TECHNICAL DEBT` — not reopened here, just not to be confused with this migration-applied confirmation.
+
+Owner
+
+Engineering
+
+Status
+
+Resolved (2026-08-01)
+
+---
+
 # RECENT COMPLETED WORK
 
 Most recent accomplishments (source: git log, most recent first).
