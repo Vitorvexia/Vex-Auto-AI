@@ -32,7 +32,14 @@ vi.mock("next/cache", () => ({
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { createVehicle, updateVehicle, archiveVehicle, unarchiveVehicle } from "@/lib/vehicle-actions";
+import {
+  createVehicle,
+  updateVehicle,
+  archiveVehicle,
+  unarchiveVehicle,
+  publishVehicle,
+  unpublishVehicle,
+} from "@/lib/vehicle-actions";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -225,6 +232,59 @@ describe("unarchiveVehicle", () => {
     const chain = makeChain();
     chain.maybeSingle.mockResolvedValue({ data: null, error: null });
     await expect(unarchiveVehicle("v-outro")).rejects.toThrow("Veículo não encontrado");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// publishVehicle / unpublishVehicle (roadmap 1.4 — publicado no site)
+// ---------------------------------------------------------------------------
+
+describe("unpublishVehicle", () => {
+  it("V14: define publicado=false no veículo", async () => {
+    const chain = makeChain();
+    await unpublishVehicle("v-1");
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ publicado: false })
+    );
+  });
+
+  it("V15: revalidatePath('/estoque') chamado após ocultar do site", async () => {
+    await unpublishVehicle("v-1");
+    expect(mockRevalidate).toHaveBeenCalledWith("/estoque");
+  });
+
+  it("V16: lança erro se veículo não pertence à store", async () => {
+    const chain = makeChain();
+    chain.maybeSingle.mockResolvedValue({ data: null, error: null });
+    await expect(unpublishVehicle("v-outro")).rejects.toThrow("Veículo não encontrado");
+  });
+
+  it("V16b: update não é chamado se ownership falha em unpublishVehicle", async () => {
+    const chain = makeChain();
+    chain.maybeSingle.mockResolvedValue({ data: null, error: null });
+    await expect(unpublishVehicle("v-outro")).rejects.toBeDefined();
+    expect(chain.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("publishVehicle", () => {
+  it("V17: define publicado=true no veículo (restaura exposição no site)", async () => {
+    const chain = makeChain();
+    await publishVehicle("v-1");
+    expect(chain.update).toHaveBeenCalledWith(
+      expect.objectContaining({ publicado: true })
+    );
+  });
+
+  it("V18: revalidatePath('/estoque') chamado após republicar", async () => {
+    await publishVehicle("v-1");
+    expect(mockRevalidate).toHaveBeenCalledWith("/estoque");
+  });
+
+  it("V19: lança erro se veículo não pertence à store", async () => {
+    const chain = makeChain();
+    chain.maybeSingle.mockResolvedValue({ data: null, error: null });
+    await expect(publishVehicle("v-outro")).rejects.toThrow("Veículo não encontrado");
   });
 });
 

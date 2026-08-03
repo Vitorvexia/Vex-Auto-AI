@@ -2,7 +2,14 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthError } from "@/lib/auth";
-import { createVehicle, updateVehicle, archiveVehicle, unarchiveVehicle } from "@/lib/vehicle-actions";
+import {
+  createVehicle,
+  updateVehicle,
+  archiveVehicle,
+  unarchiveVehicle,
+  publishVehicle,
+  unpublishVehicle,
+} from "@/lib/vehicle-actions";
 import { uploadVehiclePhotos } from "@/lib/vehicle-photo-actions";
 import { MAX_PHOTOS_PER_VEHICLE } from "@/lib/vehicle-photos";
 import { VehiclePhotoUpload } from "@/app/components/VehiclePhotoUpload";
@@ -16,6 +23,7 @@ type Vehicle = {
   custo: number;
   margem_minima: number;
   disponivel: boolean;
+  publicado: boolean;
   created_at: string;
   photo_url: string[];
 };
@@ -68,6 +76,20 @@ async function handleUnarchive(formData: FormData) {
   redirect("/estoque");
 }
 
+async function handleUnpublish(formData: FormData) {
+  "use server";
+  const vehicleId = formData.get("__vehicleId") as string;
+  await unpublishVehicle(vehicleId);
+  redirect("/estoque");
+}
+
+async function handlePublish(formData: FormData) {
+  "use server";
+  const vehicleId = formData.get("__vehicleId") as string;
+  await publishVehicle(vehicleId);
+  redirect("/estoque");
+}
+
 // ---------------------------------------------------------------------------
 // Page
 // ---------------------------------------------------------------------------
@@ -79,7 +101,7 @@ export default async function EstoquePage({ searchParams }: PageProps) {
 
   const { data: vehicles, error } = await supabase
     .from("vehicles")
-    .select("id, marca, modelo, ano, preco, custo, margem_minima, disponivel, created_at, photo_url")
+    .select("id, marca, modelo, ano, preco, custo, margem_minima, disponivel, publicado, created_at, photo_url")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -264,9 +286,14 @@ export default async function EstoquePage({ searchParams }: PageProps) {
                 <div className="vehicle-info">
                   <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "6px", marginBottom: "2px" }}>
                     <div className="vehicle-name">{v.marca} {v.modelo}</div>
-                    <span className={`vehicle-status-pill ${v.disponivel ? "disponivel" : "arquivado"}`}>
-                      {v.disponivel ? "Disponível" : "Arquivado"}
-                    </span>
+                    <div style={{ display: "flex", flexDirection: "column", gap: "3px", alignItems: "flex-end" }}>
+                      <span className={`vehicle-status-pill ${v.disponivel ? "disponivel" : "arquivado"}`}>
+                        {v.disponivel ? "Disponível" : "Arquivado"}
+                      </span>
+                      <span className={`site-status-pill ${v.publicado ? "publicado" : "oculto"}`}>
+                        {v.publicado ? "No site" : "Oculto do site"}
+                      </span>
+                    </div>
                   </div>
                   <div className="vehicle-detail">{v.ano}</div>
 
@@ -310,6 +337,27 @@ export default async function EstoquePage({ searchParams }: PageProps) {
                           style={{ fontSize: "12px", fontWeight: 600, color: "#15803D", background: "none", border: "none", cursor: "pointer", padding: 0 }}
                         >
                           Desarquivar
+                        </button>
+                      </form>
+                    )}
+                    {v.publicado ? (
+                      <form action={handleUnpublish} style={{ display: "inline" }}>
+                        <input type="hidden" name="__vehicleId" value={v.id} />
+                        <button
+                          type="submit"
+                          style={{ fontSize: "12px", fontWeight: 600, color: "#C2410C", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                        >
+                          Ocultar do site
+                        </button>
+                      </form>
+                    ) : (
+                      <form action={handlePublish} style={{ display: "inline" }}>
+                        <input type="hidden" name="__vehicleId" value={v.id} />
+                        <button
+                          type="submit"
+                          style={{ fontSize: "12px", fontWeight: 600, color: "#0369A1", background: "none", border: "none", cursor: "pointer", padding: 0 }}
+                        >
+                          Publicar no site
                         </button>
                       </form>
                     )}

@@ -42,7 +42,7 @@ async function createTestStoreWithSlug(label: string): Promise<{ id: string; slu
 
 async function createVehicle(
   storeId: string,
-  overrides: Partial<{ disponivel: boolean }> = {}
+  overrides: Partial<{ disponivel: boolean; publicado: boolean }> = {}
 ): Promise<string> {
   const { data, error } = await db
     .from("vehicles")
@@ -126,6 +126,12 @@ describeIf("Leitura pública de estoque — public_vehicle_listings / public_sto
 
   it("PVL-5: veículo indisponível (disponivel=false) nunca aparece na view pública", async () => {
     const hiddenId = await createVehicle(storeA.id, { disponivel: false });
+    const list = await getPublicVehicleListings(anonClient, storeA.id);
+    expect(list.map((v) => v.id)).not.toContain(hiddenId);
+  });
+
+  it("PVL-5b (roadmap 1.4): veículo publicado=false nunca aparece na view pública, mesmo com disponivel=true", async () => {
+    const hiddenId = await createVehicle(storeA.id, { disponivel: true, publicado: false });
     const list = await getPublicVehicleListings(anonClient, storeA.id);
     expect(list.map((v) => v.id)).not.toContain(hiddenId);
   });

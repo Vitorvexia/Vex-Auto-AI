@@ -17,7 +17,7 @@ export type HandoffTo = "IA" | "HUMANO";
 export type Direcao = "entrada" | "saida";
 export type Autor = "lead" | "ia" | "humano" | "sistema";
 export type Canal = "whatsapp" | "instagram" | "portal_chat";
-export type Origem = "whatsapp" | "portal" | "base_inativa" | "manual";
+export type Origem = "whatsapp" | "portal" | "base_inativa" | "manual" | "site";
 
 export interface Lead {
   id: string;

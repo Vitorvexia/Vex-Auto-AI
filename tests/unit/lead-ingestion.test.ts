@@ -217,6 +217,20 @@ it("T8: origem default é 'manual' quando não informada", async () => {
 });
 
 // ---------------------------------------------------------------------------
+// T8b — origem 'site' (roadmap 1.4 — contato do site público da loja)
+// ---------------------------------------------------------------------------
+
+it("T8b: aceita origem 'site' e persiste no insert do lead", async () => {
+  setupNewLead();
+  await ingestLeadManually({ ...BASE, origem: "site" });
+
+  const leadsInsertChain = mockFrom.mock.results[1].value;
+  expect(leadsInsertChain.insert).toHaveBeenCalledWith(
+    expect.objectContaining({ origem: "site" })
+  );
+});
+
+// ---------------------------------------------------------------------------
 // T9 — sendWhatsAppMessage nunca chamado
 // ---------------------------------------------------------------------------
 

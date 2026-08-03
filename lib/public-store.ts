@@ -49,3 +49,24 @@ export async function getPublicVehicleListings(
   if (error) throw error;
   return (data ?? []) as PublicVehicleListing[];
 }
+
+/**
+ * Busca 1 veículo público por id (página de detalhe, roadmap 1.4) — mesma
+ * VIEW e mesma allowlist de getPublicVehicleListings, nunca `vehicles`
+ * direto. Filtro duplo (store_id + id) evita que o id de um veículo de outra
+ * loja resolva por engano via URL adivinhada.
+ */
+export async function getPublicVehicleById(
+  supabase: SupabaseClient,
+  storeId: string,
+  vehicleId: string
+): Promise<PublicVehicleListing | null> {
+  const { data, error } = await supabase
+    .from("public_vehicle_listings")
+    .select("id, store_id, marca, modelo, ano, preco, photo_url, disponivel")
+    .eq("store_id", storeId)
+    .eq("id", vehicleId)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as PublicVehicleListing | null) ?? null;
+}

@@ -12,6 +12,7 @@ import { describe, it, expect, vi } from "vitest";
 import {
   resolveStoreIdBySlug,
   getPublicVehicleListings,
+  getPublicVehicleById,
 } from "@/lib/public-store";
 
 function buildChain(finalResult: { data: unknown; error: unknown }) {
@@ -115,6 +116,68 @@ describe("getPublicVehicleListings", () => {
     const supabase = { from } as unknown as Parameters<typeof getPublicVehicleListings>[0];
 
     await expect(getPublicVehicleListings(supabase, "store-a")).rejects.toThrow(
+      "view unavailable"
+    );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getPublicVehicleById (roadmap 1.4 — página de detalhe do site público)
+// ---------------------------------------------------------------------------
+
+describe("getPublicVehicleById", () => {
+  it("PS-9: consulta a VIEW public_vehicle_listings, nunca a tabela vehicles direto", async () => {
+    const chain = buildChain({ data: { id: "v-1", store_id: "store-a" }, error: null });
+    const from = vi.fn().mockReturnValue(chain);
+    const supabase = { from } as unknown as Parameters<typeof getPublicVehicleById>[0];
+
+    await getPublicVehicleById(supabase, "store-a", "v-1");
+
+    expect(from).toHaveBeenCalledWith("public_vehicle_listings");
+    expect(from).not.toHaveBeenCalledWith("vehicles");
+  });
+
+  it("PS-10: filtra por store_id E id — isolamento cross-tenant na busca por id", async () => {
+    const chain = buildChain({ data: { id: "v-1", store_id: "store-a" }, error: null });
+    const from = vi.fn().mockReturnValue(chain);
+    const supabase = { from } as unknown as Parameters<typeof getPublicVehicleById>[0];
+
+    await getPublicVehicleById(supabase, "store-a", "v-1");
+
+    expect(chain.eq).toHaveBeenCalledWith("store_id", "store-a");
+    expect(chain.eq).toHaveBeenCalledWith("id", "v-1");
+  });
+
+  it("PS-11: select() nunca pede custo nem margem_minima — mesma allowlist da listagem", async () => {
+    const chain = buildChain({ data: { id: "v-1", store_id: "store-a" }, error: null });
+    const from = vi.fn().mockReturnValue(chain);
+    const supabase = { from } as unknown as Parameters<typeof getPublicVehicleById>[0];
+
+    await getPublicVehicleById(supabase, "store-a", "v-1");
+
+    const selectedColumns = chain.select.mock.calls[0][0] as string;
+    expect(selectedColumns).not.toContain("custo");
+    expect(selectedColumns).not.toContain("margem_minima");
+    expect(selectedColumns).not.toBe("*");
+  });
+
+  it("PS-12: retorna null quando o veículo não existe / não pertence à store (nunca lança)", async () => {
+    const chain = buildChain({ data: null, error: null });
+    const from = vi.fn().mockReturnValue(chain);
+    const supabase = { from } as unknown as Parameters<typeof getPublicVehicleById>[0];
+
+    const result = await getPublicVehicleById(supabase, "store-a", "v-inexistente");
+
+    expect(result).toBeNull();
+  });
+
+  it("PS-13: erro de query é propagado", async () => {
+    const dbError = new Error("view unavailable");
+    const chain = buildChain({ data: null, error: dbError });
+    const from = vi.fn().mockReturnValue(chain);
+    const supabase = { from } as unknown as Parameters<typeof getPublicVehicleById>[0];
+
+    await expect(getPublicVehicleById(supabase, "store-a", "v-1")).rejects.toThrow(
       "view unavailable"
     );
   });
