@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering Leadership
 
-Last Updated: 2026-07-31
+Last Updated: 2026-08-03
 
 ---
 
@@ -252,6 +252,72 @@ Active
 ---
 
 # REAL DECISIONS
+
+Date
+
+2026-08-03
+
+Decision ID
+
+DL-0012
+
+Title
+
+Adiar DNS Wildcard (*.vexauto.com.br) — Usar CNAME Específico por Loja Até Haver Volume
+
+Category
+
+Infrastructure
+
+Context
+
+Item 1.3 do roadmap (rota de leitura pública por subdomínio) exige que cada loja seja acessível via subdomínio (ex: speed-motos.vexauto.com.br). A Vercel recomendou domínio wildcard (*.vexauto.com.br) para cobrir todas as lojas automaticamente, mas isso exige migrar os nameservers do domínio inteiro para a Vercel. O domínio vexauto.com.br já tem e-mail profissional ativo via Zoho (registros MX, SPF, DKIM, verificação de domínio) na Hostinger — migrar nameservers sem recriar manualmente todos esses registros do lado da Vercel primeiro derrubaria o e-mail da empresa.
+
+Decision
+
+Não migrar nameservers agora. Usar um CNAME específico por loja (ex: speed-motos.vexauto.com.br → cname.vercel-dns.com ou valor equivalente indicado pela Vercel), criado manualmente na Hostinger para cada nova loja, mantendo o DNS atual (Zoho/e-mail) intocado.
+
+Reasoning
+
+Com 1 loja piloto ativa, o custo de criar um CNAME manual por loja é desprezível — não há volume que justifique o risco de uma migração de nameservers sem rede de segurança. Adiar a decisão até haver volume real de lojas preserva o e-mail da empresa sem bloquear o roadmap: a arquitetura de código do 1.3 (resolução de loja por subdomínio) funciona igual com CNAME específico ou wildcard — a diferença é só operacional (criar 1 registro DNS por loja vs. automático).
+
+Alternatives Considered
+
+Migrar nameservers para Vercel imediatamente, recriando manualmente os registros MX/SPF/DKIM/TXT do Zoho no painel de DNS da Vercel antes da migração — rejeitado por ora: risco desnecessário para o volume atual (1 loja), e-mail é serviço crítico da operação, sem necessidade de assumir esse risco agora.
+
+Expected Impact
+
+Onboarding de loja nova no site público passa a ter um passo manual extra (criar CNAME na Hostinger + cadastrar domínio na Vercel) até a migração de nameservers acontecer. Sem impacto no e-mail da empresa. Sem impacto na arquitetura de código do 1.3.
+
+Potential Risks
+
+Se o número de lojas crescer rápido, esse passo manual vira gargalo de onboarding — critério de revisão abaixo cobre isso. Enquanto não migrado, todo subdomínio novo de loja exige ação manual do founder (não é self-serve).
+
+Owner
+
+Founder (decisão de infraestrutura)
+
+Related ADR
+
+None
+
+Related Issue
+
+Item 1.3 (53_ROADMAP.md)
+
+Related Runbook
+
+None
+
+Review Date
+
+Quando o número de lojas ativas tornar a criação manual de CNAME por loja um gargalo de onboarding perceptível (ex: 5+ lojas, ou onboarding self-serve virar prioridade) — nesse ponto, migrar nameservers para Vercel, recriando antes os registros MX/SPF/DKIM/TXT do Zoho no painel de DNS da Vercel.
+
+Status
+
+Active
+
+---
 
 Date
 
