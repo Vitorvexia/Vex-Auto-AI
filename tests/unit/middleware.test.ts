@@ -28,6 +28,7 @@ vi.mock("@supabase/ssr", () => ({
 }));
 
 import { middleware } from "@/middleware";
+import { PUBLIC_SITE_ROUTE_HEADER } from "@/lib/public-route-header";
 
 const PROD_HOST = "app.vexauto.com.br";
 
@@ -101,5 +102,16 @@ describe("middleware — roteamento público por subdomínio (roadmap 1.3)", () 
     expect(res.headers.get("x-middleware-rewrite")).toContain(
       "/site/speedmotos/veiculo/123"
     );
+  });
+
+  it("MW-9 (regressão): rewrite pro site público marca PUBLIC_SITE_ROUTE_HEADER — é o que app/layout.tsx usa (via AppChrome) pra nunca renderizar o Header autenticado numa rota pública", async () => {
+    const res = await middleware(buildRequest("/", "speedmotos.vexauto.com.br"));
+    // Next.js propaga headers de request via x-middleware-request-<nome> na resposta.
+    expect(res.headers.get(`x-middleware-request-${PUBLIC_SITE_ROUTE_HEADER}`)).toBe("1");
+  });
+
+  it("MW-10: rota protegida autenticada NÃO marca PUBLIC_SITE_ROUTE_HEADER", async () => {
+    const res = await middleware(buildRequest("/conversations", PROD_HOST));
+    expect(res.headers.get(`x-middleware-request-${PUBLIC_SITE_ROUTE_HEADER}`)).toBeNull();
   });
 });

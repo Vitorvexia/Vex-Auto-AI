@@ -1,8 +1,10 @@
 import "./globals.css";
 import { Exo_2, Barlow } from "next/font/google";
-import { Header } from "@/app/components/Header";
+import { headers } from "next/headers";
+import { AppChrome } from "@/app/components/AppChrome";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { isSuperAdmin } from "@/lib/admin-auth";
+import { PUBLIC_SITE_ROUTE_HEADER } from "@/lib/public-route-header";
 
 const exo2 = Exo_2({
   subsets: ["latin"],
@@ -38,12 +40,15 @@ export default async function RootLayout({
   const {
     data: { user },
   } = await supabase.auth.getUser();
+  const requestHeaders = await headers();
+  const isPublicRoute = requestHeaders.get(PUBLIC_SITE_ROUTE_HEADER) === "1";
 
   return (
     <html lang="pt-BR" className={`${exo2.variable} ${barlow.variable}`}>
       <body>
-        <Header isAdmin={isSuperAdmin(user?.email)} />
-        {children}
+        <AppChrome isPublicRoute={isPublicRoute} isAdmin={isSuperAdmin(user?.email)}>
+          {children}
+        </AppChrome>
       </body>
     </html>
   );

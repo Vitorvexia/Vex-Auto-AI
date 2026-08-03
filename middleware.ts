@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
 import { extractStoreSlugFromHost, DEFAULT_APP_ROOT_DOMAIN } from "@/lib/subdomain";
+import { PUBLIC_SITE_ROUTE_HEADER } from "@/lib/public-route-header";
 
 // Rotas hoje protegidas por sessão — preservadas exatamente como estavam
 // antes do roteamento por subdomínio (o matcher ficou mais amplo pra
@@ -38,7 +39,14 @@ export async function middleware(request: NextRequest) {
     const url = request.nextUrl.clone();
     const suffix = url.pathname === "/" ? "" : url.pathname;
     url.pathname = `/site/${storeSlug}${suffix}`;
-    return NextResponse.rewrite(url);
+    // Marca a request pra app/layout.tsx saber (via next/headers) que não
+    // deve renderizar o Header do app autenticado — o Next.js App Router não
+    // permite que um layout aninhado (app/site/[slug]/layout.tsx) remova JSX
+    // renderizado por um layout ancestral (app/layout.tsx envolve TODAS as
+    // rotas). Este é o mecanismo real; ver app/components/AppChrome.tsx.
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set(PUBLIC_SITE_ROUTE_HEADER, "1");
+    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
   }
 
   if (!isProtectedPath(request.nextUrl.pathname)) {
