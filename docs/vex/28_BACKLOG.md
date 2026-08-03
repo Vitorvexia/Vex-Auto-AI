@@ -1816,6 +1816,70 @@ Fluxo em 2 passos (criar → editar → foto) é o padrão mais simples e mais p
 
 ---
 
+BL-0025
+
+Title
+
+RESERVED_SUBDOMAINS (lib/subdomain.ts) exige atualização manual a cada novo subdomínio de infraestrutura
+
+Problem
+
+`lib/subdomain.ts` (roadmap 1.3) reserva `www` e `app` — subdomínios que NUNCA podem ser tratados como slug de loja, porque `app.vexauto.com.br` é onde o app autenticado roda de verdade em produção. Achado durante a implementação de 1.3: a primeira versão só reservava `www`, e teria tratado `app` como slug de loja "app", reescrevendo toda request de produção real para `/site/app/...` e quebrando a autenticação inteira — pego só porque o primeiro teste de middleware do projeto (`tests/unit/middleware.test.ts`, MW-5) foi escrito contra o host real. Essa lista é estrutural, não descoberta automaticamente: se um subdomínio novo de infraestrutura for criado no futuro (`api.vexauto.com.br`, `admin.vexauto.com.br`, `staging.vexauto.com.br`, `mail.vexauto.com.br`, etc.) e ninguém lembrar de adicionar em `RESERVED_SUBDOMAINS`, o mesmo bug volta por outro nome — silenciosamente, só descoberto quando alguém tentar acessar esse subdomínio e cair no roteamento público em vez do serviço esperado.
+
+Business Value
+
+Evita reincidência de um bug de blast radius máximo (autenticação inteira quebrada em produção) por um motivo barato de esquecer (lista hardcoded sem gatilho de lembrete).
+
+Customer Value
+
+Nenhum impacto direto — é proteção de infraestrutura, não feature.
+
+Priority
+
+Baixa complexidade de resolver, mas vale revisar antes de qualquer subdomínio novo de infraestrutura entrar em produção (não é P0 hoje porque nenhum está planejado além de `app`/`www`).
+
+Status
+
+IDEA — não implementado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixo. Opções: (a) checklist manual documentado (ex: nota neste arquivo ou em `18_DEPLOYMENT.md`) lembrando de atualizar `RESERVED_SUBDOMAINS` ao provisionar subdomínio novo; (b) inverter a lógica — em vez de reservar subdomínios de infra, só tratar como slug de loja um subdomínio que exista em `stores.slug` (uma query a mais no middleware, mas elimina a categoria inteira de esquecimento). (b) é mais robusto mas muda o design de "resolução sem I/O no middleware" (`lib/subdomain.ts` é função pura hoje, decisão consciente de 1.3 pra manter o middleware rápido/sem chamada de rede por request) — avaliar custo/benefício quando houver um subdomínio de infra real no radar.
+
+Dependencies
+
+1.3 (rota de leitura pública por subdomínio) — concluído, este item é dívida consciente registrada no mesmo PR.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Achado durante a implementação de 1.3, 2026-08-03 — ver `tests/unit/middleware.test.ts` (MW-5) e `lib/subdomain.ts` (RESERVED_SUBDOMAINS).
+
+Target Version
+
+Sem agendamento — revisar antes de criar qualquer subdomínio de infraestrutura novo.
+
+Success Metrics
+
+Não definido.
+
+Notes
+
+Vitor pediu registro explícito desta dívida ao aprovar o diff de 1.3 (2026-08-03), especificamente pra não repetir o susto do bug de `app.vexauto.com.br`.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

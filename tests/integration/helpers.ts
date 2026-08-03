@@ -30,9 +30,13 @@ export async function createTestStore(suffix = ""): Promise<{
     0,
     15
   );
+  // slug: NOT NULL + UNIQUE desde a migration 033 (stores_slug_format_check
+  // so aceita [a-z0-9] e hifen) - gerado aqui em vez de derivado do nome
+  // porque os testes existentes nao controlam o formato de `suffix`.
+  const slug = `test-store-${Date.now()}-${rand}`;
   const { data, error } = await db
     .from("stores")
-    .insert({ nome: `Test ${suffix} ${Date.now()}`, whatsapp_numero })
+    .insert({ nome: `Test ${suffix} ${Date.now()}`, whatsapp_numero, slug })
     .select("id, whatsapp_numero")
     .single();
   if (error) throw error;

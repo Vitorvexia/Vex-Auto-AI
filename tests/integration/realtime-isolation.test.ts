@@ -42,9 +42,11 @@ const TEST_PREFIX = "__test__realtime-isolation";
 async function createIdentifiableTestStore(label: string): Promise<{ id: string }> {
   const rand = Math.floor(Math.random() * 1_000_000).toString().padStart(6, "0");
   const whatsapp_numero = `+9${Date.now().toString().slice(-8)}${rand}`.slice(0, 15);
+  // slug: NOT NULL + UNIQUE desde a migration 033 (roadmap 1.3).
+  const slug = `test-rt-${label.toLowerCase()}-${Date.now()}-${rand}`;
   const { data, error } = await db
     .from("stores")
-    .insert({ nome: `${TEST_PREFIX}-${label}-${randomUUID()}`, whatsapp_numero })
+    .insert({ nome: `${TEST_PREFIX}-${label}-${randomUUID()}`, whatsapp_numero, slug })
     .select("id")
     .single();
   if (error) throw error;
