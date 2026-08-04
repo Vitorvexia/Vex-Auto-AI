@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { assertSuperAdmin } from "@/lib/admin-auth";
-import { updateStore, createStoreUser } from "./actions";
+import { updateStore, createStoreUser, resetStoreOnboarding } from "./actions";
 import { DirectUserForm } from "./DirectUserForm";
 import { CreateStoreForm } from "./CreateStoreForm";
 
@@ -16,6 +16,7 @@ type Store = {
   whatsapp_phone_number_id: string | null;
   active: boolean;
   created_at: string;
+  onboarding_completed_at: string | null;
   users: StoreUser[] | null;
 };
 
@@ -25,7 +26,7 @@ export default async function AdminPage() {
   const { data: stores } = await supabaseAdmin
     .from("stores")
     .select(
-      "id, nome, whatsapp_numero, whatsapp_phone_number_id, active, created_at, users(id, nome, role)"
+      "id, nome, whatsapp_numero, whatsapp_phone_number_id, active, created_at, onboarding_completed_at, users(id, nome, role)"
     )
     .order("nome");
 
@@ -86,6 +87,15 @@ export default async function AdminPage() {
                       {users.length > 0
                         ? `${users.length} usuário${users.length > 1 ? "s" : ""}`
                         : "Sem Usuário"}
+                    </span>
+                    <span
+                      className={`text-xs px-2 py-0.5 rounded-full font-medium ${
+                        s.onboarding_completed_at
+                          ? "bg-green-100 text-green-800"
+                          : "bg-orange-100 text-orange-700"
+                      }`}
+                    >
+                      {s.onboarding_completed_at ? "Onboarding completo" : "Onboarding pendente"}
                     </span>
                   </div>
                   <div className="text-sm text-gray-500 mt-1">
@@ -171,6 +181,29 @@ export default async function AdminPage() {
                   </form>
                 </div>
               </details>
+
+              {!s.onboarding_completed_at && (
+                <details className="mt-2">
+                  <summary className="cursor-pointer text-sm text-orange-600 hover:underline list-none">
+                    Resetar onboarding (suporte)
+                  </summary>
+                  <div className="mt-3 border-t pt-3">
+                    <p className="text-xs text-gray-500 mb-2">
+                      Loja ainda não terminou o wizard de primeiro acesso. Normal logo após a
+                      criação — só use o botão abaixo se o cliente relatou estar travado e você
+                      confirmou o motivo.
+                    </p>
+                    <form action={resetStoreOnboarding.bind(null, s.id) as unknown as FormAction}>
+                      <button
+                        type="submit"
+                        className="bg-orange-600 text-white rounded px-4 py-1.5 text-sm font-medium"
+                      >
+                        Resetar onboarding
+                      </button>
+                    </form>
+                  </div>
+                </details>
+              )}
 
               {/* Criar usuário com convite */}
               <details className="mt-2">

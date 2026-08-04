@@ -6,13 +6,16 @@ import {
   DEFAULT_APP_ROOT_DOMAIN,
 } from "@/lib/subdomain";
 import { PUBLIC_SITE_ROUTE_HEADER } from "@/lib/public-route-header";
+import { shouldRedirectToOnboarding, isOnboardingExemptPath } from "@/lib/onboarding-guard";
 
 // Rotas hoje protegidas por sessão — preservadas exatamente como estavam
 // antes do roteamento por subdomínio (o matcher ficou mais amplo pra
 // conseguir inspecionar o Host de QUALQUER request, mas isso não deve, por
 // si só, passar a exigir login em rotas que nunca exigiram, ex: "/", "/login",
 // "/privacidade", "/renave", "/agenda" — nenhuma delas estava no matcher
-// original, então nenhuma delas ganha guard de auth novo aqui).
+// original, então nenhuma delas ganha guard de auth novo aqui). "/onboarding"
+// (BL-0026) entra na lista de propósito — precisa de sessão como qualquer
+// outra rota protegida, mesmo sendo isenta do próprio gate de onboarding.
 const PROTECTED_PATH_PREFIXES = [
   "/leads",
   "/conversations",
@@ -21,6 +24,7 @@ const PROTECTED_PATH_PREFIXES = [
   "/analytics",
   "/inicio",
   "/admin",
+  "/onboarding",
 ];
 
 function isProtectedPath(pathname: string): boolean {
@@ -118,15 +122,49 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
   const isAdminRoute = path === "/admin" || path.startsWith("/admin/");
+  // Inlined — cannot import lib/admin-auth.ts here (Edge Runtime, no Node.js APIs).
+  const adminEmails = (process.env.ADMIN_EMAILS ?? "")
+    .split(",")
+    .map((e) => e.trim().toLowerCase())
+    .filter(Boolean);
+  const userEmail = user.email?.toLowerCase() ?? "";
+  const isSuperAdminUser = adminEmails.includes(userEmail);
+
   if (isAdminRoute) {
-    // Inlined — cannot import lib/admin-auth.ts here (Edge Runtime, no Node.js APIs).
-    const adminEmails = (process.env.ADMIN_EMAILS ?? "")
-      .split(",")
-      .map((e) => e.trim().toLowerCase())
-      .filter(Boolean);
-    const userEmail = user.email?.toLowerCase() ?? "";
-    if (!adminEmails.includes(userEmail)) {
+    if (!isSuperAdminUser) {
       return NextResponse.redirect(new URL("/acesso-restrito", request.url));
+    }
+    return response;
+  }
+
+  // Gate de onboarding (BL-0026) — só dono_loja com onboarding pendente é
+  // redirecionado. Query pulada inteiramente quando dá pra decidir sem I/O
+  // (rota isenta ou super_admin já identificado pelo e-mail acima) — reaproveita
+  // a sessão já resolvida por auth.getUser() acima em vez de repetir o padrão
+  // de lib/auth.ts (assertStoreAdmin/getServerUserRole fazem 2x auth.getUser()
+  // cada; aqui é 1 query extra no máximo, sobre a sessão que já existe).
+  if (!isSuperAdminUser && !isOnboardingExemptPath(path)) {
+    const { data: profile } = await supabase
+      .from("users")
+      .select("role, store_id, stores(onboarding_completed_at)")
+      .eq("id", user.id)
+      .single();
+
+    const storeRel = (profile as { stores?: unknown } | null)?.stores;
+    const store = Array.isArray(storeRel) ? storeRel[0] : storeRel;
+    const onboardingCompletedAt =
+      (store as { onboarding_completed_at?: string | null } | undefined)
+        ?.onboarding_completed_at ?? null;
+
+    if (
+      shouldRedirectToOnboarding({
+        pathname: path,
+        isSuperAdmin: false,
+        role: (profile as { role?: string } | null)?.role ?? null,
+        onboardingCompletedAt,
+      })
+    ) {
+      return NextResponse.redirect(new URL("/onboarding", request.url));
     }
   }
 

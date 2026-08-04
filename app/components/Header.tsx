@@ -66,6 +66,11 @@ export function Header({ isAdmin = false }: { isAdmin?: boolean }) {
     return () => document.removeEventListener("mousedown", handler);
   }, [dropOpen]);
 
+  // Wizard de onboarding (BL-0026) roda em tela cheia, sem nav do app —
+  // dono_loja com onboarding pendente nunca deveria ver as outras seções
+  // mesmo antes de terminar o setup.
+  if (pathname === "/onboarding") return null;
+
   return (
     <header className="header">
       <div className="header-inner">

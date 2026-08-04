@@ -48,7 +48,7 @@ vi.mock("@/lib/audit", () => ({
 // Import após mocks
 // ---------------------------------------------------------------------------
 
-import { createStore, updateStore, createStoreUser, createStoreUserDirect, type CreateStoreState } from "@/app/admin/actions";
+import { createStore, updateStore, createStoreUser, createStoreUserDirect, resetStoreOnboarding, type CreateStoreState } from "@/app/admin/actions";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -547,5 +547,52 @@ describe("createStoreUserDirect", () => {
       resourceId: "auth-id-2",
       metadata: { role: "vendedor" },
     });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// resetStoreOnboarding (BL-0026, Task 6)
+// ---------------------------------------------------------------------------
+
+describe("resetStoreOnboarding", () => {
+  it("assertSuperAdmin chamado antes do update", async () => {
+    const c = chain({ eq: { error: null } });
+    c.update.mockReturnValue(c);
+    mockFrom.mockReturnValue(c);
+
+    await resetStoreOnboarding("store-1");
+
+    expect(mockAssertSuperAdmin).toHaveBeenCalledTimes(1);
+  });
+
+  it("sucesso → seta onboarding_completed_at=null, filtra por id, revalida /admin", async () => {
+    const c = chain({ eq: { error: null } });
+    c.update.mockReturnValue(c);
+    mockFrom.mockReturnValue(c);
+
+    const result = await resetStoreOnboarding("store-1");
+
+    expect(mockFrom).toHaveBeenCalledWith("stores");
+    expect(c.update).toHaveBeenCalledWith({ onboarding_completed_at: null });
+    expect(c.eq).toHaveBeenCalledWith("id", "store-1");
+    expect(mockRevalidatePath).toHaveBeenCalledWith("/admin");
+    expect(result).toEqual({ success: true });
+  });
+
+  it("DB error → retorna { error }", async () => {
+    const c = chain({ eq: { error: { message: "db down" } } });
+    c.update.mockReturnValue(c);
+    mockFrom.mockReturnValue(c);
+
+    const result = await resetStoreOnboarding("store-1");
+
+    expect(result).toEqual({ error: "db down" });
+  });
+
+  it("assertSuperAdmin rejeita → erro propagado, sem update", async () => {
+    mockAssertSuperAdmin.mockRejectedValueOnce(new Error("forbidden"));
+
+    await expect(resetStoreOnboarding("store-1")).rejects.toThrow("forbidden");
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });

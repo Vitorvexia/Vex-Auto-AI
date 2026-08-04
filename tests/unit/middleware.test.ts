@@ -18,9 +18,10 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NextRequest } from "next/server";
 
-const { mockGetUser, mockCreateServerClient } = vi.hoisted(() => ({
+const { mockGetUser, mockCreateServerClient, mockFrom } = vi.hoisted(() => ({
   mockGetUser: vi.fn(),
   mockCreateServerClient: vi.fn(),
+  mockFrom: vi.fn(),
 }));
 
 vi.mock("@supabase/ssr", () => ({
@@ -38,12 +39,22 @@ function buildRequest(path: string, host: string): NextRequest {
   });
 }
 
+// profile: null simula usuário sem linha em public.users (ex: superadmin puro).
+function mockProfile(profile: { role: string; store_id: string; stores: { onboarding_completed_at: string | null } } | null) {
+  const chain: Record<string, ReturnType<typeof vi.fn>> = {};
+  const methods = ["select", "eq", "single"];
+  for (const m of methods) chain[m] = vi.fn().mockReturnValue(chain);
+  chain.single = vi.fn().mockResolvedValue({ data: profile, error: null });
+  mockFrom.mockReturnValue(chain);
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
   mockCreateServerClient.mockReturnValue({
     auth: { getUser: mockGetUser },
+    from: mockFrom,
   });
   mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
 });
@@ -142,5 +153,83 @@ describe("middleware — landing page de vendas no apex/www (roadmap 1.7)", () =
     const res = await middleware(buildRequest("/", PROD_HOST));
     expect(res.headers.get("x-middleware-rewrite")).toBeNull();
     expect(res.status).toBe(200);
+  });
+});
+
+describe("middleware — gate de onboarding (BL-0026)", () => {
+  beforeEach(() => {
+    process.env.ADMIN_EMAILS = "vex@vexauto.com.br";
+  });
+
+  it("MW-16: dono_loja com onboarding pendente em /leads → redireciona /onboarding", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "dono@x.com" } }, error: null });
+    mockProfile({ role: "dono_loja", store_id: "store-1", stores: { onboarding_completed_at: null } });
+
+    const res = await middleware(buildRequest("/leads", PROD_HOST));
+
+    expect(res.headers.get("location")).toContain("/onboarding");
+  });
+
+  it("MW-17: dono_loja com onboarding completo em /leads → não redireciona", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "dono@x.com" } }, error: null });
+    mockProfile({ role: "dono_loja", store_id: "store-1", stores: { onboarding_completed_at: "2026-08-01T00:00:00Z" } });
+
+    const res = await middleware(buildRequest("/leads", PROD_HOST));
+
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("MW-18: vendedor com onboarding pendente em /leads → não redireciona, nunca vê o wizard", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u2", email: "vendedor@x.com" } }, error: null });
+    mockProfile({ role: "vendedor", store_id: "store-1", stores: { onboarding_completed_at: null } });
+
+    const res = await middleware(buildRequest("/leads", PROD_HOST));
+
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("MW-19: super_admin (ADMIN_EMAILS) em /leads → não redireciona e não consulta a tabela users (round-trip evitado)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u3", email: "vex@vexauto.com.br" } }, error: null });
+
+    const res = await middleware(buildRequest("/leads", PROD_HOST));
+
+    expect(res.headers.get("location")).toBeNull();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("MW-20: já em /onboarding → não redireciona (sem loop) e não consulta a tabela users", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "dono@x.com" } }, error: null });
+
+    const res = await middleware(buildRequest("/onboarding", PROD_HOST));
+
+    expect(res.headers.get("location")).toBeNull();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("MW-21: /estoque com onboarding pendente → não redireciona (destino do botão 'Ir pro estoque agora') e não consulta a tabela users", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "dono@x.com" } }, error: null });
+
+    const res = await middleware(buildRequest("/estoque", PROD_HOST));
+
+    expect(res.headers.get("location")).toBeNull();
+    expect(mockFrom).not.toHaveBeenCalled();
+  });
+
+  it("MW-22: usuário sem linha em public.users → não redireciona", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "orfao@x.com" } }, error: null });
+    mockProfile(null);
+
+    const res = await middleware(buildRequest("/leads", PROD_HOST));
+
+    expect(res.headers.get("location")).toBeNull();
+  });
+
+  it("MW-23: sem sessão em /onboarding → redireciona /login (rota também exige auth)", async () => {
+    mockGetUser.mockResolvedValue({ data: { user: null }, error: null });
+
+    const res = await middleware(buildRequest("/onboarding", PROD_HOST));
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/login");
   });
 });

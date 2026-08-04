@@ -185,3 +185,21 @@ export async function createStoreUserDirect(
   revalidatePath("/admin");
   return { success: true, password, email };
 }
+
+// Suporte pra destravar uma loja com onboarding preso (BL-0026, spec Edge
+// Case 5) — onboarding_completed_at nunca é limpo automaticamente, só aqui.
+export async function resetStoreOnboarding(
+  storeId: string
+): Promise<{ error: string } | { success: true }> {
+  await assertSuperAdmin();
+
+  const { error } = await supabaseAdmin
+    .from("stores")
+    .update({ onboarding_completed_at: null })
+    .eq("id", storeId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath("/admin");
+  return { success: true };
+}
