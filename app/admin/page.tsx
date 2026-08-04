@@ -23,12 +23,22 @@ type Store = {
 export default async function AdminPage() {
   await assertSuperAdmin();
 
-  const { data: stores } = await supabaseAdmin
+  const { data: stores, error } = await supabaseAdmin
     .from("stores")
     .select(
       "id, nome, whatsapp_numero, whatsapp_phone_number_id, active, created_at, onboarding_completed_at, users(id, nome, role)"
     )
     .order("nome");
+
+  if (error) {
+    return (
+      <main className="p-6 max-w-5xl mx-auto">
+        <p className="text-red-600 text-sm">
+          Erro ao carregar lojas: {error.message}
+        </p>
+      </main>
+    );
+  }
 
   return (
     <main className="p-6 max-w-5xl mx-auto">
