@@ -1,17 +1,21 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { notFound } from "next/navigation";
 import { createPublicSupabaseClient } from "@/lib/supabase-public";
-import { resolveStoreIdBySlug, getPublicVehicleById } from "@/lib/public-store";
+import { getPublicStoreBySlug, getPublicVehicleById } from "@/lib/public-store";
 import { ContactForm } from "./ContactForm";
+import { StoreBrandHeader } from "../../StoreBrandHeader";
+import { StoreFooter } from "../../StoreFooter";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Página de detalhe do site público da loja (roadmap 1.4). Mesma allowlist
-// de dados do card de listagem (id/store_id/marca/modelo/ano/preco/photo_url/
-// disponivel) — nunca custo/margem_minima, mesma decisão da migration 034.
-// "Voltar" usa link relativo à raiz do site ("/"), não "/site/[slug]" — ver
-// nota em app/site/[slug]/page.tsx sobre por que os links são relativos.
+// Página de detalhe do site público da loja (roadmap 1.4/1.5). Mesma
+// allowlist de dados do card de listagem (id/store_id/marca/modelo/ano/preco/
+// photo_url/disponivel) — nunca custo/margem_minima, mesma decisão da
+// migration 034. Identidade visual (logo/cor/contato) segue o mesmo padrão de
+// app/site/[slug]/page.tsx. "Voltar" usa link relativo à raiz do site ("/"),
+// não "/site/[slug]" — ver nota lá sobre por que os links são relativos.
 export default async function PublicVehicleDetailPage({
   params,
 }: {
@@ -19,14 +23,20 @@ export default async function PublicVehicleDetailPage({
 }) {
   const supabase = createPublicSupabaseClient();
 
-  const storeId = await resolveStoreIdBySlug(supabase, params.slug);
-  if (!storeId) notFound();
+  const store = await getPublicStoreBySlug(supabase, params.slug);
+  if (!store) notFound();
 
-  const vehicle = await getPublicVehicleById(supabase, storeId, params.vehicleId);
+  const vehicle = await getPublicVehicleById(supabase, store.id, params.vehicleId);
   if (!vehicle) notFound();
 
+  const accentStyle = store.cor_primaria
+    ? ({ "--accent": store.cor_primaria } as CSSProperties)
+    : undefined;
+
   return (
-    <div className="site-public">
+    <div className="site-public" style={accentStyle}>
+      <StoreBrandHeader store={store} />
+
       <Link href="/" className="site-public-back">← Voltar ao estoque</Link>
 
       <div className="site-vehicle-detail">
@@ -55,6 +65,8 @@ export default async function PublicVehicleDetailPage({
           <ContactForm slug={params.slug} />
         </div>
       </div>
+
+      <StoreFooter store={store} />
     </div>
   );
 }

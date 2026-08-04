@@ -13,6 +13,7 @@ import {
   resolveStoreIdBySlug,
   getPublicVehicleListings,
   getPublicVehicleById,
+  getPublicStoreBySlug,
 } from "@/lib/public-store";
 
 function buildChain(finalResult: { data: unknown; error: unknown }) {
@@ -180,5 +181,72 @@ describe("getPublicVehicleById", () => {
     await expect(getPublicVehicleById(supabase, "store-a", "v-1")).rejects.toThrow(
       "view unavailable"
     );
+  });
+});
+
+// ---------------------------------------------------------------------------
+// getPublicStoreBySlug (roadmap 1.5 — config visual por loja)
+// ---------------------------------------------------------------------------
+
+describe("getPublicStoreBySlug", () => {
+  const row = {
+    id: "store-a",
+    slug: "speedmotos",
+    nome: "Speed Motos",
+    logo_url: "https://x/logo.png",
+    cor_primaria: "#FF0000",
+    telefone_publico: "+55 11 99999-0000",
+    endereco: "Rua A, 123",
+    sobre: "Loja de motos usadas.",
+  };
+
+  it("PS-14: consulta a VIEW public_store_lookup filtrando por slug — nunca a tabela stores direto", async () => {
+    const chain = buildChain({ data: row, error: null });
+    const from = vi.fn().mockReturnValue(chain);
+    const supabase = { from } as unknown as Parameters<typeof getPublicStoreBySlug>[0];
+
+    const store = await getPublicStoreBySlug(supabase, "speedmotos");
+
+    expect(store).toEqual(row);
+    expect(from).toHaveBeenCalledWith("public_store_lookup");
+    expect(from).not.toHaveBeenCalledWith("stores");
+    expect(chain.eq).toHaveBeenCalledWith("slug", "speedmotos");
+  });
+
+  it("PS-15: select() nunca pede whatsapp_numero nem whatsapp_phone_number_id — allowlist explícita", async () => {
+    const chain = buildChain({ data: row, error: null });
+    const from = vi.fn().mockReturnValue(chain);
+    const supabase = { from } as unknown as Parameters<typeof getPublicStoreBySlug>[0];
+
+    await getPublicStoreBySlug(supabase, "speedmotos");
+
+    const selectedColumns = chain.select.mock.calls[0][0] as string;
+    expect(selectedColumns).not.toContain("whatsapp");
+    expect(selectedColumns).not.toBe("*");
+    expect(selectedColumns).toContain("nome");
+    expect(selectedColumns).toContain("logo_url");
+    expect(selectedColumns).toContain("cor_primaria");
+    expect(selectedColumns).toContain("telefone_publico");
+    expect(selectedColumns).toContain("endereco");
+    expect(selectedColumns).toContain("sobre");
+  });
+
+  it("PS-16: slug inexistente retorna null (não lança)", async () => {
+    const chain = buildChain({ data: null, error: null });
+    const from = vi.fn().mockReturnValue(chain);
+    const supabase = { from } as unknown as Parameters<typeof getPublicStoreBySlug>[0];
+
+    const store = await getPublicStoreBySlug(supabase, "loja-que-nao-existe");
+
+    expect(store).toBeNull();
+  });
+
+  it("PS-17: erro de query é propagado", async () => {
+    const dbError = new Error("boom");
+    const chain = buildChain({ data: null, error: dbError });
+    const from = vi.fn().mockReturnValue(chain);
+    const supabase = { from } as unknown as Parameters<typeof getPublicStoreBySlug>[0];
+
+    await expect(getPublicStoreBySlug(supabase, "speedmotos")).rejects.toThrow("boom");
   });
 });

@@ -1,18 +1,20 @@
 import Link from "next/link";
+import type { CSSProperties } from "react";
 import { notFound } from "next/navigation";
 import { createPublicSupabaseClient } from "@/lib/supabase-public";
-import {
-  resolveStoreIdBySlug,
-  getPublicVehicleListings,
-} from "@/lib/public-store";
+import { getPublicStoreBySlug, getPublicVehicleListings } from "@/lib/public-store";
+import { StoreBrandHeader } from "./StoreBrandHeader";
+import { StoreFooter } from "./StoreFooter";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
-// Site público da loja (roadmap 1.4) — template único, multi-tenant. Estilo
-// neutro/padrão do sistema (tokens de app/globals.css) — identidade visual
-// por loja (logo, cor, texto "sobre") é o item 1.5, próximo do roadmap, não
-// antecipado aqui.
+// Site público da loja (roadmap 1.4/1.5) — template único, multi-tenant.
+// Identidade visual por loja (logo, cor primária, telefone, endereço,
+// "sobre") vem da view public_store_lookup (migration 039). cor_primaria
+// sobrescreve --accent só dentro de .site-public (style inline no container
+// raiz) — nunca vaza pro app autenticado, que tem seu próprio --accent fixo
+// em globals.css.
 //
 // Links de veículo são relativos (`/veiculo/[id]`, não `/site/[slug]/veiculo/[id]`)
 // de propósito: em produção o visitante está em nomedaloja.vexauto.com.br —
@@ -20,10 +22,6 @@ export const revalidate = 0;
 // barra do navegador continua sendo a do subdomínio real. Um Link absoluto
 // com o prefixo /site/[slug] quebraria a navegação em produção (o middleware
 // tentaria reescrever de novo por cima).
-//
-// Nome da loja não aparece aqui — public_store_lookup (migration 035) expõe
-// só id/slug de propósito (nunca nome/whatsapp), então o cabeçalho é
-// genérico até o item 1.5 decidir como/onde a identidade da loja entra.
 export default async function PublicStorePage({
   params,
 }: {
@@ -31,15 +29,22 @@ export default async function PublicStorePage({
 }) {
   const supabase = createPublicSupabaseClient();
 
-  const storeId = await resolveStoreIdBySlug(supabase, params.slug);
-  if (!storeId) notFound();
+  const store = await getPublicStoreBySlug(supabase, params.slug);
+  if (!store) notFound();
 
-  const vehicles = await getPublicVehicleListings(supabase, storeId);
+  const vehicles = await getPublicVehicleListings(supabase, store.id);
+
+  const accentStyle = store.cor_primaria
+    ? ({ "--accent": store.cor_primaria } as CSSProperties)
+    : undefined;
 
   return (
-    <div className="site-public">
+    <div className="site-public" style={accentStyle}>
+      <StoreBrandHeader store={store} />
+
       <header className="site-public-header">
-        <h1>Veículos disponíveis</h1>
+        <h1>{store.nome}</h1>
+        <div className="site-public-header-subtitle">Veículos disponíveis</div>
       </header>
 
       {vehicles.length === 0 ? (
@@ -67,6 +72,8 @@ export default async function PublicStorePage({
           ))}
         </div>
       )}
+
+      <StoreFooter store={store} />
     </div>
   );
 }

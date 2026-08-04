@@ -18,6 +18,37 @@ export interface PublicVehicleListing {
  * só libera authenticated via my_store_id()), então SELECT direto retornaria
  * sempre 0 linhas para a rota pública.
  */
+export interface PublicStoreInfo {
+  id: string;
+  slug: string;
+  nome: string;
+  logo_url: string | null;
+  cor_primaria: string | null;
+  telefone_publico: string | null;
+  endereco: string | null;
+  sobre: string | null;
+}
+
+/**
+ * Busca dados públicos de identidade da loja por slug (roadmap 1.5) — nome,
+ * logo, cor primária, telefone, endereço, sobre. Mesma VIEW de
+ * resolveStoreIdBySlug (migration 039 estendeu a allowlist), nunca `stores`
+ * direto — allowlist explícita, nunca whatsapp_numero/whatsapp_phone_number_id
+ * ou qualquer credencial.
+ */
+export async function getPublicStoreBySlug(
+  supabase: SupabaseClient,
+  slug: string
+): Promise<PublicStoreInfo | null> {
+  const { data, error } = await supabase
+    .from("public_store_lookup")
+    .select("id, slug, nome, logo_url, cor_primaria, telefone_publico, endereco, sobre")
+    .eq("slug", slug)
+    .maybeSingle();
+  if (error) throw error;
+  return (data as PublicStoreInfo | null) ?? null;
+}
+
 export async function resolveStoreIdBySlug(
   supabase: SupabaseClient,
   slug: string
