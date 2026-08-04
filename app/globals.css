@@ -880,7 +880,6 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
   width: 40px; height: 40px; object-fit: contain; border-radius: 8px;
   background: var(--panel-2); border: 1px solid var(--border);
 }
-.site-public-brand-name { font-size: 15px; font-weight: 700; color: var(--text-strong); }
 
 .site-public-footer {
   margin-top: 40px; padding-top: 20px; border-top: 1px solid var(--border);
