@@ -1,5 +1,5 @@
 -- =============================================================================
--- Vex Auto  Migration 021 — Onboarding wizard tracking
+-- Vex Auto  Migration 040 — Onboarding wizard tracking
 -- =============================================================================
 -- Adiciona rastreio de progresso do wizard de primeiro acesso (self-service).
 --
