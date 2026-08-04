@@ -1944,6 +1944,78 @@ Passo de WhatsApp self-service (`updateStoreWhatsAppSelfService`, já existe no 
 
 ---
 
+BL-0027
+
+Title
+
+Teste de integração PVL-8 (public-vehicle-listings.test.ts) falha — desalinhado com a allowlist real de public_store_lookup desde a migration 039
+
+Problem
+
+`tests/integration/public-vehicle-listings.test.ts`, teste `PVL-8: public_store_lookup nunca expõe nome/whatsapp_numero, mesmo com select('*')` falha contra Supabase real:
+
+```
+AssertionError: expected [ 'id', 'slug', 'nome', …(5) ] to not include 'nome'
+❯ tests/integration/public-vehicle-listings.test.ts:164:39
+    expect(Object.keys(data![0])).not.toContain("nome");
+```
+
+Causa raiz: o teste foi escrito na migration 035 (roadmap 1.3), quando `public_store_lookup` só expunha `id`/`slug` de propósito (nunca `nome`, ver nota em `27_PROJECT_STATUS.md`, entrada 1.3). A migration 039 (roadmap 1.5, config visual por loja) estendeu deliberadamente a allowlist da view pra `id, slug, nome, logo_url, cor_primaria, telefone_publico, endereco, sobre` — `nome` virou público de propósito (site da loja precisa exibir o nome), documentado no próprio comentário da migration 039 e na entrada 1.5 de `27_PROJECT_STATUS.md`. O teste PVL-8 não foi atualizado nesse momento e ficou testando o comportamento antigo (035), não o comportamento atual desejado (039). **Não é regressão de segurança** — `whatsapp_numero`/`whatsapp_phone_number_id` continuam fora da allowlist, só `nome` que passou a ser esperado e não está coberto pela assertion. Confirmado quebrado em main antes de qualquer trabalho do item 1.6 (`git stash`/checkout limpo reproduz a mesma falha) — não foi introduzido pelo rebase de `feat/onboarding-wizard`.
+
+Business Value
+
+Suíte de integração com teste vermelho conhecido é ruído — mascara falha real futura na mesma allowlist (ex: se `whatsapp_numero` vazar de verdade, ninguém vai notar um teste a mais falhando numa suíte que já falha).
+
+Customer Value
+
+Nenhum direto — é dívida de qualidade de teste, não bug de produto. Produção não expõe dado sensível (confirmado: `whatsapp_numero`/`whatsapp_phone_number_id` seguem fora da view).
+
+Priority
+
+Baixa complexidade, mas resolver logo — é 1 assertion errada, não redesenho. Vale corrigir antes que mais alguém rode a suíte de integração e gaste tempo reinvestigando o mesmo achado.
+
+Status
+
+IDEA — não corrigido. Fix é atualizar a assertion de PVL-8 pra refletir a allowlist pós-039 (remover `nome` da lista de campos que não devem aparecer, manter `whatsapp_numero`/`whatsapp_phone_number_id`).
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Trivial — 1 linha de assertion em `tests/integration/public-vehicle-listings.test.ts:164`.
+
+Dependencies
+
+Nenhuma — migration 039 já está em produção.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Achado durante validação de suíte completa do item 1.6 (2026-08-04, `DL-0013`/`53_ROADMAP.md`), confirmado pré-existente em main antes desse trabalho.
+
+Target Version
+
+Sem agendamento — próxima vez que alguém tocar `tests/integration/public-vehicle-listings.test.ts` ou rodar a suíte de integração completa.
+
+Success Metrics
+
+Não definido.
+
+Notes
+
+Registrado a pedido do Vitor pra não deixar falha de teste conhecida sem rastro — ver confirmação em `27_PROJECT_STATUS.md`, entrada 1.6 ("1 falha pré-existente em `public-vehicle-listings.test.ts`").
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
