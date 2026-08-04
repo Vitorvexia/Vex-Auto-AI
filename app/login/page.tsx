@@ -26,17 +26,20 @@ function LoginForm() {
     setLoading(true);
     setError(null);
 
-    const supabase = createBrowserClient(url, key);
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    try {
+      const supabase = createBrowserClient(url, key);
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
 
-    if (error) {
-      setError("E-mail ou senha inválidos.");
+      if (error) {
+        setError("E-mail ou senha inválidos.");
+        return;
+      }
+
+      router.push(redirectTo);
+      router.refresh();
+    } finally {
       setLoading(false);
-      return;
     }
-
-    router.push(redirectTo);
-    router.refresh();
   }
 
   return (
