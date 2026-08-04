@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { extractStoreSlugFromHost, DEFAULT_APP_ROOT_DOMAIN } from "@/lib/subdomain";
+import {
+  extractStoreSlugFromHost,
+  isMarketingApexHost,
+  DEFAULT_APP_ROOT_DOMAIN,
+} from "@/lib/subdomain";
 
 describe("extractStoreSlugFromHost — resolução de loja por subdomínio (roadmap 1.3)", () => {
   it("SUB-1: subdomínio de produção extrai o slug", () => {
@@ -91,5 +95,58 @@ describe("extractStoreSlugFromHost — resolução de loja por subdomínio (road
 
   it("DEFAULT_APP_ROOT_DOMAIN é exportado para uso no middleware", () => {
     expect(DEFAULT_APP_ROOT_DOMAIN).toBe("vexauto.com.br");
+  });
+});
+
+describe("isMarketingApexHost — detecta apex/www da landing page (roadmap 1.7)", () => {
+  it("MKT-1: apex do domínio raiz é host de marketing", () => {
+    expect(isMarketingApexHost("vexauto.com.br")).toBe(true);
+  });
+
+  it("MKT-2: www do domínio raiz é host de marketing", () => {
+    expect(isMarketingApexHost("www.vexauto.com.br")).toBe(true);
+  });
+
+  it("MKT-3: subdomínio de loja não é host de marketing", () => {
+    expect(isMarketingApexHost("speedmotos.vexauto.com.br")).toBe(false);
+  });
+
+  it("MKT-4: app.vexauto.com.br (app autenticado) não é host de marketing", () => {
+    expect(isMarketingApexHost("app.vexauto.com.br")).toBe(false);
+  });
+
+  it("MKT-5: domínio de preview da Vercel não é host de marketing", () => {
+    expect(isMarketingApexHost("vex-auto-git-main-vitor.vercel.app")).toBe(false);
+  });
+
+  it("MKT-6: host nulo/vazio não é host de marketing", () => {
+    expect(isMarketingApexHost(null)).toBe(false);
+    expect(isMarketingApexHost("")).toBe(false);
+  });
+
+  it("MKT-7: localhost puro é host de marketing (paridade dev/prod)", () => {
+    expect(isMarketingApexHost("localhost:3000")).toBe(true);
+  });
+
+  it("MKT-8: www.localhost é host de marketing", () => {
+    expect(isMarketingApexHost("www.localhost:3000")).toBe(true);
+  });
+
+  it("MKT-9: app.localhost não é host de marketing", () => {
+    expect(isMarketingApexHost("app.localhost:3000")).toBe(false);
+  });
+
+  it("MKT-10: rootDomain customizável via parâmetro", () => {
+    expect(
+      isMarketingApexHost("outrodominio.com", "outrodominio.com")
+    ).toBe(true);
+  });
+
+  it("MKT-11: porta no host não interfere", () => {
+    expect(isMarketingApexHost("vexauto.com.br:3000")).toBe(true);
+  });
+
+  it("MKT-12: comparação é case-insensitive", () => {
+    expect(isMarketingApexHost("VexAuto.com.br")).toBe(true);
   });
 });

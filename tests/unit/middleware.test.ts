@@ -115,3 +115,32 @@ describe("middleware — roteamento público por subdomínio (roadmap 1.3)", () 
     expect(res.headers.get(`x-middleware-request-${PUBLIC_SITE_ROUTE_HEADER}`)).toBeNull();
   });
 });
+
+describe("middleware — landing page de vendas no apex/www (roadmap 1.7)", () => {
+  it("MW-11: apex \"/\" reescreve para /marketing sem checar sessão", async () => {
+    const res = await middleware(buildRequest("/", "vexauto.com.br"));
+    expect(res.headers.get("x-middleware-rewrite")).toContain("/marketing");
+    expect(mockGetUser).not.toHaveBeenCalled();
+  });
+
+  it("MW-12: www \"/\" também reescreve para /marketing", async () => {
+    const res = await middleware(buildRequest("/", "www.vexauto.com.br"));
+    expect(res.headers.get("x-middleware-rewrite")).toContain("/marketing");
+  });
+
+  it("MW-13 (regressão): apex reescrito marca PUBLIC_SITE_ROUTE_HEADER — landing não herda Header do app autenticado", async () => {
+    const res = await middleware(buildRequest("/", "vexauto.com.br"));
+    expect(res.headers.get(`x-middleware-request-${PUBLIC_SITE_ROUTE_HEADER}`)).toBe("1");
+  });
+
+  it("MW-14: apex em path diferente de \"/\" (ex: /login) NÃO é reescrito para /marketing", async () => {
+    const res = await middleware(buildRequest("/login", "vexauto.com.br"));
+    expect(res.headers.get("x-middleware-rewrite")).toBeNull();
+  });
+
+  it("MW-15: app.vexauto.com.br \"/\" NÃO é reescrito para /marketing — é o app autenticado, não apex/www", async () => {
+    const res = await middleware(buildRequest("/", PROD_HOST));
+    expect(res.headers.get("x-middleware-rewrite")).toBeNull();
+    expect(res.status).toBe(200);
+  });
+});

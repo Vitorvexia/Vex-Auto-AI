@@ -1,6 +1,10 @@
 import { NextResponse, type NextRequest } from "next/server";
 import { createServerClient } from "@supabase/ssr";
-import { extractStoreSlugFromHost, DEFAULT_APP_ROOT_DOMAIN } from "@/lib/subdomain";
+import {
+  extractStoreSlugFromHost,
+  isMarketingApexHost,
+  DEFAULT_APP_ROOT_DOMAIN,
+} from "@/lib/subdomain";
 import { PUBLIC_SITE_ROUTE_HEADER } from "@/lib/public-route-header";
 
 // Rotas hoje protegidas por sessão — preservadas exatamente como estavam
@@ -44,6 +48,26 @@ export async function middleware(request: NextRequest) {
     // permite que um layout aninhado (app/site/[slug]/layout.tsx) remova JSX
     // renderizado por um layout ancestral (app/layout.tsx envolve TODAS as
     // rotas). Este é o mecanismo real; ver app/components/AppChrome.tsx.
+    const requestHeaders = new Headers(request.headers);
+    requestHeaders.set(PUBLIC_SITE_ROUTE_HEADER, "1");
+    return NextResponse.rewrite(url, { request: { headers: requestHeaders } });
+  }
+
+  // Landing page de vendas do Vex Auto (roadmap 1.7) — só a raiz "/" do
+  // apex/www é reescrita; outros paths no mesmo host (/login, /privacidade
+  // etc.) seguem intocados pro fluxo normal abaixo. Reaproveita
+  // PUBLIC_SITE_ROUTE_HEADER (mesmo marcador do site público de loja) porque
+  // o efeito desejado é idêntico: layout próprio, sem o Header do app
+  // autenticado. Ver app/marketing/page.tsx.
+  if (
+    request.nextUrl.pathname === "/" &&
+    isMarketingApexHost(
+      host,
+      process.env.NEXT_PUBLIC_APP_ROOT_DOMAIN ?? DEFAULT_APP_ROOT_DOMAIN
+    )
+  ) {
+    const url = request.nextUrl.clone();
+    url.pathname = "/marketing";
     const requestHeaders = new Headers(request.headers);
     requestHeaders.set(PUBLIC_SITE_ROUTE_HEADER, "1");
     return NextResponse.rewrite(url, { request: { headers: requestHeaders } });

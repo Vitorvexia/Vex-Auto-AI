@@ -69,3 +69,22 @@ export function extractStoreSlugFromHost(
   // tratado como subdomínio de loja. Cai no fluxo normal do app autenticado.
   return null;
 }
+
+// Detecta se o host é o apex ou o "www" do domínio raiz — onde a landing
+// page de vendas (roadmap 1.7) deve renderizar. Função separada de
+// extractStoreSlugFromHost porque ali apex, www, "app" reservado e domínio
+// desconhecido todos retornam null igualmente — não dá pra distinguir "é
+// mesmo o apex/www do Vex" de "é um host qualquer não reconhecido" a partir
+// só do retorno null.
+export function isMarketingApexHost(
+  host: string | null | undefined,
+  rootDomain: string = DEFAULT_APP_ROOT_DOMAIN
+): boolean {
+  if (!host) return false;
+  const hostname = stripPort(host).toLowerCase();
+  const root = rootDomain.toLowerCase();
+  if (hostname === root || hostname === `www.${root}`) return true;
+  // localhost puro (sem subdomínio) — paridade dev/prod com o apex real,
+  // mesmo espírito do devFallback em extractStoreSlugFromHost.
+  return hostname === "localhost" || hostname === "www.localhost";
+}
