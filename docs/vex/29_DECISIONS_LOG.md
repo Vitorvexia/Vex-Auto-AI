@@ -259,6 +259,72 @@ Date
 
 Decision ID
 
+DL-0014
+
+Title
+
+stores.slug — gap entre migration 033 (backfill) e createStore() nunca coberto, exposto na primeira criação de loja pela UI desde o roadmap 1.3
+
+Category
+
+Engineering
+
+Context
+
+Migration 033 (`033_stores_slug.sql`, roadmap 1.3 — rota pública por subdomínio) adicionou `stores.slug` como `NOT NULL` + `UNIQUE` + `CHECK` de formato, com backfill determinístico só das lojas que já existiam na hora em que a migration rodou. `app/admin/actions.ts::createStore()` nunca foi atualizado pra gerar `slug` em criações novas — ninguém tentou criar uma loja pela UI entre a 033 e agora (04/08), então o gap ficou invisível por semanas. Descoberto ao testar manualmente o BL-0026 (wizard de onboarding): criar uma "Loja Teste Onboarding" pela UI quebrou com `null value in column "slug" of relation "stores" violates not-null constraint`.
+
+Decision
+
+Gerar `slug` em `createStore()` reaproveitando exatamente o mesmo algoritmo do backfill da migration 033 (unaccent + lowercase + não-alfanumérico→hífen + trim), extraído como função pura em `lib/store-slug.ts` (`slugifyStoreName`, `nextAvailableSlug`). Colisão de slug (mesmo nome de loja usado duas vezes) resolvida com sufixo `-2`, `-3`, ... — mesmo esquema de numeração da migration. Erro `23505` na inserção passa a diferenciar colisão de `slug` (rara, corrida) de colisão de `whatsapp_numero` (caso já tratado antes), evitando mensagem enganosa ao super-admin.
+
+Reasoning
+
+Migrations que fazem backfill de coluna `NOT NULL` só cobrem o estado passado — qualquer caminho de escrita (Server Action, endpoint) que insere linha nova precisa ser atualizado no mesmo PR/branch, senão o gap só aparece quando alguém tenta o caminho não coberto. Aqui isso levou ~2 semanas pra aparecer porque nenhuma loja nova foi criada nesse intervalo.
+
+Alternatives Considered
+
+Gerar slug via trigger no banco (`BEFORE INSERT`) em vez de código da aplicação — rejeitado por ora: mudaria onde a lógica de negócio mora (banco vs. `lib/`), inconsistente com o padrão do projeto de manter lógica de domínio em funções puras testáveis em `lib/`. Reavaliar se mais pontos de escrita em `stores` aparecerem (hoje só `createStore()`).
+
+Expected Impact
+
+Criação de loja pela UI do admin volta a funcionar. Nenhum impacto em lojas existentes (já têm slug via backfill da 033).
+
+Potential Risks
+
+Se outro ponto de código no futuro fizer `insert` direto em `stores` (fora de `createStore()`), o mesmo gap se repete — não há trigger de banco garantindo `slug` sempre presente, só a convenção de passar pela Server Action. Considerar trigger `BEFORE INSERT` se um segundo caminho de escrita em `stores` aparecer.
+
+Owner
+
+Engineering
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0026 (onboarding wizard) — bug encontrado durante teste manual, não faz parte do escopo original
+
+Related Runbook
+
+None
+
+Review Date
+
+Se um segundo ponto de insert em `stores` for criado — avaliar mover geração de slug pra trigger de banco em vez de duplicar a lógica em mais um Server Action.
+
+Status
+
+Active
+
+---
+
+Date
+
+2026-08-04
+
+Decision ID
+
 DL-0013
 
 Title

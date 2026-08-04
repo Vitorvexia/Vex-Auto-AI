@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { assertSuperAdmin } from "@/lib/admin-auth";
 import { supabaseAdmin } from "@/lib/supabase";
 import { logAudit } from "@/lib/audit";
+import { slugifyStoreName, nextAvailableSlug } from "@/lib/store-slug";
 
 export type CreateStoreState = { success: true } | { error: string } | null;
 
@@ -16,6 +17,18 @@ export type CreateUserState =
 // autenticação do Server Component que as invoca.
 
 const E164_REGEX = /^\+[1-9][0-9]{6,14}$/;
+
+// stores.slug é NOT NULL + UNIQUE desde a migration 033 (roadmap 1.3), mas
+// essa migration só fez backfill das lojas que já existiam na hora — nunca
+// atualizou este createStore() pra gerar slug em criações novas. Gap ficou
+// sem dono até uma loja nova ser criada pela primeira vez pela UI (ver
+// docs/vex/29_DECISIONS_LOG.md).
+async function generateUniqueStoreSlug(nome: string): Promise<string> {
+  const base = slugifyStoreName(nome);
+  const { data } = await supabaseAdmin.from("stores").select("slug");
+  const taken = new Set((data ?? []).map((s: { slug: string }) => s.slug));
+  return nextAvailableSlug(base, taken);
+}
 
 export async function createStore(
   _prev: CreateStoreState,
@@ -34,15 +47,22 @@ export async function createStore(
   if (!E164_REGEX.test(whatsappNumero))
     return { error: "formato inválido: use +55DDD9XXXXXXXX (E.164)" };
 
+  const slug = await generateUniqueStoreSlug(nome);
+
   const { error } = await supabaseAdmin.from("stores").insert({
     nome,
     whatsapp_numero: whatsappNumero,
     whatsapp_phone_number_id: phoneId,
+    slug,
   });
 
   if (error) {
-    if (error.code === "23505")
+    if (error.code === "23505") {
+      if (error.message.toLowerCase().includes("slug")) {
+        return { error: "Conflito ao gerar identificador da loja — tente salvar de novo." };
+      }
       return { error: "Já existe uma loja cadastrada com este WhatsApp." };
+    }
     return { error: error.message };
   }
   revalidatePath("/admin");

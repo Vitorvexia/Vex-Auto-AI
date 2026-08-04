@@ -169,6 +169,63 @@ describe("createStore", () => {
     ).rejects.toThrow("redirect:/leads");
     expect(mockFrom).not.toHaveBeenCalled();
   });
+
+  // -------------------------------------------------------------------------
+  // Regressão: "null value in column \"slug\" of relation \"stores\" violates
+  // not-null constraint" — migration 033 (roadmap 1.3) fez backfill das lojas
+  // existentes mas createStore() nunca foi atualizado pra gerar slug em
+  // criações novas. Ver docs/vex/29_DECISIONS_LOG.md.
+  // -------------------------------------------------------------------------
+
+  it("insert sempre recebe slug não-nulo derivado do nome (bug do NOT NULL constraint)", async () => {
+    let insertPayload: Record<string, unknown> | undefined;
+    mockFrom.mockImplementation(() => {
+      const c = chain({ select: { data: [], error: null }, insert: { data: null, error: null } });
+      const originalInsert = c.insert as ReturnType<typeof vi.fn>;
+      c.insert = vi.fn((payload: Record<string, unknown>) => {
+        insertPayload = payload;
+        return originalInsert(payload);
+      });
+      return c;
+    });
+
+    await createStore(prev, makeForm({ nome: "Speed Motos São José", whatsapp_numero: "+5511999990001" }));
+
+    expect(insertPayload?.slug).toBe("speed-motos-sao-jose");
+  });
+
+  it("slug colidindo com loja existente → gera sufixo -2 em vez de estourar UNIQUE", async () => {
+    let insertPayload: Record<string, unknown> | undefined;
+    mockFrom.mockImplementation(() => {
+      const c = chain({
+        select: { data: [{ slug: "loja-teste" }], error: null },
+        insert: { data: null, error: null },
+      });
+      const originalInsert = c.insert as ReturnType<typeof vi.fn>;
+      c.insert = vi.fn((payload: Record<string, unknown>) => {
+        insertPayload = payload;
+        return originalInsert(payload);
+      });
+      return c;
+    });
+
+    await createStore(prev, makeForm({ nome: "Loja Teste", whatsapp_numero: "+5511999990002" }));
+
+    expect(insertPayload?.slug).toBe("loja-teste-2");
+  });
+
+  it("23505 por colisão de slug (corrida rara) → mensagem distinta da de WhatsApp duplicado", async () => {
+    mockFrom.mockReturnValue(
+      chain({
+        select: { data: [], error: null },
+        insert: { data: null, error: { code: "23505", message: 'duplicate key value violates unique constraint "stores_slug_uidx"' } },
+      })
+    );
+
+    const result = await createStore(prev, makeForm({ nome: "Loja X", whatsapp_numero: "+5511999990001" }));
+
+    expect(result).toEqual({ error: expect.stringContaining("identificador da loja") });
+  });
 });
 
 // ---------------------------------------------------------------------------
