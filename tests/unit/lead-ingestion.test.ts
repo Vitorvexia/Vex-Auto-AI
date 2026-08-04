@@ -220,6 +220,24 @@ it("T8: origem default é 'manual' quando não informada", async () => {
 // T8b — origem 'site' (roadmap 1.4 — contato do site público da loja)
 // ---------------------------------------------------------------------------
 
+it("T8c: mensagem de sistema difere por origem — 'site' gera texto próprio, 'manual' mantém o genérico", async () => {
+  setupNewLead();
+  await ingestLeadManually({ ...BASE, origem: "site" });
+  const messagesInsertChainSite = mockFrom.mock.results[4].value;
+  expect(messagesInsertChainSite.insert).toHaveBeenCalledWith(
+    expect.objectContaining({ mensagem: "Lead recebido pelo site." })
+  );
+
+  vi.clearAllMocks();
+  mockGetServerStoreId.mockResolvedValue("store-1");
+  setupNewLead();
+  await ingestLeadManually(BASE); // origem default 'manual'
+  const messagesInsertChainManual = mockFrom.mock.results[4].value;
+  expect(messagesInsertChainManual.insert).toHaveBeenCalledWith(
+    expect.objectContaining({ mensagem: "Lead importado manualmente." })
+  );
+});
+
 it("T8b: aceita origem 'site' e persiste no insert do lead", async () => {
   setupNewLead();
   await ingestLeadManually({ ...BASE, origem: "site" });

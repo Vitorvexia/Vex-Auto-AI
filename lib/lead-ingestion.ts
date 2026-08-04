@@ -54,7 +54,8 @@ export async function ingestLeadManually(
 
     const convId = await createConversationAndMessage(
       existingLead.id,
-      input.storeId
+      input.storeId,
+      origem
     );
     return { status: "existing", leadId: existingLead.id, conversationId: convId };
   }
@@ -98,13 +99,28 @@ export async function ingestLeadManually(
     return { status: "created", leadId: newLead.id, conversationId: existingConv.id };
   }
 
-  const convId = await createConversationAndMessage(newLead.id, input.storeId);
+  const convId = await createConversationAndMessage(newLead.id, input.storeId, origem);
   return { status: "created", leadId: newLead.id, conversationId: convId };
 }
 
+/**
+ * Mensagem de sistema por origem — Record<Origem, string> força o TypeScript
+ * a exigir uma entrada pra toda origem existente em types/domain.ts. Uma
+ * origem nova no union quebra o build aqui até alguém decidir a mensagem
+ * dela, em vez de cair silenciosamente num texto genérico errado.
+ */
+const SYSTEM_MESSAGE_BY_ORIGEM: Record<Origem, string> = {
+  whatsapp: "Lead importado manualmente.",
+  portal: "Lead importado manualmente.",
+  base_inativa: "Lead importado manualmente.",
+  manual: "Lead importado manualmente.",
+  site: "Lead recebido pelo site.",
+};
+
 async function createConversationAndMessage(
   leadId: string,
-  storeId: string
+  storeId: string,
+  origem: Origem
 ): Promise<string> {
   const { data: conv, error: convError } = await supabaseAdmin
     .from("conversations")
@@ -138,7 +154,7 @@ async function createConversationAndMessage(
     store_id: storeId,
     direcao: "saida",
     autor: "sistema",
-    mensagem: "Lead importado manualmente.",
+    mensagem: SYSTEM_MESSAGE_BY_ORIGEM[origem],
   });
 
   return convId;
