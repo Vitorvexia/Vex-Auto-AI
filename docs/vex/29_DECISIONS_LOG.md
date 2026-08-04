@@ -255,6 +255,74 @@ Active
 
 Date
 
+2026-08-04
+
+Decision ID
+
+DL-0013
+
+Title
+
+Item 1.6 — feat/onboarding-wizard: rebase (não descarte), escopo absorvido reduzido a backend
+
+Category
+
+Engineering
+
+Context
+
+Branch `feat/onboarding-wizard` abandonada em 2026-07-21, nunca mergeada, sem decisão registrada sobre destino. Levantamento (item 1.6 do roadmap) mostrou: 5 commits, 580 linhas em 8 arquivos, migration própria (021, renumerada pra 040 — 021 já livre em main mas 99 commits de main passaram por cima desde 21/07, próximo número real era 040). Diff não toca nenhum arquivo tocado por RBAC 0.3 (migration 026), config visual de loja (1.5, migration 039), site público (1.3/1.4) ou qualquer outra migration do período. Único bug real encontrado: `assertStoreAdmin()` em `lib/auth.ts` checava `role !== "admin"`, mas migration 026 (30/07, já em produção) renomeou o role pra `dono_loja` — função quebrava pra todo dono de loja legítimo, sem gerar erro de merge (é código novo, não edita linha existente). Plano original da branch tinha 8 tasks; só as 4 primeiras (migration + guard de auth + lógica pura de passos + Server Actions) foram implementadas. Tasks 5-8 (middleware de redirect, página `/onboarding`, componente de formulário, integração no painel admin) nunca foram escritas — zero UI existe.
+
+Decision
+
+Rebase da branch em main (não descarte). Fix do bug de role usando o padrão já estabelecido em `getServerUserRole()` (RBAC 0.3) em vez de manter a query raw antiga. Migration renumerada pra 040. Merge do backend em main. UI da wizard (Tasks 5-8 do plano original) fica de fora deliberadamente — vira item novo de backlog, dependente deste merge.
+
+Reasoning
+
+Diff pequeno (580 linhas), sem conflito de schema real com nenhum trabalho feito desde 21/07, e 366 linhas de teste já escritas cobrindo a lógica — descartar jogaria fora trabalho testado e correto por causa de um bug de 1 linha. Rebase decorreu limpo: só 2 arquivos em conflito textual (`lib/auth.ts`, `tests/unit/auth.test.ts`), ambos por adição pura (sem edição de linha existente de main). O bug de role foi confirmado via teste RED (mock com `role: "dono_loja"` lançando `ForbiddenError` contra a implementação antiga) antes do fix, e GREEN depois — não foi corrigido às cegas.
+
+Alternatives Considered
+
+Descartar e reimplementar do zero — rejeitado: o backend testado (assertStoreAdmin, nextOnboardingStep, as 4 Server Actions) é reaproveitável sem retrabalho; o único custo real do reaproveitamento foi o fix de 1 linha + renumeração de migration.
+
+Absorver a UI (Tasks 5-8) neste mesmo merge — rejeitado: fora do escopo pedido pro item 1.6 (decisão de destino da branch), e é trabalho não-trivial (middleware, página, componente) que merece planejamento próprio, não anexado a uma decisão de rebase-vs-descarte.
+
+Expected Impact
+
+Backend de onboarding self-service (guard de auth, derivação de passo, 4 Server Actions) disponível em main, testado (38 testes unitários), mas sem nenhuma superfície de uso — não há middleware redirecionando lojas incompletas nem página pra rodar o wizard. Nenhum impacto em produção até a UI existir (nada aciona esse código hoje).
+
+Potential Risks
+
+Backend merged sem consumidor pode ficar esquecido/dessincronizar de novo se o item de backlog da UI não for priorizado. Campo de WhatsApp self-service (`updateStoreWhatsAppSelfService`) coleta `phone_number_id`/`whatsapp_numero` cru sem validação contra a API da Meta — quando a UI for construída, revisar se esse passo ainda faz sentido dado BL-0001 (WhatsApp Embedded Signup é o caminho self-service real, ainda bloqueado por CNPJ próprio).
+
+Owner
+
+Engineering
+
+Related ADR
+
+None
+
+Related Issue
+
+Item 1.6 (53_ROADMAP.md), backlog novo de UI da wizard (28_BACKLOG.md)
+
+Related Runbook
+
+None
+
+Review Date
+
+Quando UI da wizard (Tasks 5-8) entrar em planejamento — revisar se passo de WhatsApp self-service ainda é o desenho certo.
+
+Status
+
+Active
+
+---
+
+Date
+
 2026-08-03
 
 Decision ID

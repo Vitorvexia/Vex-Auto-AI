@@ -1880,6 +1880,70 @@ Vitor pediu registro explícito desta dívida ao aprovar o diff de 1.3 (2026-08-
 
 ---
 
+BL-0026
+
+Title
+
+UI do wizard de onboarding self-service — middleware de redirect, página, componente, integração no painel admin
+
+Problem
+
+Item 1.6 do roadmap decidiu rebase (não descarte) de `feat/onboarding-wizard` — ver `DL-0013` (`29_DECISIONS_LOG.md`) e fechamento do item em `53_ROADMAP.md`/`27_PROJECT_STATUS.md`. Só o backend foi absorvido no merge (`assertStoreAdmin` em `lib/auth.ts`, `nextOnboardingStep` em `lib/onboarding.ts`, 4 Server Actions em `lib/onboarding-actions.ts`, migration 040). O plano original da branch (`docs/superpowers/plans/2026-07-21-onboarding-wizard.md`) tinha 8 tasks; só as 4 primeiras (schema + guard + lógica pura + Server Actions) viraram código merged. Faltam as Tasks 5-8: middleware que redireciona loja com `onboarding_completed_at IS NULL` pra `/onboarding`; a própria página `/onboarding/page.tsx` (Server Component); componente `VendedorStepForm.tsx` (client, formulário de criação de vendedor); e integração no painel `/admin` mostrando status de onboarding por loja + botão de reset (`resetStoreOnboarding`, também não implementado). Hoje o backend existe mas não tem nenhum consumidor — nada aciona esse código em produção.
+
+Business Value
+
+Reduz fricção de ativação de loja nova — hoje o cadastro inicial (nome, vendedor, estoque, WhatsApp) depende de passos manuais/dispersos; um wizard guiado no primeiro acesso reduz tempo até a loja ficar operacional e reduz suporte manual do founder em cada onboarding.
+
+Customer Value
+
+Dono de loja nova completa a configuração inicial sozinho, sem depender de intervenção manual da Vex pra cadastrar vendedor/estoque/WhatsApp.
+
+Priority
+
+Não é P0 — piloto atual (Speed Motos) já passou do onboarding manualmente, sem essa UI. Vira relevante quando houver 2º cliente pra onboardar.
+
+Status
+
+IDEA — backend pronto e testado, UI não implementada. Plano detalhado já existe (`docs/superpowers/plans/2026-07-21-onboarding-wizard.md`, Tasks 5-8), pode servir de base direta pra implementação.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Médio. Middleware + página + componente + integração admin — sem lógica de domínio nova (toda a lógica de derivação de passo já existe e está testada em `lib/onboarding.ts`), é majoritariamente UI e fiação.
+
+Dependencies
+
+Backend merged em 1.6 (`lib/onboarding.ts`, `lib/onboarding-actions.ts`, `lib/auth.ts::assertStoreAdmin`, migration 040).
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Item 1.6 (`53_ROADMAP.md`), `DL-0013` (`29_DECISIONS_LOG.md`).
+
+Target Version
+
+Sem agendamento — revisar quando onboarding de 2º cliente entrar em planejamento.
+
+Success Metrics
+
+Não definido.
+
+Notes
+
+Passo de WhatsApp self-service (`updateStoreWhatsAppSelfService`, já existe no backend) coleta `phone_number_id`/`whatsapp_numero` cru via form, sem validar contra a API da Meta. Revisar se ainda faz sentido como está — BL-0001 (WhatsApp Embedded Signup) é o caminho self-service real de longo prazo, ainda bloqueado por CNPJ próprio.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
