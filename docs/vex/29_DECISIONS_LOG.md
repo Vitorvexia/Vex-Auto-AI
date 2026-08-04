@@ -385,6 +385,10 @@ Status
 
 Active
 
+Nota de Esclarecimento (2026-08-04)
+
+Confirmado que existe um CNAME wildcard (*) já apontado pra Vercel na Hostinger. Isso NÃO elimina o passo manual — a Vercel exige cadastro explícito do domínio no painel "Domains" do projeto pra servir TLS/rotear, independente do DNS resolver. `extractStoreSlugFromHost` (`lib/subdomain.ts`) e o restante do app não dependem de cadastro na Vercel, só da tabela `stores` — o gargalo é 100% infra externa (Hostinger DNS + Vercel Domains), como já documentado. Processo de 2 passos por loja nova permanece válido até decisão de migrar nameservers. Origem do wildcard já existir não identificada (teste anterior ou pré-provisionamento) — inofensivo no estado atual, revisar se aparecer confusão futura.
+
 ---
 
 Date
