@@ -1904,7 +1904,7 @@ Não é P0 — piloto atual (Speed Motos) já passou do onboarding manualmente, 
 
 Status
 
-IDEA — backend pronto e testado, UI não implementada. Plano detalhado já existe (`docs/superpowers/plans/2026-07-21-onboarding-wizard.md`, Tasks 5-8), pode servir de base direta pra implementação.
+✔ CONCLUÍDO E VALIDADO (2026-08-04) — Tasks 5-8 implementadas e validadas ponta a ponta em produção real, não só em teste automatizado: `middleware.ts` (gate de redirect, `lib/onboarding-guard.ts`), `app/onboarding/page.tsx`, `OnboardingWizard.tsx` (4 passos: nome/vendedor/estoque/whatsapp), integração em `/admin` (badge de status + `resetStoreOnboarding`, Edge Case 5). Commit inicial `8fdebac`. Validação manual confirmou os 4 passos funcionando em 2 lojas (Speed Motos retroativa + "Loja Teste Onboarding" criada do zero), redirect automático do middleware, reavaliação dinâmica via `maybeStampOnboardingComplete`, e retorno ao `/inicio` com Header normal ao completar. Validação expôs e corrigiu 3 bugs colaterais não relacionados ao escopo original da UI em si: erro de query silenciosamente engolido em `/admin` mascarando lojas reais (`744c90a`), botão de login preso em "Entrando..." + round-trips redundantes no `/onboarding` (`befb6c0`), e `stores.slug` ausente em `createStore()` desde a migration 033 — gap de 1.3, não desta feature, ver `DL-0014` (`c3b769a`). Ver `27_PROJECT_STATUS.md` RECENT COMPLETED WORK e `53_ROADMAP.md` item 1.6 pro fechamento completo.
 
 Owner
 
