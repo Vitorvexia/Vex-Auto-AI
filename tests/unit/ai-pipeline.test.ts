@@ -361,6 +361,64 @@ describe("runAiPipeline — integração sendWhatsAppMessage", () => {
     expect(transitionConversationStatus).toHaveBeenCalledWith(
       BASE_PARAMS.conversationId,
       "AGUARDANDO_HUMANO",
+      { handoff_to: "HUMANO", handoff_topics: ["preco_negociacao"] }
+    );
+  });
+
+  // -------------------------------------------------------------------------
+  // Roadmap 1.11 — handoff parcial por assunto: union de handoff_topics
+  // -------------------------------------------------------------------------
+
+  it("1.11: should_handoff=true (via LLM, fora de collection) marca handoff_topics=['preco_negociacao']", async () => {
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      should_handoff: true,
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    expect(transitionConversationStatus).toHaveBeenCalledWith(
+      BASE_PARAMS.conversationId,
+      "AGUARDANDO_HUMANO",
+      expect.objectContaining({ handoff_topics: ["preco_negociacao"] })
+    );
+  });
+
+  it("1.11: já com handoff_topics=['preco_negociacao'] — união não duplica", async () => {
+    vi.mocked(buildAgentContext).mockResolvedValue({
+      ...BASE_CTX,
+      conversation: { ...BASE_CTX.conversation, handoff_topics: ["preco_negociacao"] },
+    } as any);
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      should_handoff: true,
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    expect(transitionConversationStatus).toHaveBeenCalledWith(
+      BASE_PARAMS.conversationId,
+      "AGUARDANDO_HUMANO",
+      { handoff_to: "HUMANO", handoff_topics: ["preco_negociacao"] }
+    );
+  });
+
+  it("1.11: should_handoff forçado por coleta de financiamento/troca NÃO marca handoff_topics (handoff é total, não por tópico)", async () => {
+    vi.mocked(runGuardrails).mockReturnValue({
+      mode: "normal", reason: "normal",
+      collection: { ask: [], collect: ["financiamento"], missingTrocaFields: [] },
+    } as any);
+    vi.mocked(runAgent).mockResolvedValueOnce({
+      ...BASE_RESULT,
+      should_handoff: false,
+      collected_data: { financiamento: { nome_completo: "João", cpf: "111.222.333-44", renda_aproximada: "3000", entrada_disposta: "2000" } },
+    } as any);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    expect(transitionConversationStatus).toHaveBeenCalledWith(
+      BASE_PARAMS.conversationId,
+      "AGUARDANDO_HUMANO",
       { handoff_to: "HUMANO" }
     );
   });

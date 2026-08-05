@@ -112,6 +112,23 @@ describeIf("transitionLeadStatus / transitionConversationStatus", () => {
     expect(data!.handoff_to).toBe("HUMANO");
   });
 
+  it("conv: atualiza handoff_topics no mesmo passo (roadmap 1.11, migration 043)", async () => {
+    const leadId = await mkLead();
+    const convId = await mkConv(leadId);
+    await transitionConversationStatus(convId, "AGUARDANDO_HUMANO", {
+      handoff_to: "HUMANO",
+      handoff_topics: ["preco_negociacao"],
+    });
+    const { data } = await db
+      .from("conversations")
+      .select("conversation_status, handoff_to, handoff_topics")
+      .eq("id", convId)
+      .single();
+    expect(data!.conversation_status).toBe("AGUARDANDO_HUMANO");
+    expect(data!.handoff_to).toBe("HUMANO");
+    expect(data!.handoff_topics).toEqual(["preco_negociacao"]);
+  });
+
   it("concorrencia: 2 transicoes paralelas a partir de NOVO => 1 ok, 1 falha", async () => {
     const id = await mkLead();
     const results = await Promise.allSettled([

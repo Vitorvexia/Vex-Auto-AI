@@ -51,6 +51,7 @@ export interface AgentContext {
     id: string;
     conversation_status: ConversationStatus;
     handoff_to: HandoffTo;
+    handoff_topics: string[];
     summary: string | null;
     ultima_mensagem_em: string;
   };
@@ -94,7 +95,7 @@ export async function buildAgentContext(params: {
       .single(),
     supabaseAdmin
       .from("conversations")
-      .select("id, conversation_status, handoff_to, summary, ultima_mensagem_em")
+      .select("id, conversation_status, handoff_to, handoff_topics, summary, ultima_mensagem_em")
       .eq("id", conversationId)
       .single(),
     supabaseAdmin

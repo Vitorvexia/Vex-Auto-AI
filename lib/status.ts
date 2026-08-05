@@ -145,7 +145,7 @@ export async function transitionLeadStatus(
 export async function transitionConversationStatus(
   conversationId: string,
   to: ConversationStatus,
-  opts?: { handoff_to?: HandoffTo; assigned_to?: string | null }
+  opts?: { handoff_to?: HandoffTo; assigned_to?: string | null; handoff_topics?: string[] }
 ): Promise<{
   from: ConversationStatus;
   to: ConversationStatus;
@@ -173,6 +173,7 @@ export async function transitionConversationStatus(
   if (to === "ENCERRADA") update.encerrada_em = new Date().toISOString();
   if (opts?.handoff_to !== undefined) update.handoff_to = opts.handoff_to;
   if (opts?.assigned_to !== undefined) update.assigned_to = opts.assigned_to;
+  if (opts?.handoff_topics !== undefined) update.handoff_topics = opts.handoff_topics;
 
   if (Object.keys(update).length === 0) {
     return { from, to, changed: false };

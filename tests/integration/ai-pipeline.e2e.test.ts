@@ -44,6 +44,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       id: "e2e-conv",
       conversation_status: "ATIVA",
       handoff_to: "IA",
+      handoff_topics: [],
       summary: "Lead entrou em contato via WhatsApp perguntando sobre veículos.",
       ultima_mensagem_em: new Date().toISOString(),
     },
@@ -116,6 +117,7 @@ describe("E2E — Pipeline de IA (cenários reais)", () => {
         id: "e2e-conv",
         conversation_status: "AGUARDANDO_HUMANO",
         handoff_to: "HUMANO",
+        handoff_topics: [],
         summary: "Lead aguardando atendimento humano.",
         ultima_mensagem_em: new Date().toISOString(),
       },
@@ -224,6 +226,7 @@ describe("E2E — Pipeline de IA (cenários reais)", () => {
           id: "e2e-conv",
           conversation_status: "ATIVA",
           handoff_to: "IA",
+          handoff_topics: [],
           summary:
             "Lead muito interessado no Jeep Renegade 2023. Já perguntou sobre preço, financiamento e disponibilidade. Pronto para fechar.",
           ultima_mensagem_em: new Date().toISOString(),

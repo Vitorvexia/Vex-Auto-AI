@@ -20,6 +20,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       id: "conv-1",
       conversation_status: "ATIVA",
       handoff_to: "IA",
+      handoff_topics: [],
       summary: "Lead interessada em SUV",
       ultima_mensagem_em: new Date().toISOString(),
     },

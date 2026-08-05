@@ -19,6 +19,7 @@ function makeCtx(overrides: Partial<AgentContext> = {}): AgentContext {
       id: "conv-1",
       conversation_status: "ATIVA",
       handoff_to: "IA",
+      handoff_topics: [],
       summary: null,
       ultima_mensagem_em: new Date().toISOString(),
     },
@@ -46,6 +47,7 @@ describe("runGuardrails", () => {
         id: "conv-1",
         conversation_status: "ENCERRADA",
         handoff_to: "IA",
+        handoff_topics: [],
         summary: null,
         ultima_mensagem_em: new Date().toISOString(),
       },
@@ -61,6 +63,7 @@ describe("runGuardrails", () => {
         id: "conv-1",
         conversation_status: "ENCERRADA",
         handoff_to: "HUMANO",
+        handoff_topics: [],
         summary: null,
         ultima_mensagem_em: new Date().toISOString(),
       },
@@ -75,6 +78,7 @@ describe("runGuardrails", () => {
         id: "conv-1",
         conversation_status: "ATIVA",
         handoff_to: "HUMANO",
+        handoff_topics: [],
         summary: null,
         ultima_mensagem_em: new Date().toISOString(),
       },
@@ -89,6 +93,7 @@ describe("runGuardrails", () => {
         id: "conv-1",
         conversation_status: "AGUARDANDO_HUMANO",
         handoff_to: "IA",
+        handoff_topics: [],
         summary: null,
         ultima_mensagem_em: new Date().toISOString(),
       },
@@ -160,7 +165,7 @@ describe("runGuardrails — outsideBusinessHours (campo ortogonal ao mode)", () 
 
   it("outsideBusinessHours=true também em ENCERRADA/human_handoff/reopen (campo sempre computado)", () => {
     const ctxHandoff = makeCtx({
-      conversation: { id: "conv-1", conversation_status: "AGUARDANDO_HUMANO", handoff_to: "IA", summary: null, ultima_mensagem_em: new Date().toISOString() },
+      conversation: { id: "conv-1", conversation_status: "AGUARDANDO_HUMANO", handoff_to: "IA", handoff_topics: [], summary: null, ultima_mensagem_em: new Date().toISOString() },
     });
     const r = runGuardrails(ctxHandoff, { now: OFF_HOURS_NOW });
     expect(r.mode).toBe("human_handoff");
@@ -205,6 +210,7 @@ describe("collection — detecção de financiamento/troca", () => {
         id: "conv-1",
         conversation_status: "AGUARDANDO_HUMANO",
         handoff_to: "HUMANO",
+        handoff_topics: [],
         summary: null,
         ultima_mensagem_em: new Date().toISOString(),
       },
@@ -242,5 +248,103 @@ describe("collection — detecção de financiamento/troca", () => {
     const r = runGuardrails(ctx, { now: BUSINESS_NOW });
     expect(r.collection?.collect).toContain("troca");
     expect(r.collection?.missingTrocaFields.length).toBeGreaterThan(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Roadmap 1.11 — handoff parcial por assunto (preço/negociação)
+//
+// Caso real documentado em BL-0011 (2026-07-27): "tem desconto nela?" disparou
+// handoff total; a pergunta seguinte, "tem quantas 160 no momento?" (estoque,
+// sem relação com preço), ficou sem resposta porque o gate era incondicional.
+// ---------------------------------------------------------------------------
+
+describe("runGuardrails — handoff parcial por tópico (roadmap 1.11)", () => {
+  function handoffCtx(overrides: Partial<AgentContext> = {}): AgentContext {
+    return makeCtx({
+      conversation: {
+        id: "conv-1",
+        conversation_status: "AGUARDANDO_HUMANO",
+        handoff_to: "HUMANO",
+        handoff_topics: ["preco_negociacao"],
+        summary: null,
+        ultima_mensagem_em: new Date().toISOString(),
+      },
+      ...overrides,
+    });
+  }
+
+  it("handoff legado (handoff_topics vazio) bloqueia tudo — comportamento preservado", () => {
+    const ctx = makeCtx({
+      conversation: {
+        id: "conv-1",
+        conversation_status: "AGUARDANDO_HUMANO",
+        handoff_to: "HUMANO",
+        handoff_topics: [],
+        summary: null,
+        ultima_mensagem_em: new Date().toISOString(),
+      },
+      incoming_text: "tem quantas 160 no momento?",
+    });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.mode).toBe("human_handoff");
+  });
+
+  it("handoff parcial + mensagem sobre o tópico suspenso (preço) => continua human_handoff", () => {
+    const ctx = handoffCtx({ incoming_text: "mas consegue baixar mais um pouco?" });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.mode).toBe("human_handoff");
+  });
+
+  it("caso real BL-0011: handoff parcial + 'tem quantas 160 no momento?' (estoque) => NÃO bloqueia, mode normal", () => {
+    const ctx = handoffCtx({ incoming_text: "tem quantas 160 no momento?" });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.mode).not.toBe("human_handoff");
+    expect(r.mode).toBe("normal");
+  });
+
+  it("handoff parcial + mensagem fora do tópico continua computando collection normalmente", () => {
+    const ctx = handoffCtx({ incoming_text: "vocês têm financiamento?" });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.mode).toBe("normal");
+    expect(r.collection?.ask).toContain("financiamento");
+  });
+
+  it("handoff parcial + mensagem curta fora do tópico => short_message, não human_handoff", () => {
+    const ctx = handoffCtx({ incoming_text: "oi" });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.mode).toBe("short_message");
+  });
+
+  it("AGUARDANDO_HUMANO com handoff_to=IA + handoff_topics preenchido também aplica gate condicional (não só handoff_to)", () => {
+    const ctx = makeCtx({
+      conversation: {
+        id: "conv-1",
+        conversation_status: "AGUARDANDO_HUMANO",
+        handoff_to: "IA",
+        handoff_topics: ["preco_negociacao"],
+        summary: null,
+        ultima_mensagem_em: new Date().toISOString(),
+      },
+      incoming_text: "tem quantas 160 no momento?",
+    });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.mode).not.toBe("human_handoff");
+  });
+
+  it("handoff parcial + ENCERRADA prevalece (prioridade máxima já testada, aqui só confirma que topics não interfere)", () => {
+    const ctx = makeCtx({
+      conversation: {
+        id: "conv-1",
+        conversation_status: "ENCERRADA",
+        handoff_to: "HUMANO",
+        handoff_topics: ["preco_negociacao"],
+        summary: null,
+        ultima_mensagem_em: new Date().toISOString(),
+      },
+      incoming_text: "tem quantas 160 no momento?",
+    });
+    const r = runGuardrails(ctx, { now: BUSINESS_NOW });
+    expect(r.mode).toBe("reopen");
   });
 });

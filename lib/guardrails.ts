@@ -114,19 +114,40 @@ export function runGuardrails(
     };
   }
 
-  // 2. Handoff humano ativo → IA não deve responder, coleta não se aplica
-  if (
+  // 2. Handoff humano ativo → IA não deve responder, salvo handoff PARCIAL
+  // (roadmap 1.11): handoff_topics vazio = handoff legado/total, bloqueia
+  // tudo (comportamento pré-1.11, preserva conversas já em handoff no
+  // deploy). handoff_topics com "preco_negociacao" só bloqueia mensagens
+  // que efetivamente forem sobre esse tópico — o resto segue fluxo normal
+  // abaixo, mesmo com a conversa ainda AGUARDANDO_HUMANO/handoff_to=HUMANO.
+  const handoffActive =
     ctx.conversation.handoff_to === "HUMANO" ||
-    ctx.conversation.conversation_status === "AGUARDANDO_HUMANO"
-  ) {
-    return {
-      mode: "human_handoff",
-      reason: "conversa sob controle humano",
-      collection: null,
-      outsideBusinessHours,
-      businessHoursStart: start,
-      businessHoursEnd: end,
-    };
+    ctx.conversation.conversation_status === "AGUARDANDO_HUMANO";
+
+  if (handoffActive) {
+    const topics = ctx.conversation.handoff_topics ?? [];
+    const isPartialHandoff = topics.length > 0;
+    const messageMatchesSuspendedTopic =
+      isPartialHandoff &&
+      topics.includes("preco_negociacao") &&
+      detectSignals(ctx.incoming_text).includes("preco_negociacao");
+
+    if (!isPartialHandoff || messageMatchesSuspendedTopic) {
+      return {
+        mode: "human_handoff",
+        reason: isPartialHandoff
+          ? "conversa sob controle humano — mensagem sobre o tópico suspenso (preço/negociação)"
+          : "conversa sob controle humano",
+        collection: null,
+        outsideBusinessHours,
+        businessHoursStart: start,
+        businessHoursEnd: end,
+      };
+    }
+    // handoff parcial ativo, mensagem fora do tópico suspenso — segue fluxo
+    // normal abaixo (steps seguintes decidem mode/collection normalmente).
+    // A conversa continua AGUARDANDO_HUMANO/handoff_to=HUMANO pro tópico
+    // pendente; só esta mensagem específica é respondida pela IA.
   }
 
   // 3. Mensagem muito curta

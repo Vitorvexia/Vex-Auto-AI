@@ -105,6 +105,23 @@ const SIGNAL_DEFS: SignalDef[] = [
     phrases: [["troca"], ["moto", "troca"], ["dar", "moto"], ["moto", "usada"], ["aceita", "troca"]],
   },
   {
+    // Roadmap 1.11 — classificador determinístico pra handoff parcial por
+    // assunto (preço/negociação). Propósito diferente do sinal "preco"
+    // acima: aquele mede interesse genérico (pergunta o preço), este
+    // detecta pedido de desconto/negociação — usado pelo guardrail pra
+    // decidir se a mensagem nova pertence ao tópico suspenso de um handoff
+    // parcial, não pelo scoring.
+    id: "preco_negociacao",
+    phrases: [
+      ["desconto"],
+      ["abaixa"],
+      ["consegue", "diminuir"],
+      ["menor", "preco"],
+      ["consegue", "baixar"],
+      ["tem", "como", "abaixar"],
+    ],
+  },
+  {
     id: "visita",
     phrases: [
       ["endereco"],

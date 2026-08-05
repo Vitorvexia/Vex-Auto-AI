@@ -23,6 +23,8 @@ const CONV_STATUS_LABELS: Record<string, string> = {
   ATIVA: "Ativa", AGUARDANDO_HUMANO: "Aguardando", PAUSADA: "Pausada", ENCERRADA: "Encerrada",
 };
 const HANDOFF_LABELS: Record<string, string> = { IA: "IA", HUMANO: "Vendedor" };
+// Roadmap 1.11 — handoff parcial por assunto. Só 1 tópico possível hoje.
+const HANDOFF_TOPIC_LABELS: Record<string, string> = { preco_negociacao: "preço/negociação" };
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -39,7 +41,7 @@ export default async function ConversationPage({
   const { data: conv, error } = await supabase
     .from("conversations")
     .select(
-      `id, store_id, conversation_status, handoff_to, summary, iniciada_em, ultima_mensagem_em,
+      `id, store_id, conversation_status, handoff_to, handoff_topics, summary, iniciada_em, ultima_mensagem_em,
        leads ( id, nome, phone_normalized, lead_status, score ),
        messages ( id, direcao, autor, mensagem, created_at )`
     )
@@ -188,6 +190,14 @@ export default async function ConversationPage({
           <span className="pill" data-handoff={conv.handoff_to}>
             {HANDOFF_LABELS[conv.handoff_to] ?? conv.handoff_to}
           </span>
+          {((conv.handoff_topics ?? []) as string[]).length > 0 && (
+            <span className="op-badge quente">
+              Aguardando humano —{" "}
+              {((conv.handoff_topics ?? []) as string[])
+                .map((t: string) => HANDOFF_TOPIC_LABELS[t] ?? t)
+                .join(", ")}
+            </span>
+          )}
         </div>
       </div>
 

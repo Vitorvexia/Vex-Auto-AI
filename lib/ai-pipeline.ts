@@ -282,6 +282,15 @@ export async function runAiPipeline(params: {
 
     // --- Coleta determinística de financiamento/troca ---
     const collection = guardrail.collection ?? null;
+    // Handoff forçado pela coleta (financiamento/troca completos) é TOTAL,
+    // não por tópico — o vendedor precisa assumir a conversa inteira pra
+    // continuar o atendimento, não só responder uma pergunta pontual.
+    // handoff_topics fica vazio nesse caso (mesma semântica de handoff
+    // legado — bloqueia tudo, ver lib/guardrails.ts). Só o handoff decidido
+    // pela LLM via REGRAS FIXAS (pedido de desconto abaixo da margem) marca
+    // "preco_negociacao" — é o único caminho que a partial-handoff (1.11)
+    // cobre hoje.
+    let collectionForcedHandoff = false;
     if (collection && (collection.ask.length > 0 || collection.collect.length > 0)) {
       const update = applyCollectionUpdate(ctx.lead.contexto ?? {}, collection, result.collected_data);
       try {
@@ -304,6 +313,7 @@ export async function runAiPipeline(params: {
       }
       if (update.forceHandoff) {
         result.should_handoff = true;
+        collectionForcedHandoff = true;
       }
     }
 
@@ -407,10 +417,19 @@ export async function runAiPipeline(params: {
     // should_handoff=true → reply já gravado → transicionar sem nova resposta
     if (result.should_handoff) {
       try {
+        const transitionOpts: { handoff_to: "HUMANO"; handoff_topics?: string[] } = {
+          handoff_to: "HUMANO",
+        };
+        if (!collectionForcedHandoff) {
+          const existingTopics = ctx.conversation.handoff_topics ?? [];
+          transitionOpts.handoff_topics = existingTopics.includes("preco_negociacao")
+            ? existingTopics
+            : [...existingTopics, "preco_negociacao"];
+        }
         await transitionConversationStatus(
           params.conversationId,
           "AGUARDANDO_HUMANO",
-          { handoff_to: "HUMANO" }
+          transitionOpts
         );
       } catch (e) {
         // Reply já salvo; falha na transição não é fatal para o webhook

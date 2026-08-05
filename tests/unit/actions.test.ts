@@ -271,7 +271,18 @@ describe("returnConversationToAI", () => {
     expect(mockTransitionConv).toHaveBeenCalledWith("conv-1", "ATIVA", {
       handoff_to: "IA",
       assigned_to: null,
+      handoff_topics: [],
     });
+  });
+
+  it("1.11: returnConversationToAI limpa handoff_topics (resolver sempre limpa tudo — só 1 tópico possível hoje)", async () => {
+    mockTransitionConv.mockResolvedValue({ from: "AGUARDANDO_HUMANO", to: "ATIVA", changed: true });
+    chainInsert();
+
+    await returnConversationToAI("conv-1");
+
+    const [, , opts] = mockTransitionConv.mock.calls[0] as [string, string, { handoff_topics: unknown }];
+    expect(opts.handoff_topics).toEqual([]);
   });
 
   it("T4b: insere message de sistema ao retornar para IA", async () => {

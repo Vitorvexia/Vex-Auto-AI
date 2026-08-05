@@ -97,6 +97,9 @@ export async function returnConversationToAI(
   await transitionConversationStatus(conversationId, "ATIVA", {
     handoff_to: "IA",
     assigned_to: null,
+    // Só existe 1 tópico possível hoje (roadmap 1.11) — resolver sempre
+    // limpa tudo, não há tópico parcial pra preservar.
+    handoff_topics: [],
   });
   await supabaseAdmin.from("messages").insert({
     conversation_id: conversationId,

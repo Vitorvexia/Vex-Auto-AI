@@ -363,3 +363,56 @@ describe("normalização de texto (test 15)", () => {
     expect(r.reasons).toContain("veiculo_especifico");
   });
 });
+
+// ---------------------------------------------------------------------------
+// sinal: preco_negociacao (roadmap 1.11) — classificador determinístico
+// pré-LLM pro handoff parcial por assunto. Propósito diferente do sinal
+// "preco" (que mede interesse pra scoring): este decide se a mensagem nova
+// pertence ao tópico suspenso de um handoff parcial. Não deve alimentar
+// calculateLeadScore — só detectSignals é testado aqui.
+// ---------------------------------------------------------------------------
+
+describe("sinal: preco_negociacao (roadmap 1.11)", () => {
+  it("'tem desconto nela?' aciona preco_negociacao", () => {
+    expect(detectSignals("tem desconto nela?")).toContain("preco_negociacao");
+  });
+
+  it("'vc abaixa o valor?' aciona preco_negociacao", () => {
+    expect(detectSignals("vc abaixa o valor?")).toContain("preco_negociacao");
+  });
+
+  it("'consegue diminuir um pouco?' aciona preco_negociacao", () => {
+    expect(detectSignals("consegue diminuir um pouco?")).toContain("preco_negociacao");
+  });
+
+  it("'qual o menor preço que você faz?' aciona preco_negociacao", () => {
+    expect(detectSignals("qual o menor preço que você faz?")).toContain("preco_negociacao");
+  });
+
+  it("'consegue baixar mais um pouco?' aciona preco_negociacao", () => {
+    expect(detectSignals("consegue baixar mais um pouco?")).toContain("preco_negociacao");
+  });
+
+  it("'tem como abaixar o valor?' aciona preco_negociacao", () => {
+    expect(detectSignals("tem como abaixar o valor?")).toContain("preco_negociacao");
+  });
+
+  it("negação: 'não quero desconto' não aciona o sinal", () => {
+    expect(detectSignals("não quero desconto")).not.toContain("preco_negociacao");
+  });
+
+  it("'qual o preço da moto?' aciona só 'preco', nunca 'preco_negociacao' (sem overlap)", () => {
+    const signals = detectSignals("qual o preço da moto?");
+    expect(signals).toContain("preco");
+    expect(signals).not.toContain("preco_negociacao");
+  });
+
+  it("'tem quantas 160 no momento?' (caso real BL-0011, pergunta de estoque) não aciona preco_negociacao", () => {
+    expect(detectSignals("tem quantas 160 no momento?")).not.toContain("preco_negociacao");
+  });
+
+  it("'tem desconto nela?' não aciona o sinal 'preco' existente (sem overlap na outra direção)", () => {
+    const signals = detectSignals("tem desconto nela?");
+    expect(signals).not.toContain("preco");
+  });
+});

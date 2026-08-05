@@ -27,6 +27,7 @@ function makeCtx(): AgentContext {
       id: "test-conv",
       conversation_status: "ATIVA",
       handoff_to: "IA",
+      handoff_topics: [],
       summary: null,
       ultima_mensagem_em: new Date().toISOString(),
     },
