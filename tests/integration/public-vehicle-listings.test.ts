@@ -154,14 +154,20 @@ describeIf("Leitura pública de estoque — public_vehicle_listings / public_sto
     expect(data).toEqual([]);
   });
 
-  it("PVL-8: public_store_lookup nunca expõe nome/whatsapp_numero, mesmo com select('*')", async () => {
+  it("PVL-8: public_store_lookup expõe só a allowlist pós-1.5 (nunca whatsapp_numero/whatsapp_phone_number_id), mesmo com select('*')", async () => {
     const { data, error } = await anonClient
       .from("public_store_lookup")
       .select("*")
       .eq("id", storeA.id);
     expect(error).toBeNull();
     expect(data!.length).toBe(1);
-    expect(Object.keys(data![0])).not.toContain("nome");
+    // Allowlist real da view (migration 039, roadmap 1.5) — nome/logo/cor/
+    // telefone/endereço/sobre são públicos de propósito (site da loja precisa
+    // exibir identidade visual). PVL-8 testava a allowlist da migration 035
+    // (só id/slug), desatualizada desde a 039 — BL-0027.
+    expect(Object.keys(data![0]).sort()).toEqual(
+      ["id", "slug", "nome", "logo_url", "cor_primaria", "telefone_publico", "endereco", "sobre"].sort()
+    );
     expect(Object.keys(data![0])).not.toContain("whatsapp_numero");
     expect(Object.keys(data![0])).not.toContain("whatsapp_phone_number_id");
   });
