@@ -969,7 +969,7 @@ Alta intenção — impacto direto em conversão, caminho frequente. Mas é muda
 
 Status
 
-IDEA — avaliação técnica feita em 2026-07-27, não implementado.
+RESOLVIDO (2026-08-05) — implementado como roadmap 1.11, escopo contido a 1 tópico ("preco_negociacao"), conforme a avaliação técnica abaixo previu (`handoff_topics` jsonb, guardrail condicional, `detectSignals` estendido, ação de retorno limpando o tópico). Ver `53_ROADMAP.md` item 1.11 e `27_PROJECT_STATUS.md` para detalhe completo da implementação e validação em produção real.
 
 Owner
 
