@@ -2016,6 +2016,70 @@ Registrado a pedido do Vitor pra não deixar falha de teste conhecida sem rastro
 
 ---
 
+BL-0028
+
+Title
+
+Distribuição automática de leads (1.10) não distingue vendedor ativo/inativo — todo `role='vendedor'` da loja é candidato
+
+Problem
+
+`assign_lead_to_least_loaded_vendedor` (migration 042, `lib/lead-distribution.ts`) seleciona candidatos por `users.role = 'vendedor' AND store_id = <loja>`, sem nenhum filtro de disponibilidade. `public.users` não tem coluna de status (ativo/inativo/afastado/férias) — levantamento prévio ao item 1.10 confirmou ausência total do campo em todas as migrations (001–041). Um vendedor afastado, de férias ou desligado sem remoção do cadastro continua contando pra cálculo de menor carga, podendo receber lead novo mesmo indisponível pra atendê-lo.
+
+Business Value
+
+Baixo agora — todas as lojas em produção têm no máximo 1 vendedor (verificado por query direta 2026-08-05: Speed Motos, Loja Teste Onboarding, Diag2 Store, Vex Motors Demo têm exatamente 1 `role='vendedor'` cada). Sem 2+ vendedores simultâneos em nenhuma loja, o cenário de "vendedor afastado recebendo lead" ainda não tem caso real pra ferir.
+
+Customer Value
+
+Nenhum direto hoje. Relevante quando a primeira loja crescer pra 2+ vendedores — mesmo gatilho de revisão do `DL-0008` (visibilidade de lead entre vendedores).
+
+Priority
+
+Não bloqueante. Revisar junto com `DL-0008` quando o gatilho (loja com 2+ vendedores ativos simultâneos) disparar — os dois gaps nascem da mesma causa raiz (RBAC/distribuição desenhados sem dado real de multi-vendedor).
+
+Status
+
+IDEA — gap documentado no momento da implementação de 1.10, não corrigido. Fix provável: coluna `users.ativo boolean default true` (ou equivalente) + filtro no `WHERE` da função SQL e na query que monta `candidates` pro `pickLeastLoadedVendedor`.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Pequena — 1 migration (coluna + índice opcional) + 1 linha de filtro na função SQL + UI pra marcar vendedor inativo (esta última é o esforço real, não a coluna em si).
+
+Dependencies
+
+Mesmo gatilho de `DL-0008` — loja real com 2+ vendedores ativos simultâneos.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Roadmap 1.10 (`53_ROADMAP.md`), `DL-0008` (`29_DECISIONS_LOG.md`)
+
+Target Version
+
+Sem agendamento — junto da revisão do `DL-0008`.
+
+Success Metrics
+
+Não definido.
+
+Notes
+
+Registrado por decisão explícita ao implementar 1.10 antecipadamente (sem efeito prático hoje, nenhuma loja com 2+ vendedores) — gap consciente, não descoberto por acidente.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
