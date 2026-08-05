@@ -4,8 +4,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — refs compartilhados nas factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockSendWA, mockRunAI, mockRevalidate, mockGetServerStoreId } = vi.hoisted(() => ({
+const { mockFrom, mockRpc, mockSendWA, mockRunAI, mockRevalidate, mockGetServerStoreId } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
+  mockRpc: vi.fn(),
   mockSendWA: vi.fn(),
   mockRunAI: vi.fn(),
   mockRevalidate: vi.fn(),
@@ -17,7 +18,7 @@ const { mockFrom, mockSendWA, mockRunAI, mockRevalidate, mockGetServerStoreId } 
 // ---------------------------------------------------------------------------
 
 vi.mock("@/lib/supabase", () => ({
-  supabaseAdmin: { from: mockFrom },
+  supabaseAdmin: { from: mockFrom, rpc: mockRpc },
 }));
 
 vi.mock("@/lib/whatsapp-send", () => ({
@@ -94,6 +95,7 @@ beforeEach(() => {
   vi.spyOn(console, "log").mockImplementation(() => {});
   vi.spyOn(console, "error").mockImplementation(() => {});
   mockGetServerStoreId.mockResolvedValue("store-1");
+  mockRpc.mockResolvedValue({ data: null, error: null });
 });
 
 afterEach(() => {
@@ -376,4 +378,41 @@ it("T17: importLead chama getServerStoreId() para resolver storeId (não DEFAULT
   await importLead(null, formData);
 
   expect(mockGetServerStoreId).toHaveBeenCalledOnce();
+});
+
+// ---------------------------------------------------------------------------
+// T18 — distribuição automática (roadmap 1.10): lead novo chama a RPC de
+// atribuição; lead existente (duplicado ou heal path) nunca chama.
+// ---------------------------------------------------------------------------
+
+it("T18: lead novo chama assign_lead_to_least_loaded_vendedor via RPC com leadId + storeId", async () => {
+  setupNewLead("lead-42");
+  await ingestLeadManually(BASE);
+
+  expect(mockRpc).toHaveBeenCalledWith("assign_lead_to_least_loaded_vendedor", {
+    p_lead_id: "lead-42",
+    p_store_id: "store-1",
+  });
+});
+
+it("T19: lead duplicado (existing) não chama a RPC de distribuição", async () => {
+  mockFrom
+    .mockReturnValueOnce(chainRead({ id: "lead-1" }))
+    .mockReturnValueOnce(chainRead({ id: "conv-1" }));
+
+  await ingestLeadManually(BASE);
+
+  expect(mockRpc).not.toHaveBeenCalled();
+});
+
+it("T20: heal path (lead existente sem conversa) não chama a RPC de distribuição", async () => {
+  mockFrom
+    .mockReturnValueOnce(chainRead({ id: "lead-1" }))
+    .mockReturnValueOnce(chainRead(null))
+    .mockReturnValueOnce(chainWrite({ id: "conv-healed" }))
+    .mockReturnValueOnce(chainInsertVoid(null));
+
+  await ingestLeadManually(BASE);
+
+  expect(mockRpc).not.toHaveBeenCalled();
 });

@@ -88,6 +88,11 @@ export async function ingestLeadManually(
     return { status: "existing", leadId: racedLead?.id ?? "", conversationId: null };
   }
 
+  await supabaseAdmin.rpc("assign_lead_to_least_loaded_vendedor", {
+    p_lead_id: newLead.id,
+    p_store_id: input.storeId,
+  });
+
   const { data: existingConv } = await supabaseAdmin
     .from("conversations")
     .select("id")
