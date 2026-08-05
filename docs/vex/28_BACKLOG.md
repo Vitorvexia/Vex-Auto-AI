@@ -2080,6 +2080,70 @@ Registrado por decisão explícita ao implementar 1.10 antecipadamente (sem efei
 
 ---
 
+BL-0029
+
+Title
+
+Limite de frequência Marketing da Meta pode reter mensagens de reativação/follow-up em rajada
+
+Problem
+
+Validação manual de envio real dos 8 templates WhatsApp pendentes (05/08/2026, `scripts/test-template-send.ts` contra a API real, mesmo destinatário — ver `27_PROJECT_STATUS.md`) mostrou: as 3 primeiras mensagens de categoria MARKETING enviadas em sequência curta pro mesmo número foram entregues normalmente; as 5 seguintes retornaram HTTP 2xx da Graph API (aceitas) mas não chegaram no aparelho. Confirmado via API real (`GET /{waba-id}/message_templates`) que os 9 templates (`follow_up_1/2/3`, `reactivation_vehicle_1/2/3`, `reactivation_no_vehicle_1/2/3`) são todos categoria MARKETING, todos `APPROVED` — não é problema de template rejeitado/mal formatado. `sendWhatsAppTemplateMessage` (`lib/whatsapp-send.ts`) só verifica `res.ok`, nunca lê o corpo da resposta mesmo no caminho de sucesso — hoje não há nenhuma forma de o sistema saber, no momento do envio, se uma mensagem Marketing foi de fato entregue ou retida pela Meta.
+
+Business Value
+
+Relevante pro desenho de `lib/follow-up.ts` (cadência 2h→24h→72h) e `lib/reactivation.ts` (3 tentativas, 14d→30d→30d) — se o volume de leads crescer a ponto de múltiplos disparos Marketing pro mesmo lead caírem numa janela curta (ex: reprocessamento, retry, ou lead recebendo follow-up e reativação quase juntos), uma fração desses envios simplesmente não chega, sem erro nenhum pro sistema perceber. Ineficácia silenciosa, não só risco.
+
+Customer Value
+
+Nenhum hoje — cadências atuais já espaçam por horas/dias (2h/24h/72h, 14d/30d/30d), longe da janela curta que disparou o teto no teste manual (poucos minutos entre envios). Fica relevante se alguém no futuro apertar essa cadência ou dois fluxos (follow-up + reativação) coincidirem pro mesmo lead num intervalo curto.
+
+Priority
+
+Não bloqueante — volume de produção hoje é 1 loja piloto, cadências reais já são espaçadas o suficiente pra nunca ter batido nesse teto em uso normal (só bateu no teste manual por ser rajada artificial de validação). Vale monitorar antes de qualquer mudança que aperte intervalo entre envios Marketing pro mesmo destinatário.
+
+Status
+
+IDEA — achado documentado, não investigado a fundo (número exato do teto não confirmado — "aproximadamente 3" é observação de uma única sessão de teste, não característica documentada pela Meta confirmada com múltiplas amostras) nem mitigado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Não estimado — depende da mitigação escolhida. Duas direções possíveis, não excludentes: (1) espaçar por tempo real entre disparos Marketing consecutivos pro mesmo lead (lógica nova em `lib/follow-up.ts`/`lib/reactivation.ts`); (2) migrar parte dos templates de MARKETING pra UTILITY onde a régua de negócio permitir (UTILITY geralmente não tem esse teto de frequência — troca de categoria exige nova aprovação de template na Meta, não é reclassificação simples).
+
+Dependencies
+
+Nenhuma bloqueante. Relacionado ao mecanismo de envio (`lib/whatsapp-send.ts`) e às cadências de `lib/follow-up.ts`/`lib/reactivation.ts`.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Validação manual dos templates WhatsApp (05/08/2026) — ver `27_PROJECT_STATUS.md`
+
+Target Version
+
+Sem agendamento — reavaliar se volume de leads crescer ou cadência de follow-up/reativação for apertada.
+
+Success Metrics
+
+Não definido.
+
+Notes
+
+Achado de produção real durante validação deliberada (não acidental) — 8 templates testados via `scripts/test-template-send.ts` pro mesmo número, 3 entregues, 5 aceitos pela API mas retidos pela Meta. Não é bug de código, script, ou template mal configurado — confirmado que todos os 9 templates estão `APPROVED` e a categoria (MARKETING) é uniforme entre os que entregaram e os que não entregaram, o que aponta pro teto de frequência como causa, não pra diferença de template. `res.ok`-only na resposta de envio (`lib/whatsapp-send.ts`) é decisão consciente de não logar corpo da resposta da Meta (risco de PII) — significa que esse teto é invisível pro sistema em runtime, só detectável por teste manual como este ou por reclamação de lead que não recebeu.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
