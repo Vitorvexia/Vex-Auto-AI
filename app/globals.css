@@ -1,7 +1,7 @@
 /* ─── Brand Design Tokens ────────────────────── */
 :root {
   --navy-dark:    #1C2B3A;
-  --sky:          #0EA5E9;
+  --sky:          #005BFE;
   --sky-light:    #BAE6FD;
 
   --bg:           #F5FAFC;
@@ -12,7 +12,7 @@
   --text:         #334155;
   --text-strong:  #1C2B3A;
   --muted:        #64748B;
-  --accent:       #0EA5E9;
+  --accent:       #005BFE;
 
   --status-novo:        #94A3B8;
   --status-engajado:    #0EA5E9;
