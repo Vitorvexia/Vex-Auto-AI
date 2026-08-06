@@ -1,0 +1,17 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "app/globals.css"
+        ],
+        "createdAt": "2026-08-06T19:23:37.715Z",
+        "reason": "User confirmed L711-712 (.conv-sidebar-item.active/.waiting left-border) is intentional functional state indicator, pre-existing pattern, same convention as kanban column top-borders"
+      }
+    ]
+  }
+}
