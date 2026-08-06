@@ -1,0 +1,3 @@
+Display: Anton — só maiúsculas, headline/título/número de destaque, nunca em parágrafo ou botão pequeno
+Corpo/UI: Inter — pesos 400 (regular), 500 (medium), 600 (semibold) — tudo o resto (parágrafo, formulário, menu, tabela)
+Fonte: Google Fonts (gratuita) — https://fonts.google.com/specimen/Anton e https://fonts.google.com/specimen/Inter

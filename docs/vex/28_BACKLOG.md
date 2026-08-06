@@ -2144,6 +2144,140 @@ Achado de produção real durante validação deliberada (não acidental) — 8 
 
 ---
 
+BL-0030
+
+Title
+
+Cores de accent hardcoded (`rgba(14,165,233,...)`) fora do token `--accent`/`--sky` em `app/globals.css`
+
+Problem
+
+A troca de accent de marca (`--accent`/`--sky`: `#0EA5E9` → `#005BFE`, aplicada 2026-08-06 na mesma variável CSS) cobre só os usos que já referenciam `var(--accent)`/`var(--sky)`. Auditoria das 9 linhas de `color: var(--accent)` feita antes da troca (contraste WCAG AA por fundo real) expôs, como efeito colateral, pelo menos 22 ocorrências de `rgba(14,165,233,...)` literal no mesmo arquivo — a maioria delas é sinalização própria e não relacionada (ex: `.pill[data-status="ENGAJADO"]`, `.msg-bubble.ia`, `.alert-item.info`, sempre pareadas com `color: #0369A1` hardcoded, sistema fechado e autoconsistente, sem relação com a cor de marca). Mas pelo menos duas — `.dossie-score` (linha 774) e `.dossie-intent-signals li` (linha 790-791) — têm fundo `rgba(14,165,233,...)` literal só duplicando a cor de marca antiga, com o texto usando `var(--accent)` (que agora aponta pro azul novo). Resultado depois da troca: chip com fundo no azul antigo e texto no azul novo — duas cores de azul visivelmente diferentes no mesmo componente. Mesma classe de risco em efeitos colaterais não-texto: `.conv-sidebar-item.active` (linha 711, fundo hardcoded + borda em `var(--accent)`) e 3 `box-shadow` de glow (linhas 167, 345, 448) que ficam com brilho no azul antigo ao redor de bordas já no azul novo.
+
+Business Value
+
+Evita item visual quebrado (dois azuis diferentes no mesmo chip) chegando em produção sem ninguém perceber — barato de checar agora, caro de debugar depois quando a causa (literal vs variável) não estiver óbvia olhando só o resultado renderizado.
+
+Customer Value
+
+Nenhum direto — é consistência visual interna, não funcionalidade.
+
+Priority
+
+P3 — não bloqueia a troca de accent (BL registrado separado de propósito, ver Notes). Vira P2 se `.dossie-score`/`.dossie-intent-signals` forem uma superfície de alta visibilidade (dossiê do lead é olhado por vendedor com frequência).
+
+Status
+
+IDEA — não implementado, registrado no momento do achado (2026-08-06), decisão de escopo do dono do produto: não resolver dentro do commit cirúrgico de troca de variável.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixa pra corrigir, mas exige decisão de produto antes (duas direções, não excludentes):
+1. Re-hexar manualmente cada `rgba(14,165,233,...)` que hoje acompanha `var(--accent)` pro rgb do azul novo (`rgba(0,91,254,...)`), preservando a mesma opacidade — troca pontual, resolve o sintoma.
+2. Migrar esses casos específicos pra usar `var(--accent)` com opacity (ex: `color-mix(in srgb, var(--accent) 10%, white)` ou equivalente) em vez de literal — resolve a causa raiz, evita o mesmo problema se a cor de marca mudar de novo no futuro. Maior escopo (precisa confirmar suporte de `color-mix`/fallback no browser-alvo do projeto).
+
+Não decidir sozinho qual direção tomar — é chamada do dono do produto, registrada aqui só como as duas opções levantadas.
+
+Dependencies
+
+Nenhuma técnica bloqueante. Relacionado à troca de `--accent`/`--sky` (mesma sessão, 2026-08-06) que expôs o achado.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Nenhuma — achado durante auditoria de contraste WCAG AA da troca de accent (2026-08-06)
+
+Target Version
+
+Sem agendamento
+
+Success Metrics
+
+Zero componente com fundo e texto em tons de azul diferentes no mesmo elemento.
+
+Notes
+
+Escopo e risco deliberadamente separados do commit de troca de `--accent`/`--sky`: aquele é troca cirúrgica de 1 variável CSS, testável e revertível isoladamente; isto exige decisão de produto (re-hexar vs migrar arquitetura de cor) e toca componentes específicos, não a variável central. Ver também `.impeccable/design.json`/`DESIGN.md` (raiz do projeto, escrito 2026-08-06) — Colors, seção "Cores de status (fora do escopo de marca)" já documenta que esses literais são independentes do token de marca; este item é a ação de limpeza que falta pra fechar o gap entre o que está documentado e o que está no código.
+
+---
+
+BL-0031
+
+Title
+
+`DESIGN.md` enxuto demais como referência do hook de design — gera ruído alto (324 achados) em CSS legado já existente
+
+Problem
+
+`DESIGN.md`/`.impeccable/design.json` (raiz do projeto) foram escritos em 2026-08-06 capturando só os tokens novos/intencionais da direção de marca (cores, tipografia, alguns radius/spacing) — deliberadamente enxuto, seguindo a orientação do próprio `document.md` do Impeccable de não catalogar cada valor único. `app/globals.css` (980 linhas, sistema real em produção, testado com Speed Motos) tem uma escala ad hoc bem mais fina — radius em 4/6/7/8/9/10/11/12px, font-size em passos de meio pixel de 10px a 30px, dezenas de cores literais — que nunca foi documentada, porque é anterior ao `DESIGN.md`. Confirmado na prática: a primeira edição de `globals.css` depois do `DESIGN.md` existir (troca de `--accent`/`--sky`, 2 linhas alteradas) disparou o hook de design com 324 achados — nenhum deles relacionado à edição em si, todos são drift entre o CSS legado e o `DESIGN.md` novo e enxuto.
+
+Business Value
+
+Sem ajuste, todo futuro editor de `globals.css` recebe o mesmo volume de ruído (324 achados) mesmo fazendo uma mudança trivial de 1 linha — risco real de a pessoa aprender a ignorar o hook por cansaço, o que apaga o valor dele justamente pros achados que importam.
+
+Customer Value
+
+Nenhum direto — ferramenta interna de qualidade de design, não visível ao cliente.
+
+Priority
+
+Baixa — não bloqueia nada hoje (decisão explícita do dono do produto, 2026-08-06: seguir com o commit da troca de accent apesar do ruído). Mas cresce de custo quanto mais tempo passar sem ser tratado — próxima pessoa a mexer no arquivo não vai ter o contexto desta sessão pra saber que já foi discutido e conscientemente adiado.
+
+Status
+
+IDEA — não implementado, registrado no momento do achado (2026-08-06)
+
+Owner
+
+Engineering / Product (decisão de quanto detalhar o design system é chamada de produto, não só técnica)
+
+Estimated Complexity
+
+Não estimado — depende da direção escolhida, duas não excludentes:
+1. Engordar `DESIGN.md`/`design.json` com os padrões que já são intencionais no `globals.css` atual (escala real de radius, font-size, cores de status) — trabalho de documentação, sem mudança de código; resolve o ruído capturando o legado como parte do sistema documentado.
+2. Ajustar o hook (`/impeccable hooks`) pra ser menos sensível a arquivos/padrões legados enquanto o sistema de design está em transição do tema antigo (Exo2/sky-blue) pro novo (Anton/vex-blue) — configuração, não documentação.
+
+Dependencies
+
+Nenhuma técnica bloqueante. Relacionado a `DESIGN.md`/`.impeccable/design.json` (raiz, 2026-08-06) e à direção de marca que os originou (`docs/vex/assets/brand/`).
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Nenhuma — achado durante a troca de `--accent`/`--sky` (2026-08-06), hook disparou 324 findings no primeiro `git diff` de `app/globals.css` pós-`DESIGN.md`
+
+Target Version
+
+Sem agendamento
+
+Success Metrics
+
+Edição pontual em `globals.css` não dispara achado de hook não relacionado à mudança feita.
+
+Notes
+
+Decisão explícita do dono do produto (2026-08-06): não resolver agora, não rodar `ignore-file` no `globals.css` (suprimiria achados reais junto com o ruído) — só registrar pra não se repetir sem lembrança na próxima pessoa que mexer no arquivo.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

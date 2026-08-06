@@ -1,0 +1,103 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-08-06T00:00:00Z",
+  "title": "Design System: VEX Auto",
+  "extensions": {
+    "colorMeta": {
+      "vex-blue": { "role": "primary", "displayName": "VEX Blue", "canonical": "#005BFE", "tonalRamp": ["#000C33", "#001A66", "#002899", "#0036CC", "#005BFE", "#3379FE", "#6699FF", "#B3CCFF"] },
+      "vex-black": { "role": "brand-neutral", "displayName": "VEX Black", "canonical": "#000000", "tonalRamp": ["#000000"] },
+      "vex-white": { "role": "brand-neutral", "displayName": "VEX White", "canonical": "#FFFFFF", "tonalRamp": ["#FFFFFF"] },
+      "navy-dark": { "role": "product-neutral", "displayName": "Navy Dark (header)", "canonical": "#1C2B3A", "tonalRamp": ["#0E161E", "#1C2B3A", "#334155", "#64748B", "#94A3B8", "#CBD5E1", "#E2E8F0", "#F5FAFC"] },
+      "bg": { "role": "product-neutral", "displayName": "Product Background", "canonical": "#F5FAFC" },
+      "panel": { "role": "product-neutral", "displayName": "Panel", "canonical": "#FFFFFF" },
+      "panel-2": { "role": "product-neutral", "displayName": "Panel Secondary", "canonical": "#F0F7FC" },
+      "border": { "role": "product-neutral", "displayName": "Border", "canonical": "#DDE8F0" },
+      "border-strong": { "role": "product-neutral", "displayName": "Border Strong", "canonical": "#B8CEDE" },
+      "text": { "role": "product-neutral", "displayName": "Text", "canonical": "#334155" },
+      "text-strong": { "role": "product-neutral", "displayName": "Text Strong", "canonical": "#1C2B3A" },
+      "muted": { "role": "product-neutral", "displayName": "Muted", "canonical": "#64748B" }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Anton Display", "purpose": "Título de página/seção no app (lido uma vez); headline full em marketing/landing/Instagram. Nunca em parágrafo, botão pequeno, KPI ou preço." },
+      "body": { "displayName": "Inter Body/UI", "purpose": "Parágrafo, formulário, menu, tabela — marca e produto." },
+      "kpi-legacy": { "displayName": "Exo 2 Italic (legado)", "purpose": "KPI e preço no app — não migra pra Anton nesta rodada, pendente validação de legibilidade." }
+    },
+    "shadows": [
+      { "name": "product-card-rest", "value": "0 1px 3px rgba(28,43,58,.06)", "purpose": "Sombra ambiente em repouso de card/painel do produto." },
+      { "name": "product-card-hover", "value": "0 2px 8px rgba(0,91,254,.13)", "purpose": "Sombra de hover em card clicável, usando o novo accent." }
+    ],
+    "motion": [
+      { "name": "ease-standard", "value": "0.15s", "purpose": "Transição padrão de border-color/box-shadow em cards e botões do produto." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "720px" },
+      { "name": "md", "value": "900px" },
+      { "name": "lg", "value": "1400px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação principal do produto (enviar resposta, salvar, mover kanban).",
+      "html": "<button class=\"ds-btn-primary\">Salvar</button>",
+      "css": ".ds-btn-primary { padding: 9px 18px; border-radius: 7px; font-size: 13px; font-weight: 700; background: #005BFE; color: #fff; border: none; cursor: pointer; transition: opacity 0.15s; } .ds-btn-primary:hover { opacity: 0.88; }"
+    },
+    {
+      "name": "Status Pill",
+      "kind": "chip",
+      "refersTo": "status-pill",
+      "description": "Sinalização funcional de lead_status/conversation_status/handoff — independente de marca.",
+      "html": "<span class=\"ds-pill\" data-status=\"NEGOCIACAO\">Negociação</span>",
+      "css": ".ds-pill { display: inline-flex; align-items: center; height: 22px; padding: 0 9px; border-radius: 999px; font-size: 10.5px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase; background: rgba(34,197,94,.1); color: #15803D; border: 1px solid rgba(34,197,94,.3); }"
+    },
+    {
+      "name": "Lead Card",
+      "kind": "card",
+      "refersTo": "lead-card",
+      "description": "Card de kanban — signature component do produto.",
+      "html": "<div class=\"ds-lead-card\"><div class=\"ds-lead-card-name\">João Silva</div><div class=\"ds-lead-card-phone\">+55 11 9****-1234</div></div>",
+      "css": ".ds-lead-card { display: block; background: #fff; border: 1px solid #DDE8F0; border-radius: 8px; padding: 11px 12px; box-shadow: 0 1px 2px rgba(28,43,58,0.05); transition: border-color 0.15s, box-shadow 0.15s; } .ds-lead-card:hover { border-color: #005BFE; box-shadow: 0 2px 8px rgba(0,91,254,0.13); } .ds-lead-card-name { font-size: 13px; font-weight: 600; color: #1C2B3A; } .ds-lead-card-phone { font-size: 11.5px; color: #64748B; }"
+    },
+    {
+      "name": "Page Title",
+      "kind": "custom",
+      "refersTo": "display-title",
+      "description": "Título de página/seção — único ponto onde Anton entra no app operacional.",
+      "html": "<h1 class=\"ds-page-title\">LEADS</h1>",
+      "css": ".ds-page-title { font-family: 'Anton', sans-serif; font-weight: 400; text-transform: uppercase; font-size: 23px; letter-spacing: 0.01em; color: #1C2B3A; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Motorsport Telemetry, Working Shift",
+    "overview": "VEX Auto tem duas camadas visuais que não se confundem. A camada de marca (logo, favicon, mascote, marketing, Instagram, landing) é motorsport puro: fundo preto quase absoluto, wordmark itálico condensado, bandeira quadriculada como motivo estrutural, raposa geométrica low-poly como mascote de aquisição. A camada de produto (app logado) é uma superfície de trabalho clara e testada em produção real (Speed Motos), que herda da marca só o essencial: o azul de acento e, pontualmente, a tipografia de destaque em títulos de página.",
+    "keyCharacteristics": [
+      "Marca: preto quase-absoluto, wordmark itálico motorsport, bandeira quadriculada, raposa low-poly restrita a marketing",
+      "Produto: fundo claro, painéis brancos, cards com sombra ambiente suave — inalterado nesta rodada",
+      "Um único azul de sistema (#005BFE) atravessa as duas camadas como fio condutor de marca",
+      "Anton entra no produto só em título de página/seção — nunca em KPI, preço, parágrafo ou botão pequeno",
+      "Cores de status (kanban/pill) são sinalização funcional, independentes da identidade de marca"
+    ],
+    "rules": [
+      { "name": "The One Blue Rule", "body": "Existe um azul de sistema (#005BFE). Qualquer novo componente, marca ou produto, que precisar de azul usa esse — nunca inventa um tom próximo.", "section": "colors" },
+      { "name": "The One Read Rule", "body": "Anton é pra texto lido uma vez (título). Se o texto é lido várias vezes ao dia em velocidade (KPI, preço, tabela), não é Anton — é Inter ou o Exo2 legado, nunca a fonte de impacto.", "section": "typography" },
+      { "name": "The Flat Brand, Soft Product Rule", "body": "Marca nunca tem sombra ou gradiente. Produto sempre tem sombra ambiente sutil em superfícies interativas. Nunca aplicar a regra de um lado no outro.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do usar #005BFE como único azul de sistema, marca e produto.",
+      "Do trocar --accent/--sky no globals.css pra #005BFE como mudança cirúrgica de 1 variável.",
+      "Do usar Anton em título de página/seção dentro do app e full em marketing/landing/Instagram.",
+      "Do manter Exo 2 italic em KPI/preço do app até validação de legibilidade própria.",
+      "Do manter as 7 cores de status do funil e as 3 cores de bolha de chat exatamente como estão.",
+      "Do manter a raposa fora do app logado — só Instagram e landing page."
+    ],
+    "donts": [
+      "Don't aplicar fundo preto, itálico motorsport ou bandeira quadriculada em qualquer tela do app operacional.",
+      "Don't usar Anton em parágrafo, botão pequeno, KPI ou preço.",
+      "Don't usar #0029A7 (azul legado da raposa v1) em qualquer trabalho novo.",
+      "Don't mostrar a raposa dentro do sistema logado, em nenhum contexto.",
+      "Don't inventar número ou depoimento de resultado pra Speed Motos em nenhuma copy."
+    ]
+  }
+}
