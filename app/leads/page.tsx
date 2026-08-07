@@ -33,6 +33,7 @@ type Enriched = {
   priority: PriorityTier;
   priority_label: string;
   recommended_action: string;
+  interesse: string | null;
 };
 
 export default async function LeadsPage({
@@ -56,7 +57,7 @@ export default async function LeadsPage({
   let leadsQuery = supabase
     .from("leads")
     .select(
-      `id, nome, phone_normalized, score, lead_status, assigned_to, updated_at,
+      `id, nome, phone_normalized, score, lead_status, assigned_to, updated_at, contexto,
        conversations ( id, ultima_mensagem_em, conversation_status )`
     )
     .in("lead_status", COLUMNS);
@@ -101,7 +102,9 @@ export default async function LeadsPage({
   const role = await getServerUserRole();
   const canReassign = role !== "vendedor";
 
-  const enriched: Enriched[] = leads.map((l: { id: string; nome: string | null; phone_normalized: string; score: number; lead_status: string; assigned_to: string | null; updated_at: string; conversations?: { id: string; ultima_mensagem_em: string | null; conversation_status: string | null }[] }) => {
+  const enriched: Enriched[] = leads.map((l: { id: string; nome: string | null; phone_normalized: string; score: number; lead_status: string; assigned_to: string | null; updated_at: string; contexto?: Record<string, unknown> | null; conversations?: { id: string; ultima_mensagem_em: string | null; conversation_status: string | null }[] }) => {
+    const interesseRaw = l.contexto?.interesse;
+    const interesse = typeof interesseRaw === "string" && interesseRaw.trim() ? interesseRaw.trim() : null;
     const openConv = (l.conversations ?? []).find((c) =>
       (OPEN_CONVERSATION_STATUSES as string[]).includes(c.conversation_status ?? "")
     );
@@ -126,6 +129,7 @@ export default async function LeadsPage({
       priority,
       priority_label,
       recommended_action,
+      interesse,
     };
   });
 

@@ -29,6 +29,7 @@ type Props = {
   assignedTo?: string | null;
   vendedores?: { id: string; nome: string }[];
   canReassign?: boolean;
+  interesse?: string | null;
 };
 
 type UrgencyLevel = "cooling" | "urgent" | "stale";
@@ -59,6 +60,7 @@ export function LeadCard({
   assignedTo,
   vendedores,
   canReassign,
+  interesse,
 }: Props) {
   const href        = conversation_id ? `/conversations/${conversation_id}` : "#";
   const sc          = scoreClass(score);
@@ -72,6 +74,8 @@ export function LeadCard({
           <span className="lead-card-name">{nome ?? "Sem nome"}</span>
           <span className={`score-badge ${sc}`}>{score}</span>
         </div>
+
+        {interesse && <div className="lead-card-interesse">{interesse}</div>}
 
         <div className="lead-card-phone">{phone_normalized}</div>
 

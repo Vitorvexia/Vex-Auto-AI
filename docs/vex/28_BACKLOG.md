@@ -2282,39 +2282,39 @@ BL-0032
 
 Title
 
-Lead card não mostra veículo de interesse nem valor do negócio — kanban de leads fica genérico
+Lead card não mostrava contexto de interesse do lead — kanban de leads ficava genérico [RESOLVIDO, escopo reduzido]
 
 Problem
 
-`/impeccable critique` em `app/leads/page.tsx` (2026-08-07, snapshot `.impeccable/critique/2026-08-07T17-39-55Z__app-leads-page-tsx.md`) apontou como maior gap de especificidade de design: `LeadCard` mostra nome, telefone, score, prioridade, urgência e timestamp — nunca `leads.contexto.veiculo_interesse`, apesar desse dado já existir e já ser usado em outro lugar (templates de reativação). Vendedor olhando a coluna QUENTE ou NEGOCIAÇÃO não consegue diferenciar um negócio de moto de R$15k de um SUV de R$80k sem abrir a conversa de cada lead.
+`/impeccable critique` em `app/leads/page.tsx` (2026-08-07, snapshot `.impeccable/critique/2026-08-07T17-39-55Z__app-leads-page-tsx.md`) apontou como maior gap de especificidade de design: `LeadCard` mostrava nome, telefone, score, prioridade, urgência e timestamp — nunca contexto de interesse do lead. O item original assumia `leads.contexto.veiculo_interesse` (jsonb, lido por `lib/reactivation.ts`) como fonte, com valor do negócio ao lado. Investigação antes da implementação (2026-08-07) encontrou que **`veiculo_interesse` nunca é escrito por nenhum código em produção** — é lido só por `reactivation.ts`/RPC, sem writer real (só aparece mockado em teste unitário). O campo realmente escrito é `leads.contexto.interesse` (texto livre do form "Importar Lead", `lib/lead-ingestion.ts:64`), que por sua vez nunca era lido em lugar nenhum antes desta mudança. Não existe hoje nenhum valor de negócio (BRL) estruturado antes do fechamento — `leads.vehicle_id`/`valor_final` só existem depois de `FECHADO` (guardrail de margem, migration 020).
 
 Business Value
 
-Fecha o gap de especificidade mais citado na critique — kanban deixa de parecer CRM genérico com etiqueta automotiva pra ser pipeline pensado pro domínio. Também melhora triagem imediatamente antes do guardrail de margem (etapa de fechamento já implementada), ajudando o vendedor a priorizar negócios de maior valor.
+Fecha parcialmente o gap de especificidade — conecta um dado que já era coletado (form de import) mas nunca aparecia em lugar nenhum do produto. Não fecha o gap de valor de negócio (não há dado pra isso hoje).
 
 Customer Value
 
-Vendedor ganha contexto de negócio no primeiro olhar do kanban, sem precisar abrir cada conversa pra lembrar do que se trata.
+Vendedor vê o texto de interesse cadastrado no import (quando existe) direto no card, sem abrir a conversa.
 
 Priority
 
-Média — não bloqueia nada hoje, mas é decisão de produto, não fix mecânico: precisa de revisão visual (onde entra o veículo no card, como fica com nome longo, o que mostrar quando `veiculo_interesse` é nulo) antes de aprovar a versão final.
+Resolvido nesta rodada com escopo reduzido — decisão do usuário (2026-08-07) após ver os achados da investigação.
 
 Status
 
-IDEA — não implementado, registrado no fechamento da critique de 2026-08-07
+RESOLVIDO (escopo reduzido) — implementado 2026-08-07. `LeadCard` exibe `contexto.interesse` (texto livre, truncado 1 linha com ellipsis) como segunda linha abaixo do nome, quando presente; omite a linha inteira quando ausente (sem placeholder). Sem valor BRL — não existe fonte de dado pra isso antes do fechamento. Validado visualmente (2 cenários: com e sem interesse) antes de fechar.
 
 Owner
 
-Product / Design (decisão de layout do card) + Engineering (implementação)
+Engineering
 
 Estimated Complexity
 
-Baixa tecnicamente (campo já existe em `leads.contexto`, só falta exibir) — complexidade real está na decisão visual, não no código.
+Baixa — sem migration nova, só passar `contexto` na query de `app/leads/page.tsx`, extrair `interesse` e renderizar condicionalmente em `LeadCard.tsx` + `.lead-card-interesse` em `globals.css`.
 
 Dependencies
 
-Nenhuma técnica bloqueante. Depende de `leads.contexto.veiculo_interesse` (já existente, usado em `lib/reactivation.ts`).
+Nenhuma técnica bloqueante. Ver `BL-0036` pro trabalho de fundo (pipeline estruturado de veículo+valor) que este item não cobre.
 
 Related ADR
 
@@ -2330,11 +2330,71 @@ Snapshot da critique: `.impeccable/critique/2026-08-07T17-39-55Z__app-leads-page
 
 Target Version
 
+Entregue 2026-08-07
+
+Success Metrics
+
+Card de lead no kanban mostra `contexto.interesse` (quando existente) sem precisar abrir a conversa. Atingido.
+
+---
+
+BL-0036
+
+Title
+
+IA não extrai/persiste veículo de interesse estruturado nem valor estimado durante a conversa — card do kanban não pode mostrar valor de negócio
+
+Problem
+
+Achado durante a investigação de `BL-0032` (2026-08-07): não existe hoje nenhum pipeline que faça a IA identificar, durante a conversa via WhatsApp, qual veículo o lead quer e gravar isso de forma estruturada + valor estimado. `leads.contexto.veiculo_interesse` é só um tipo já previsto (`lib/reactivation.ts`) sem nenhum writer real. `leads.vehicle_id`/`valor_final` só nascem no fechamento (guardrail de margem), tarde demais pra ajudar triagem no kanban. Sem esse pipeline, o card de lead nunca vai poder mostrar valor de negócio antes do fechamento — só texto livre (`contexto.interesse`, resolvido em `BL-0032` com escopo reduzido).
+
+Business Value
+
+Sem isso, o gap de especificidade mais citado na critique de `app/leads/page.tsx` (triagem por valor de negócio antes de abrir cada conversa) continua parcialmente aberto — vendedor ainda não consegue eyeball qual negócio em NEGOCIAÇÃO vale mais.
+
+Customer Value
+
+Se implementado: vendedor vê valor estimado do negócio direto no kanban, prioriza por tamanho de negócio sem abrir conversa por conversa.
+
+Priority
+
+Não dimensionada — trabalho de pipeline de IA (extração + persistência durante a conversa, provavelmente via `lib/collection.ts`/`lib/prompts.ts`, mesmo padrão de financiamento/troca), maior que um fix de UI. Não bloqueia nada hoje.
+
+Status
+
+IDEA — não implementado, registrado durante o fechamento de `BL-0032` (2026-08-07)
+
+Owner
+
+Engineering / Product (decisão de quando/como a IA deve perguntar preço-alvo sem soar como negociação — linha fina com o guardrail de margem)
+
+Estimated Complexity
+
+Não estimado — precisa de spec própria (novo sinal de coleta, prompt, campo em `contexto`, e decisão de produto sobre estimar valor sem violar "IA nunca calcula/negocia preço").
+
+Dependencies
+
+Relacionado a `lib/collection.ts`/`lib/guardrails.ts` (mesma filosofia dos fluxos de financiamento/troca) e ao guardrail de margem (`lib/actions.ts`) — qualquer valor estimado pré-fechamento precisa deixar claro que não é o `valor_final` validado.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Achado durante implementação de `BL-0032` (2026-08-07)
+
+Target Version
+
 Sem agendamento
 
 Success Metrics
 
-Card de lead no kanban mostra veículo de interesse (quando existente) sem precisar abrir a conversa.
+Não definido — depende do spec.
 
 ---
 
