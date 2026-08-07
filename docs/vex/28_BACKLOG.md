@@ -2278,6 +2278,246 @@ Decisão explícita do dono do produto (2026-08-06): não resolver agora, não r
 
 ---
 
+BL-0032
+
+Title
+
+Lead card não mostra veículo de interesse nem valor do negócio — kanban de leads fica genérico
+
+Problem
+
+`/impeccable critique` em `app/leads/page.tsx` (2026-08-07, snapshot `.impeccable/critique/2026-08-07T17-39-55Z__app-leads-page-tsx.md`) apontou como maior gap de especificidade de design: `LeadCard` mostra nome, telefone, score, prioridade, urgência e timestamp — nunca `leads.contexto.veiculo_interesse`, apesar desse dado já existir e já ser usado em outro lugar (templates de reativação). Vendedor olhando a coluna QUENTE ou NEGOCIAÇÃO não consegue diferenciar um negócio de moto de R$15k de um SUV de R$80k sem abrir a conversa de cada lead.
+
+Business Value
+
+Fecha o gap de especificidade mais citado na critique — kanban deixa de parecer CRM genérico com etiqueta automotiva pra ser pipeline pensado pro domínio. Também melhora triagem imediatamente antes do guardrail de margem (etapa de fechamento já implementada), ajudando o vendedor a priorizar negócios de maior valor.
+
+Customer Value
+
+Vendedor ganha contexto de negócio no primeiro olhar do kanban, sem precisar abrir cada conversa pra lembrar do que se trata.
+
+Priority
+
+Média — não bloqueia nada hoje, mas é decisão de produto, não fix mecânico: precisa de revisão visual (onde entra o veículo no card, como fica com nome longo, o que mostrar quando `veiculo_interesse` é nulo) antes de aprovar a versão final.
+
+Status
+
+IDEA — não implementado, registrado no fechamento da critique de 2026-08-07
+
+Owner
+
+Product / Design (decisão de layout do card) + Engineering (implementação)
+
+Estimated Complexity
+
+Baixa tecnicamente (campo já existe em `leads.contexto`, só falta exibir) — complexidade real está na decisão visual, não no código.
+
+Dependencies
+
+Nenhuma técnica bloqueante. Depende de `leads.contexto.veiculo_interesse` (já existente, usado em `lib/reactivation.ts`).
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Snapshot da critique: `.impeccable/critique/2026-08-07T17-39-55Z__app-leads-page-tsx.md` (Priority Issue P1)
+
+Target Version
+
+Sem agendamento
+
+Success Metrics
+
+Card de lead no kanban mostra veículo de interesse (quando existente) sem precisar abrir a conversa.
+
+---
+
+BL-0033
+
+Title
+
+Header da coluna "NEGOCIAÇÃO" no kanban de leads — achado visual investigado, não reproduziu
+
+Problem
+
+Assessment B da critique de `app/leads/page.tsx` (2026-08-07) reportou, via screenshot, uma linha horizontal cruzando o texto do header "NEGOCIAÇÃO" no kanban, lendo como tachado — reproduzida em duas capturas de zoom na mesma sessão, nenhuma outra coluna (NOVO, ENGAJADO, INTERESSADO, QUENTE, FECHADO, PERDIDO) apresentava o mesmo. Verificação manual pós-fix do BL P0 (mesmo dia, mesma sessão): header renderizou limpo, sem tachado, em nova captura de zoom na mesma região. Não reproduziu.
+
+Business Value
+
+Nenhuma ação necessária agora — registrado só pra não reabrir investigação do zero se o sintoma reaparecer.
+
+Customer Value
+
+N/A — não confirmado como defeito real.
+
+Priority
+
+Baixa — investigado, sem repro. Reabrir só se o sintoma for observado de novo (screenshot ou relato).
+
+Status
+
+INVESTIGATED — não reproduziu na segunda verificação (2026-08-07), sem ação necessária por ora
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+N/A — sem causa raiz identificada porque não reproduziu
+
+Dependencies
+
+Nenhuma
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Snapshot da critique: `.impeccable/critique/2026-08-07T17-39-55Z__app-leads-page-tsx.md` (Priority Issue P2, "NEGOCIAÇÃO column header rendering glitch")
+
+Target Version
+
+Sem agendamento — reabrir sob demanda
+
+Success Metrics
+
+N/A
+
+---
+
+BL-0034
+
+Title
+
+Chip de alerta "Sem resposta >2h" no KPI bar de leads não é clicável/acionável
+
+Problem
+
+O chip vermelho pulsante "Sem resposta >2h" em `app/leads/page.tsx` é uma `<div>` estática, não um link/filtro — cria urgência visual sem oferecer caminho de ação. Achado pela critique de 2026-08-07 (Assessment A) como "emotional valley" sem reassurance, justo no KPI cuja função é provocar ação.
+
+Business Value
+
+Reduz fricção entre perceber urgência e agir sobre ela — vendedor vê o alerta e consegue ir direto pros leads parados, sem escanear as 7 colunas manualmente.
+
+Customer Value
+
+Menos leads esquecidos por falta de caminho direto até eles a partir do alerta.
+
+Priority
+
+Normal — cosmético/interação, sem urgência de acessibilidade.
+
+Status
+
+IDEA — não implementado, registrado no fechamento da critique de 2026-08-07
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixa — tornar o chip um link/filtro (`?filter=stale` ou equivalente) que rola ou filtra o kanban pros leads parados, seguindo o padrão de interação já estabelecido pelos links de `.vendor-filter`.
+
+Dependencies
+
+Nenhuma técnica bloqueante.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Snapshot da critique: `.impeccable/critique/2026-08-07T17-39-55Z__app-leads-page-tsx.md` (Priority Issue P2, "Alert KPI chip is not actionable")
+
+Target Version
+
+Sem agendamento
+
+Success Metrics
+
+Clicar/tocar o chip "Sem resposta >2h" leva o vendedor direto aos leads parados.
+
+---
+
+BL-0035
+
+Title
+
+Animação `kpi-alert-pulse` (KPI de leads) roda infinita sem guard de `prefers-reduced-motion`
+
+Problem
+
+`@keyframes kpi-alert-pulse` em `app/globals.css` roda `infinite` no chip de alerta "Sem resposta >2h", sem `@media (prefers-reduced-motion: reduce)`. Achado pela critique de 2026-08-07 (Assessment A, persona Sam) — problema de acessibilidade real pra usuário sensível a estímulo vestibular numa tela que fica aberta o turno inteiro, não só cosmético.
+
+Business Value
+
+Evita excluir vendedores sensíveis a movimento de uma tela operacional de uso diário obrigatório.
+
+Customer Value
+
+Acessibilidade — usuário com `prefers-reduced-motion` ativado no sistema não fica exposto a pulso visual permanente.
+
+Priority
+
+Acima dos outros P2/P3 desta rodada (BL-0033, BL-0034) quando o backlog for retomado — marcado como item de acessibilidade, não só polish visual, por decisão do dono do produto (2026-08-07).
+
+Status
+
+IDEA — não implementado, registrado no fechamento da critique de 2026-08-07
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixa — envolver a animação em `@media (prefers-reduced-motion: reduce)` (desliga ou reduz o pulso), ou limitar iterações e assentar num estado vermelho estático.
+
+Dependencies
+
+Nenhuma técnica bloqueante.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Snapshot da critique: `.impeccable/critique/2026-08-07T17-39-55Z__app-leads-page-tsx.md` (Priority Issue P2, "Infinite pulse animation, no reduced-motion opt-out")
+
+Target Version
+
+Sem agendamento
+
+Success Metrics
+
+Chip de alerta respeita `prefers-reduced-motion: reduce` do sistema operacional do usuário.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
