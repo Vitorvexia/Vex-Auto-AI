@@ -1,0 +1,63 @@
+-- =============================================================================
+-- Cleanup: leads de QA sem histórico real, encontrados em auditoria de rotina
+-- =============================================================================
+--
+-- O quê: 2 leads de teste/QA em produção real (Speed Motos), sem conversa
+-- de cliente de verdade por trás — só artefatos de submissão de formulário
+-- e mensagens automáticas de sistema/follow-up.
+--
+-- Contexto: durante fechamento de BL-0032 (2026-08-07), foi criado um lead
+-- de teste manual ("QA Interesse Card") pra validar visualmente o novo
+-- campo de interesse no card do kanban. Ao pedir a limpeza dele, foi feita
+-- auditoria de rotina (read-only, REST + service_role) em toda a tabela
+-- `leads`, que encontrou um segundo lead de teste mais antigo nunca limpo:
+-- "Teste QA 1.4", criado durante a validação do roadmap 1.4 (site público,
+-- 2026-08-03, ver `27_PROJECT_STATUS.md`), citado no fechamento daquele
+-- item mas sem nota de "apagado em seguida" como os itens 1.10/1.11 têm.
+--
+-- Verificação antes de incluir cada lead aqui (critério pedido: só apaga
+-- se não houver conversa/mensagem real de cliente por trás):
+--
+-- 1) "QA Interesse Card" (441c61e3-4481-40cb-927c-18b40d6d30aa, store Vex
+--    Motors Demo, criado 2026-08-07): 1 conversa, 1 mensagem — só o
+--    sistema ("Lead importado manualmente."). Sem follow_up_logs, sem
+--    lead_score_events. Confirmado: sem interação real.
+--
+-- 2) "Teste QA 1.4" (ae86ed4d-5271-4de2-a479-5f5a21aa3441, store Speed
+--    Motos — produção real, criado 2026-08-03): 1 conversa, 3 mensagens —
+--    todas de sistema (import + 2 follow-ups automáticos, nenhuma resposta
+--    do lead). 2 follow_up_logs, 0 reactivation_logs, 0 lead_score_events.
+--    Confirmado: sem interação real além do teste original de submissão
+--    do formulário público.
+--
+-- Um terceiro candidato ("#1 Atendimento", 575ea7c1-0eb3-49aa-b661-11ee28656425,
+-- Speed Motos, 2026-07-29) foi investigado e **excluído deste script** —
+-- ao contrário do nome sugerir artefato de ping da Meta (mesmo padrão já
+-- limpo em `cleanup-realtime-tests.sql`), a conversa tem 10 mensagens
+-- reais, incluindo respostas do lead ("me manda o catalogo", "quero fotos
+-- dela") sobre uma Titan 2026 — 3 lead_score_events, 3 follow_up_logs.
+-- Não atende ao critério de "sem conversa real" — mantido, não apagar.
+--
+-- Store "Vex Motors - Loja Demo" (aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa)
+-- foi revisada e confirmada como sandbox interno por design (usuário
+-- "Vitor"/dono_loja + vendedor seed "Carlos Vendedor" + whatsapp_numero =
+-- número sandbox conhecido da Meta, +1 555-629-2868) — não é loja piloto
+-- real nem candidata a virar uma. Leads de QA que acumulam ali (7
+-- encontrados: "QA Lead Novo", "QA Novo Lead", "Duplicado", "QA
+-- Integration Test", "lead teste", "vitor" ×2) foram deixados como estão,
+-- por decisão explícita — não fazem parte deste cleanup.
+--
+-- `leads.id` tem `on delete cascade` pra `conversations`/`messages`
+-- (migration 001) e `lead_score_events` (migration 011) — um delete na
+-- tabela `leads` já limpa tudo cascateado. `ai_logs` usa `on delete set
+-- null` (não bloqueia, não cascateia).
+--
+-- Preparado em: 2026-08-07, via investigação read-only (REST API +
+-- service_role, Claude Code). A ser rodado por Vitor via Supabase Studio
+-- SQL Editor, mesmo padrão de `cleanup-realtime-tests.sql`.
+-- =============================================================================
+
+delete from public.leads where id in (
+  '441c61e3-4481-40cb-927c-18b40d6d30aa', -- "QA Interesse Card" (Vex Motors Demo)
+  'ae86ed4d-5271-4de2-a479-5f5a21aa3441'  -- "Teste QA 1.4" (Speed Motos)
+);

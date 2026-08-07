@@ -2398,6 +2398,20 @@ Não definido — depende do spec.
 
 ---
 
+Nota de manutenção — 2026-08-07: limpeza de leads de QA sem histórico real
+
+Durante a validação visual do `BL-0032`, foi criado um lead de teste manual ("QA Interesse Card", store Vex Motors Demo). Ao pedir a limpeza dele, auditoria de rotina (read-only, REST API + `service_role`, sem exibir a key) em toda a tabela `leads` encontrou um segundo lead de teste mais antigo nunca limpo: **"Teste QA 1.4"** (Speed Motos — produção real, criado 2026-08-03 durante a validação do roadmap 1.4). Diferente dos itens 1.10/1.11, que documentam explicitamente "lead de teste apagado em seguida", o fechamento do item 1.4 em `27_PROJECT_STATUS.md` não tinha essa nota — ficou pra trás.
+
+Verificado antes de decidir (critério: só entra no cleanup se não houver conversa/mensagem real de cliente por trás):
+- **"QA Interesse Card"** — 1 conversa, 1 mensagem (só sistema, "Lead importado manualmente."). Sem `follow_up_logs`/`lead_score_events`. Sem interação real.
+- **"Teste QA 1.4"** — 1 conversa, 3 mensagens (import + 2 follow-ups automáticos, nenhuma resposta do lead). 2 `follow_up_logs`, 0 `lead_score_events`. Sem interação real.
+- **"#1 Atendimento"** (Speed Motos, 2026-07-29) — investigado por suspeita de ser o mesmo artefato de ping da Meta já limpo em `scripts/cleanup-realtime-tests.sql` (mesmo nome/padrão de telefone antigo da loja), mas **excluído do cleanup**: a conversa tem 10 mensagens reais, incluindo respostas do lead ("me manda o catalogo", "quero fotos dela") sobre uma Titan 2026, 3 `lead_score_events`, 3 `follow_up_logs`. Não atende ao critério — mantido.
+- Store **"Vex Motors - Loja Demo"** (`aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa`) — revisada e confirmada como sandbox interno por design (usuário "Vitor"/`dono_loja` + vendedor seed "Carlos Vendedor" + `whatsapp_numero` = número sandbox conhecido da Meta, `+1 555-629-2868`), não loja piloto real nem candidata a virar uma. Os 7 leads de QA que acumulam ali ("QA Lead Novo", "QA Novo Lead", "Duplicado", "QA Integration Test", "lead teste", "vitor" ×2) foram deixados como estão, por decisão explícita — mantidos por design, não esquecidos. Próxima pessoa que notar leads de teste ali não precisa reabrir essa pergunta.
+
+Script preparado e commitado versionado: `scripts/cleanup-qa-leads-2026-08-07.sql` (mesmo padrão de `cleanup-realtime-tests.sql`) — **PENDENTE DE EXECUÇÃO**, aguardando Vitor rodar via Supabase Studio SQL Editor (execução direta de delete permanente em produção não é ação que a sessão do Claude Code executa sozinha).
+
+---
+
 BL-0033
 
 Title
