@@ -76,7 +76,7 @@ a { color: inherit; text-decoration: none; }
   transition: color 0.12s, background 0.12s;
 }
 .header-nav-link:hover  { color: rgba(255,255,255,0.88); background: rgba(255,255,255,0.08); }
-.header-nav-link.active { color: #FFFFFF; background: rgba(14,165,233,0.22); }
+.header-nav-link.active { color: #FFFFFF; background: rgba(0,91,254,0.22); }
 
 /* ─── Layout ─────────────────────────── */
 .container { max-width: 1400px; margin: 0 auto; padding: 28px 24px; }
@@ -164,7 +164,7 @@ a { color: inherit; text-decoration: none; }
 }
 .lead-card:hover {
   border-color: var(--sky);
-  box-shadow: 0 2px 8px rgba(14,165,233,0.13);
+  box-shadow: 0 2px 8px rgba(0,91,254,0.13);
 }
 .lead-card-top {
   display: flex; align-items: flex-start;
@@ -221,7 +221,7 @@ a { color: inherit; text-decoration: none; }
 }
 .score-badge.s-hot  { background: rgba(249,115,22,.12); color: #C2410C; border: 1px solid rgba(249,115,22,.3); }
 .score-badge.s-warm { background: rgba(234,179,8,.12);  color: #92400E; border: 1px solid rgba(234,179,8,.3); }
-.score-badge.s-cool { background: rgba(14,165,233,.12); color: #0369A1; border: 1px solid rgba(14,165,233,.3); }
+.score-badge.s-cool { background: rgba(0,91,254,.12); color: #0369A1; border: 1px solid rgba(0,91,254,.3); }
 .score-badge.s-cold { background: var(--panel-2); color: var(--muted); border: 1px solid var(--border); }
 
 /* ─── Empty state ────────────────────────────── */
@@ -255,14 +255,14 @@ a { color: inherit; text-decoration: none; }
 }
 
 .pill[data-status="NOVO"]        { background: rgba(148,163,184,.12); color: #475569; border-color: rgba(148,163,184,.35); }
-.pill[data-status="ENGAJADO"]    { background: rgba(14,165,233,.1);   color: #0369A1; border-color: rgba(14,165,233,.3); }
+.pill[data-status="ENGAJADO"]    { background: rgba(0,91,254,.1);   color: #0369A1; border-color: rgba(0,91,254,.3); }
 .pill[data-status="INTERESSADO"] { background: rgba(139,92,246,.1);   color: #6D28D9; border-color: rgba(139,92,246,.3); }
 .pill[data-status="QUENTE"]      { background: rgba(249,115,22,.1);   color: #C2410C; border-color: rgba(249,115,22,.3); }
 .pill[data-status="NEGOCIACAO"]  { background: rgba(34,197,94,.1);    color: #15803D; border-color: rgba(34,197,94,.3); }
 .pill[data-status="FECHADO"]     { background: rgba(16,185,129,.1);   color: #047857; border-color: rgba(16,185,129,.3); }
 .pill[data-status="PERDIDO"]     { background: rgba(239,68,68,.1);    color: #B91C1C; border-color: rgba(239,68,68,.3); }
 
-.pill[data-conv-status="ATIVA"]             { background: rgba(14,165,233,.1);  color: #0369A1; border-color: rgba(14,165,233,.3); }
+.pill[data-conv-status="ATIVA"]             { background: rgba(0,91,254,.1);  color: #0369A1; border-color: rgba(0,91,254,.3); }
 .pill[data-conv-status="AGUARDANDO_HUMANO"] { background: rgba(249,115,22,.1);  color: #C2410C; border-color: rgba(249,115,22,.3); }
 .pill[data-conv-status="PAUSADA"]           { background: rgba(148,163,184,.12); color: #475569; border-color: rgba(148,163,184,.35); }
 .pill[data-conv-status="ENCERRADA"]         { background: var(--panel-2); color: var(--muted); }
@@ -290,7 +290,7 @@ a { color: inherit; text-decoration: none; }
   line-height: 1.55; font-size: 13.5px; border: 1px solid transparent;
 }
 .msg-bubble.lead   { background: var(--bubble-lead);   border-color: var(--border); border-bottom-left-radius: 3px; color: var(--text); }
-.msg-bubble.ia     { background: var(--bubble-ia);     border-color: rgba(14,165,233,.2); border-bottom-right-radius: 3px; color: #0369A1; }
+.msg-bubble.ia     { background: var(--bubble-ia);     border-color: rgba(0,91,254,.2); border-bottom-right-radius: 3px; color: #0369A1; }
 .msg-bubble.humano { background: var(--bubble-humano); border-color: rgba(34,197,94,.2);  border-bottom-right-radius: 3px; color: #15803D; }
 .msg-bubble.sistema { background: transparent; color: var(--muted); font-size: 11.5px; font-style: italic; text-align: center; }
 
@@ -342,7 +342,7 @@ a { color: inherit; text-decoration: none; }
 }
 .conv-row:hover {
   border-color: var(--sky);
-  box-shadow: 0 2px 8px rgba(14,165,233,0.1);
+  box-shadow: 0 2px 8px rgba(0,91,254,0.1);
 }
 .conv-row-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
 .conv-lead-name { font-size: 13.5px; font-weight: 600; color: var(--text-strong); }
@@ -411,7 +411,7 @@ a { color: inherit; text-decoration: none; }
 .alert-item:last-child { margin-bottom: 0; }
 .alert-item.hot  { background: rgba(239,68,68,.07);   border: 1px solid rgba(239,68,68,.2);  color: #B91C1C; }
 .alert-item.warn { background: rgba(249,115,22,.07);  border: 1px solid rgba(249,115,22,.2); color: #C2410C; }
-.alert-item.info { background: rgba(14,165,233,.07);  border: 1px solid rgba(14,165,233,.2); color: #0369A1; }
+.alert-item.info { background: rgba(0,91,254,.07);  border: 1px solid rgba(0,91,254,.2); color: #0369A1; }
 .alert-item.ok   { background: rgba(34,197,94,.07);   border: 1px solid rgba(34,197,94,.2);  color: #15803D; }
 .alert-icon { flex-shrink: 0; font-size: 13px; margin-top: 1px; }
 
@@ -433,7 +433,7 @@ a { color: inherit; text-decoration: none; }
   color: var(--accent); background: var(--panel-2); border: 1px solid var(--border);
   transition: background 0.12s, border-color 0.12s;
 }
-.quick-link:hover { background: rgba(14,165,233,.08); border-color: rgba(14,165,233,.3); }
+.quick-link:hover { background: rgba(0,91,254,.08); border-color: rgba(0,91,254,.3); }
 
 /* ─── Vehicle grid ───────────────────────────── */
 .vehicle-grid {
@@ -445,7 +445,7 @@ a { color: inherit; text-decoration: none; }
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .vehicle-card:hover {
-  border-color: var(--sky); box-shadow: 0 2px 8px rgba(14,165,233,.12);
+  border-color: var(--sky); box-shadow: 0 2px 8px rgba(0,91,254,.12);
 }
 .vehicle-thumb {
   height: 140px; background: var(--panel-2);
@@ -549,7 +549,7 @@ a { color: inherit; text-decoration: none; }
 .insight-card:last-child { margin-bottom: 0; }
 .insight-card.hot  { background: rgba(239,68,68,.07);   border: 1px solid rgba(239,68,68,.2); }
 .insight-card.warn { background: rgba(249,115,22,.07);  border: 1px solid rgba(249,115,22,.2); }
-.insight-card.info { background: rgba(14,165,233,.07);  border: 1px solid rgba(14,165,233,.2); }
+.insight-card.info { background: rgba(0,91,254,.07);  border: 1px solid rgba(0,91,254,.2); }
 .insight-card.ok   { background: rgba(34,197,94,.07);   border: 1px solid rgba(34,197,94,.2); }
 .insight-title { font-size: 13px; font-weight: 700; margin-bottom: 4px; }
 .insight-card.hot  .insight-title { color: #B91C1C; }
@@ -587,10 +587,10 @@ a { color: inherit; text-decoration: none; }
 .card-cta {
   display: inline-flex; align-items: center; gap: 4px;
   padding: 5px 11px; border-radius: 6px; font-size: 11.5px; font-weight: 600;
-  background: rgba(14,165,233,.1); color: #0369A1; border: 1px solid rgba(14,165,233,.25);
+  background: rgba(0,91,254,.1); color: #0369A1; border: 1px solid rgba(0,91,254,.25);
   transition: background .12s, border-color .12s;
 }
-.card-cta:hover { background: rgba(14,165,233,.18); border-color: rgba(14,165,233,.4); }
+.card-cta:hover { background: rgba(0,91,254,.18); border-color: rgba(0,91,254,.4); }
 
 /* ─── Operational status badge (equipe) ─────── */
 .op-badge {
@@ -599,12 +599,12 @@ a { color: inherit; text-decoration: none; }
   margin-bottom: 10px; letter-spacing: 0.02em;
 }
 .op-badge.quente     { background: rgba(239,68,68,.1);   color: #B91C1C; border: 1px solid rgba(239,68,68,.25); }
-.op-badge.atendendo  { background: rgba(14,165,233,.1);  color: #0369A1; border: 1px solid rgba(14,165,233,.25); }
+.op-badge.atendendo  { background: rgba(0,91,254,.1);  color: #0369A1; border: 1px solid rgba(0,91,254,.25); }
 .op-badge.disponivel { background: rgba(34,197,94,.1);   color: #15803D; border: 1px solid rgba(34,197,94,.25); }
 .op-badge.parado     { background: rgba(239,68,68,.08);  color: #9F1239; border: 1px solid rgba(239,68,68,.2); }
 
 /* ─── Pill: handoff + conv-status colors ─────── */
-.pill[data-handoff="IA"]     { background: rgba(14,165,233,.1);  color: #0369A1; border-color: rgba(14,165,233,.3); }
+.pill[data-handoff="IA"]     { background: rgba(0,91,254,.1);  color: #0369A1; border-color: rgba(0,91,254,.3); }
 .pill[data-handoff="HUMANO"] { background: rgba(139,92,246,.1);  color: #6D28D9; border-color: rgba(139,92,246,.3); }
 .pill[data-conv-status="ATIVA"]             { background: rgba(34,197,94,.1);  color: #15803D; border-color: rgba(34,197,94,.3); }
 .pill[data-conv-status="AGUARDANDO_HUMANO"] { background: rgba(249,115,22,.1); color: #C2410C; border-color: rgba(249,115,22,.3); }
@@ -675,7 +675,7 @@ a { color: inherit; text-decoration: none; }
 }
 .priority-badge.hot  { background: rgba(249,115,22,.12); color: #C2410C; }
 .priority-badge.warm { background: rgba(234,179,8,.12);  color: #854d0e; }
-.priority-badge.cold { background: rgba(14,165,233,.10); color: #0369a1; }
+.priority-badge.cold { background: rgba(0,91,254,.10); color: #0369a1; }
 
 /* ─── Lead card urgency badge ────────────────── */
 .urgency-badge {
@@ -708,7 +708,7 @@ a { color: inherit; text-decoration: none; }
 }
 .conv-sidebar-item:last-child { border-bottom: none; }
 .conv-sidebar-item:hover { background: var(--panel-2); }
-.conv-sidebar-item.active  { background: rgba(14,165,233,.08); border-left: 3px solid var(--accent); padding-left: 11px; }
+.conv-sidebar-item.active  { background: rgba(0,91,254,.08); border-left: 3px solid var(--accent); padding-left: 11px; }
 .conv-sidebar-item.waiting { background: rgba(249,115,22,.04); border-left: 3px solid #F97316;    padding-left: 11px; }
 .conv-sidebar-name { font-size: 12.5px; font-weight: 600; color: var(--text-strong); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .conv-sidebar-meta { display: flex; align-items: center; gap: 6px; }
@@ -726,7 +726,7 @@ a { color: inherit; text-decoration: none; }
   transition: background .12s, color .12s, border-color .12s;
 }
 .header-user-btn:hover { background: rgba(255,255,255,.14); color: #fff; }
-.header-user-btn.open  { background: rgba(14,165,233,.22); color: #fff; border-color: rgba(14,165,233,.5); }
+.header-user-btn.open  { background: rgba(0,91,254,.22); color: #fff; border-color: rgba(0,91,254,.5); }
 .header-dropdown {
   position: absolute; top: calc(100% + 8px); right: 0;
   min-width: 192px;
@@ -771,7 +771,7 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
 .dossie-badges { display: flex; align-items: center; gap: 6px; }
 .dossie-score {
   font-size: 11px; font-weight: 700; padding: 2px 6px;
-  border-radius: 4px; background: rgba(14,165,233,.1); color: var(--accent);
+  border-radius: 4px; background: rgba(0,91,254,.1); color: var(--accent);
 }
 .dossie-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 10px; }
 .dossie-section { display: flex; flex-direction: column; gap: 4px; }
@@ -787,8 +787,8 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
 }
 .dossie-intent-signals li {
   font-size: 11px; font-weight: 500; padding: 2px 8px;
-  border-radius: 999px; background: rgba(14,165,233,.09);
-  color: var(--accent); border: 1px solid rgba(14,165,233,.2);
+  border-radius: 999px; background: rgba(0,91,254,.09);
+  color: var(--accent); border: 1px solid rgba(0,91,254,.2);
 }
 .dossie-warnings { border-radius: 6px; padding: 8px 10px; }
 .dossie-warnings ul { list-style: none; padding: 0; margin: 4px 0 0; display: flex; flex-direction: column; gap: 3px; }
@@ -824,7 +824,7 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
 }
 .metric-card.metric-ok    { border-color: rgba(34,197,94,.35); background: rgba(34,197,94,.05); }
 .metric-card.metric-warn  { border-color: rgba(249,115,22,.35); background: rgba(249,115,22,.05); }
-.metric-card.metric-info  { border-color: rgba(14,165,233,.25); background: rgba(14,165,233,.04); }
+.metric-card.metric-info  { border-color: rgba(0,91,254,.25); background: rgba(0,91,254,.04); }
 .metric-label { font-size: 11px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: .04em; }
 .metric-value { font-size: 28px; font-weight: 700; color: var(--text-strong); line-height: 1.1; }
 
