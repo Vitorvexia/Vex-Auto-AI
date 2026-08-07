@@ -34,7 +34,7 @@ export default function InicioPage() {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1>Central de Operações</h1>
+          <h1 className="page-title">Central de Operações</h1>
           <div className="subtitle">Dados simulados · conecte o backend para dados reais</div>
         </div>
       </div>

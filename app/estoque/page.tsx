@@ -125,7 +125,7 @@ export default async function EstoquePage({ searchParams }: PageProps) {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1>Estoque</h1>
+          <h1 className="page-title">Estoque</h1>
           <div className="subtitle">
             {available.length} disponíve{available.length === 1 ? "l" : "is"}
             {archived.length > 0 && ` · ${archived.length} arquivado${archived.length > 1 ? "s" : ""}`}

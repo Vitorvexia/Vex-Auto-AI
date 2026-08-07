@@ -172,7 +172,7 @@ export default async function LeadsPage({
     <main className="container">
       <div className="page-header">
         <div>
-          <h1>Pipeline de Leads</h1>
+          <h1 className="page-title">Pipeline de Leads</h1>
           <div className="subtitle">
             {sorted.length} {sorted.length === 1 ? "lead" : "leads"} em atendimento
           </div>

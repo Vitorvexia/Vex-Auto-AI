@@ -50,7 +50,7 @@ export default async function AgendaPage({ searchParams }: PageProps) {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1>Agenda</h1>
+          <h1 className="page-title">Agenda</h1>
           <div className="subtitle">Motos de troca agendadas para trazer na loja</div>
         </div>
       </div>

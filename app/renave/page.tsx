@@ -42,7 +42,7 @@ export default async function RenavePage() {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1>RENAVE — Pendências</h1>
+          <h1 className="page-title">RENAVE — Pendências</h1>
           <div className="subtitle">
             Controle interno de status por veículo · o VEX organiza, valida e cobra prazo —
             não registra no RENAVE

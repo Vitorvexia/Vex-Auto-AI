@@ -121,7 +121,7 @@ export default async function EquipePage() {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1>Equipe</h1>
+          <h1 className="page-title">Equipe</h1>
           <div className="subtitle">
             Operação em tempo real · {sellers.length}{" "}
             {sellers.length === 1 ? "vendedor" : "vendedores"}

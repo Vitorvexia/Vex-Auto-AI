@@ -18,9 +18,9 @@
       "muted": { "role": "product-neutral", "displayName": "Muted", "canonical": "#64748B" }
     },
     "typographyMeta": {
-      "display": { "displayName": "Anton Display", "purpose": "Título de página/seção no app (lido uma vez); headline full em marketing/landing/Instagram. Nunca em parágrafo, botão pequeno, KPI ou preço." },
+      "display": { "displayName": "Bebas Neue Display", "purpose": "Título de página/seção no app (lido uma vez); headline full em marketing/landing/Instagram. Nunca em parágrafo, botão pequeno, KPI ou preço." },
       "body": { "displayName": "Inter Body/UI", "purpose": "Parágrafo, formulário, menu, tabela — marca e produto." },
-      "kpi-legacy": { "displayName": "Exo 2 Italic (legado)", "purpose": "KPI e preço no app — não migra pra Anton nesta rodada, pendente validação de legibilidade." }
+      "kpi-legacy": { "displayName": "Exo 2 Italic (legado)", "purpose": "KPI e preço no app — não migra pra Bebas Neue nesta rodada, pendente validação de legibilidade." }
     },
     "shadows": [
       { "name": "product-card-rest", "value": "0 1px 3px rgba(28,43,58,.06)", "purpose": "Sombra ambiente em repouso de card/painel do produto." },
@@ -64,9 +64,9 @@
       "name": "Page Title",
       "kind": "custom",
       "refersTo": "display-title",
-      "description": "Título de página/seção — único ponto onde Anton entra no app operacional.",
+      "description": "Título de página/seção — único ponto onde Bebas Neue entra no app operacional.",
       "html": "<h1 class=\"ds-page-title\">LEADS</h1>",
-      "css": ".ds-page-title { font-family: 'Anton', sans-serif; font-weight: 400; text-transform: uppercase; font-size: 23px; letter-spacing: 0.01em; color: #1C2B3A; }"
+      "css": ".ds-page-title { font-family: 'Bebas Neue', sans-serif; font-weight: 400; text-transform: uppercase; font-size: 23px; letter-spacing: 0.06em; color: #1C2B3A; }"
     }
   ],
   "narrative": {
@@ -76,25 +76,25 @@
       "Marca: preto quase-absoluto, wordmark itálico motorsport, bandeira quadriculada, raposa low-poly restrita a marketing",
       "Produto: fundo claro, painéis brancos, cards com sombra ambiente suave — inalterado nesta rodada",
       "Um único azul de sistema (#005BFE) atravessa as duas camadas como fio condutor de marca",
-      "Anton entra no produto só em título de página/seção — nunca em KPI, preço, parágrafo ou botão pequeno",
+      "Bebas Neue entra no produto só em título de página/seção — nunca em KPI, preço, parágrafo ou botão pequeno",
       "Cores de status (kanban/pill) são sinalização funcional, independentes da identidade de marca"
     ],
     "rules": [
       { "name": "The One Blue Rule", "body": "Existe um azul de sistema (#005BFE). Qualquer novo componente, marca ou produto, que precisar de azul usa esse — nunca inventa um tom próximo.", "section": "colors" },
-      { "name": "The One Read Rule", "body": "Anton é pra texto lido uma vez (título). Se o texto é lido várias vezes ao dia em velocidade (KPI, preço, tabela), não é Anton — é Inter ou o Exo2 legado, nunca a fonte de impacto.", "section": "typography" },
+      { "name": "The One Read Rule", "body": "Bebas Neue é pra texto lido uma vez (título). Se o texto é lido várias vezes ao dia em velocidade (KPI, preço, tabela), não é Bebas Neue — é Inter ou o Exo2 legado, nunca a fonte de impacto.", "section": "typography" },
       { "name": "The Flat Brand, Soft Product Rule", "body": "Marca nunca tem sombra ou gradiente. Produto sempre tem sombra ambiente sutil em superfícies interativas. Nunca aplicar a regra de um lado no outro.", "section": "elevation" }
     ],
     "dos": [
       "Do usar #005BFE como único azul de sistema, marca e produto.",
       "Do trocar --accent/--sky no globals.css pra #005BFE como mudança cirúrgica de 1 variável.",
-      "Do usar Anton em título de página/seção dentro do app e full em marketing/landing/Instagram.",
+      "Do usar Bebas Neue em título de página/seção dentro do app e full em marketing/landing/Instagram.",
       "Do manter Exo 2 italic em KPI/preço do app até validação de legibilidade própria.",
       "Do manter as 7 cores de status do funil e as 3 cores de bolha de chat exatamente como estão.",
       "Do manter a raposa fora do app logado — só Instagram e landing page."
     ],
     "donts": [
       "Don't aplicar fundo preto, itálico motorsport ou bandeira quadriculada em qualquer tela do app operacional.",
-      "Don't usar Anton em parágrafo, botão pequeno, KPI ou preço.",
+      "Don't usar Bebas Neue em parágrafo, botão pequeno, KPI ou preço.",
       "Don't usar #0029A7 (azul legado da raposa v1) em qualquer trabalho novo.",
       "Don't mostrar a raposa dentro do sistema logado, em nenhum contexto.",
       "Don't inventar número ou depoimento de resultado pra Speed Motos em nenhuma copy."

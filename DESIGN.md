@@ -16,11 +16,11 @@ colors:
   muted: "#64748B"
 typography:
   display:
-    fontFamily: "Anton, sans-serif"
+    fontFamily: "Bebas Neue, sans-serif"
     fontSize: "clamp(1.25rem, 2.5vw, 2rem)"
     fontWeight: 400
     lineHeight: 1.05
-    letterSpacing: "0.01em"
+    letterSpacing: "0.06em"
     fontFeature: "uppercase only"
   body:
     fontFamily: "Inter, system-ui, -apple-system, sans-serif"
@@ -59,13 +59,13 @@ components:
 
 VEX Auto tem duas camadas visuais que não se confundem. A camada de **marca** (logo, favicon, mascote, marketing, Instagram, landing) é motorsport puro: fundo preto quase absoluto, wordmark itálico condensado, bandeira quadriculada como motivo estrutural, raposa geométrica low-poly como mascote de aquisição. A camada de **produto** (app logado — leads, kanban, conversas, dashboards) é uma superfície de trabalho clara e testada em produção real (Speed Motos), que herda da marca só o essencial: o azul de acento e, pontualmente, a tipografia de destaque em títulos de página. As duas camadas não tentam virar uma coisa só — misturar fundo preto motorsport com uma tela onde vendedor lê 40 leads por dia seria estética vencendo tarefa, e isso é exatamente o que o Operate mode proíbe.
 
-Essa distinção **não é provisória** — é a decisão de escopo confirmada nesta sessão: a marca fica inteira (preto/branco/azul/Anton/raposa) só em superfícies de aquisição; o produto evolui de forma cirúrgica (troca de accent, tipografia de título), preservando tudo que já funciona.
+Essa distinção **não é provisória** — é a decisão de escopo confirmada nesta sessão: a marca fica inteira (preto/branco/azul/Bebas Neue/raposa) só em superfícies de aquisição; o produto evolui de forma cirúrgica (troca de accent, tipografia de título), preservando tudo que já funciona.
 
 **Key Characteristics:**
 - Marca: preto quase-absoluto, wordmark itálico motorsport, bandeira quadriculada, raposa low-poly restrita a marketing
 - Produto: fundo claro, painéis brancos, cards com sombra ambiente suave — inalterado nesta rodada
 - Um único azul de sistema (`#005BFE`) atravessa as duas camadas como fio condutor de marca
-- Anton entra no produto só em título de página/seção — nunca em KPI, preço, parágrafo ou botão pequeno
+- Bebas Neue entra no produto só em título de página/seção — nunca em KPI, preço, parágrafo ou botão pequeno
 - Cores de status (kanban/pill) são sinalização funcional, independentes da identidade de marca
 
 ## Colors
@@ -99,19 +99,19 @@ Dois grupos que não se misturam: cores de marca (para logo/favicon/mascote/mark
 
 ## Typography
 
-**Display Font:** Anton (uppercase only, sem fallback de peso — só existe um)
+**Display Font:** Bebas Neue (uppercase only, sem fallback de peso — só existe um)
 **Body Font:** Inter (400/500/600)
 **Legacy Font:** Exo 2 italic 700/800 — segue viva em KPI/preço do app, ver regra abaixo
 
-**Character:** Anton é grito de pista — condensada, maiúscula, peso único e pesado, feita pra ser lida uma vez e marcar território (nome de página, headline de marketing). Inter é a voz de trabalho — neutra, legível em qualquer tamanho, carrega tudo que se lê repetidamente. As duas nunca disputam o mesmo elemento.
+**Character:** Bebas Neue é grito de pista — condensada, maiúscula, peso único e pesado, feita pra ser lida uma vez e marcar território (nome de página, headline de marketing). Inter é a voz de trabalho — neutra, legível em qualquer tamanho, carrega tudo que se lê repetidamente. As duas nunca disputam o mesmo elemento.
 
 ### Hierarchy
-- **Display** (Anton, `clamp(1.25rem, 2.5vw, 2rem)`, uppercase, line-height 1.05): headline de marketing/landing/Instagram; dentro do app, **só** título de página/seção (ex: "Leads", "Configurações", cabeçalho de card) — lido uma vez, baixo risco.
+- **Display** (Bebas Neue, `clamp(1.25rem, 2.5vw, 2rem)`, uppercase, line-height 1.05): headline de marketing/landing/Instagram; dentro do app, **só** título de página/seção (ex: "Leads", "Configurações", cabeçalho de card) — lido uma vez, baixo risco.
 - **Body** (Inter 400/500/600, 14px, line-height 1.5): parágrafo, formulário, menu, tabela — tudo o resto, marca e produto.
-- **KPI/Preço legado** (Exo 2 italic 800, ver `.kpi-value`/`.vehicle-price`/`.onboarding-title` em `globals.css`): número lido repetidamente e rápido — **não migra para Anton nesta rodada**. Pendente de validação de legibilidade antes de trocar algo já testado em produção com peso único pesado.
+- **KPI/Preço legado** (Exo 2 italic 800, ver `.kpi-value`/`.vehicle-price`/`.onboarding-title` em `globals.css`): número lido repetidamente e rápido — **não migra para Bebas Neue nesta rodada**. Pendente de validação de legibilidade antes de trocar algo já testado em produção com peso único pesado.
 
 ### Named Rules
-**The One Read Rule.** Anton é pra texto lido uma vez (título). Se o texto é lido várias vezes ao dia em velocidade (KPI, preço, tabela), não é Anton — é Inter ou o Exo2 legado, nunca a fonte de impacto.
+**The One Read Rule.** Bebas Neue é pra texto lido uma vez (título). Se o texto é lido várias vezes ao dia em velocidade (KPI, preço, tabela), não é Bebas Neue — é Inter ou o Exo2 legado, nunca a fonte de impacto.
 
 ## Layout
 
@@ -162,14 +162,14 @@ Fundo `var(--navy-dark)` fixo, 56px altura, nav central, avatar/dropdown de usu�
 ### Do:
 - **Do** usar `#005BFE` como único azul de sistema, marca e produto — qualquer novo componente cita este hex, nunca aproxima.
 - **Do** trocar `--accent`/`--sky` no `globals.css` pra `#005BFE` como mudança cirúrgica de 1 variável — todo componente que já usa `var(--accent)` herda automaticamente.
-- **Do** usar Anton em título de página/seção dentro do app (lido uma vez) e full em qualquer peça de marketing/landing/Instagram.
+- **Do** usar Bebas Neue em título de página/seção dentro do app (lido uma vez) e full em qualquer peça de marketing/landing/Instagram.
 - **Do** manter Exo 2 italic em KPI/preço do app até validação de legibilidade própria — não é decisão adiada por esquecimento, é decisão deliberada desta rodada.
 - **Do** manter as 7 cores de status do funil e as 3 cores de bolha de chat exatamente como estão — são sinalização funcional, não superfície de marca.
 - **Do** manter a raposa fora do app logado — só Instagram e landing page.
 
 ### Don't:
 - **Don't** aplicar fundo preto, itálico motorsport ou bandeira quadriculada em qualquer tela do app operacional (leads, kanban, conversas, dashboards) — essa é a camada de marca, não de produto.
-- **Don't** usar Anton em parágrafo, botão pequeno, KPI ou preço — regra herdada de `typography.txt`, sem exceção.
+- **Don't** usar Bebas Neue em parágrafo, botão pequeno, KPI ou preço — regra herdada de `typography.txt`, sem exceção.
 - **Don't** usar `#0029A7` (azul legado da raposa v1) em qualquer trabalho novo — só existe porque já está aprovado nas 4 poses existentes.
 - **Don't** mostrar a raposa dentro do sistema logado, em nenhum contexto — o identificador ali é o favicon "V".
 - **Don't** inventar número ou depoimento de resultado pra Speed Motos em nenhuma copy — é piloto técnico validado, não case de sucesso (ver `PRODUCT.md`).

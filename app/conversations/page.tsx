@@ -57,7 +57,7 @@ export default async function ConversationsPage() {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1>WhatsApp</h1>
+          <h1 className="page-title">WhatsApp</h1>
           <div className="subtitle">
             {items.length} {items.length === 1 ? "conversa ativa" : "conversas ativas"}
             {waiting > 0 && (

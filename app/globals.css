@@ -43,6 +43,15 @@ h1, h2, h3 {
   font-style: italic;
   font-weight: 800;
 }
+.page-title.page-title {
+  font-family: var(--font-anton), "Bebas Neue", sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  font-size: clamp(1.25rem, 2.5vw, 2rem);
+  line-height: 1.05;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 h4, h5, h6 {
   font-family: var(--font-exo2), "Exo 2", system-ui, sans-serif;
   font-style: italic;

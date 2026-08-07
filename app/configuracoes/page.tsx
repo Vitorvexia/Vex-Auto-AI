@@ -63,7 +63,7 @@ export default async function ConfiguracoesPage() {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1>Configurações da Loja</h1>
+          <h1 className="page-title">Configurações da Loja</h1>
           <div className="subtitle">{s.nome}</div>
         </div>
       </div>

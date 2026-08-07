@@ -93,7 +93,7 @@ export default async function AnalyticsPage() {
     <main className="container">
       <div className="page-header">
         <div>
-          <h1>Analytics</h1>
+          <h1 className="page-title">Analytics</h1>
           <div className="subtitle">Métricas operacionais · últimos {WINDOW_DAYS} dias</div>
         </div>
         <Link href="/leads" className="btn-secondary" style={{ alignSelf: "center" }}>
