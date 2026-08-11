@@ -2592,6 +2592,70 @@ Chip de alerta respeita `prefers-reduced-motion: reduce` do sistema operacional 
 
 ---
 
+BL-0037
+
+Title
+
+Redesign visual do app operacional — fase 1: fluxo "oi do cliente até fechamento"
+
+Problem
+
+App operacional usa tema visual legado (Exo2/sky-blue, fundo claro, sem identidade de marca forte) que (a) não gera screenshots de qualidade para seção "como funciona" da landing pública (item 1.7) e (b) não reflete a direção de marca já fechada em `DESIGN.md` (Bebas Neue/Inter, preto/branco/azul canônico `#005BFE`). Redesign aprovado com fundo escuro (DL-0015, reversão consciente de tema claro anterior).
+
+Business Value
+
+Material de marketing (screenshots reais do produto) para landing pública — necessário para converter prospects que avaliam se o produto tem cara de profissional. Modernização da experiência como um todo.
+
+Customer Value
+
+Vendedor usa interface mais moderna e alinhada com a identidade visual da marca, em vez de dashboard genérico.
+
+Priority
+
+P1 — motivado por necessidade de material de marketing. Fase 1 cobre só as telas do fluxo "oi do cliente até fechamento" (inbox/conversa, kanban de leads, dossiê do lead, handoff). Fases seguintes (outras telas do sistema) ficam registradas como continuação, sem escopo fechado ainda.
+
+Status
+
+READY — paleta/tipografia já fechada (`DESIGN.md`), decisão de tema escuro aceita (DL-0015), mapeamento de telas do fluxo em andamento.
+
+Owner
+
+Engineering / Founder (direção visual)
+
+Estimated Complexity
+
+Alto por fase — cada tela é redesign visual completo, não ajuste pontual. Fase 1 = 4-6 telas (a mapear). Fases seguintes sem escopo fechado.
+
+Dependencies
+
+`DESIGN.md` (paleta/tipografia) — concluído. DL-0015 (decisão de tema escuro) — concluído.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+DL-0015 (reversão de tema claro), item 1.7 do `53_ROADMAP.md` (landing pública, consumidor dos screenshots)
+
+Target Version
+
+Fase 1 (prioridade alta, motivado por material de marketing)
+
+Success Metrics
+
+Screenshots das telas redesenhadas usáveis na seção "como funciona" da landing pública, com dado fictício/demo (nunca dado real da Speed Motos).
+
+Notes
+
+Regras de design: paleta preto/branco/azul canônico (`DESIGN.md`) + Bebas Neue só em título (nunca em KPI/preço/parágrafo) + Inter pro resto. Fundo escuro aceito (DL-0015). Dado fictício/demo obrigatório em qualquer print futuro dessas telas (nomes, telefones e veículos inventados). Fase 1 = telas do fluxo "cliente manda oi no WhatsApp → IA responde/qualifica → lead aparece no kanban → vendedor abre dossiê → handoff se necessário → fechamento". Fases seguintes (dashboard, admin, equipe, estoque, agenda, etc.) ficam como continuação sem escopo fechado.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

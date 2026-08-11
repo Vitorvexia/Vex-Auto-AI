@@ -255,6 +255,72 @@ Active
 
 Date
 
+2026-08-11
+
+Decision ID
+
+DL-0015
+
+Title
+
+Reversão consciente da decisão de manter app operacional em tema claro — fundo escuro aceito com risco de ergonomia não testada
+
+Category
+
+Product
+
+Context
+
+DL anterior desta mesma sessão definiu app operacional em tema claro + accent pontual, por falta de validação de ergonomia de fundo escuro em uso prolongado.
+
+Decision
+
+Revertida. Vitor confirma que Speed Motos é loja própria (não cliente terceiro), tolerância a risco de ergonomia não testada é aceita conscientemente. Motivo adicional: sistema vai passar por redesign visual completo, mais rico, para (a) gerar screenshots de qualidade para seção "como funciona" da landing pública, e (b) modernizar a experiência do produto como um todo. Redesign será feito por fases, não de uma vez.
+
+Reasoning
+
+Sendo loja própria, o blast radius de uma decisão estética arriscada é controlado — não há cliente terceiro afetado. O redesign por fases amortiza o risco: se fundo escuro causar fadiga em uso prolongado, será visível nas primeiras telas antes de expandir pro sistema inteiro.
+
+Alternatives Considered
+
+Manter tema claro conforme DL anterior até ter validação de ergonomia com vendedores reais — rejeitado: atrasa material de marketing (screenshots) e redesign que já precisa acontecer.
+
+Expected Impact
+
+Nenhuma mudança de posicionamento (DL-0007/B+) — é decisão de camada visual, não de escopo de produto. App operacional passa a usar fundo escuro. Screenshots do fluxo redesenhado alimentam seção "como funciona" da landing.
+
+Potential Risks
+
+Fundo escuro em uso prolongado (vendedor olhando o turno inteiro) pode causar fadiga visual — aceito conscientemente sem validação prévia. Se vendedores reportarem desconforto, reverter pra claro ou oferecer toggle é trabalho de UI, não de arquitetura.
+
+Owner
+
+Founder
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0037 (redesign visual do app operacional)
+
+Related Runbook
+
+None
+
+Review Date
+
+Primeiras semanas de uso real pós-redesign — monitorar feedback de vendedores da Speed Motos sobre fadiga visual com fundo escuro.
+
+Status
+
+Active
+
+---
+
+Date
+
 2026-08-04
 
 Decision ID

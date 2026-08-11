@@ -32,3 +32,4 @@ supabase/.temp/
 # ver linha "Codex via Anthropic API"). Não versionar até existir processo
 # real de sincronização — hoje viraria dívida de manutenção duplicada.
 AGENTS.md
+.env*
