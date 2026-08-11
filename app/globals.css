@@ -1022,4 +1022,353 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
 .onboarding-desc { font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
 .onboarding-progress { display: flex; gap: 6px; margin-bottom: 24px; }
 .onboarding-progress-dot { flex: 1; height: 4px; border-radius: 999px; background: var(--border); }
+
+/* ─── Marketing Landing (camada de marca — preto/branco/#005BFE, ver DESIGN.md) ─── */
+.marketing-landing {
+  --mkt-bg:        #000000;
+  --mkt-panel:     #0B0B0F;
+  --mkt-panel-2:   #101015;
+  --mkt-border:    rgba(255,255,255,.10);
+  --mkt-blue:      #005BFE;
+  --mkt-white:     #FFFFFF;
+  --mkt-text:      rgba(255,255,255,.72);
+  --mkt-text-dim:  rgba(255,255,255,.5);
+
+  background: var(--mkt-bg);
+  color: var(--mkt-white);
+  font-family: var(--font-inter), Inter, system-ui, -apple-system, sans-serif;
+  font-size: 15px;
+  line-height: 1.6;
+  overflow-x: hidden;
+}
+.marketing-landing h1,
+.marketing-landing h2,
+.marketing-landing h3 {
+  font-family: var(--font-anton), "Bebas Neue", sans-serif;
+  font-style: normal;
+  font-weight: 400;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  color: var(--mkt-white);
+  margin: 0;
+}
+
+/* Topbar */
+.mkt-topbar {
+  display: flex; align-items: center; gap: 10px;
+  padding: 20px 24px;
+  max-width: 1280px; margin: 0 auto;
+}
+.mkt-logo { border-radius: 50%; flex-shrink: 0; }
+
+/* Hero */
+.mkt-hero {
+  position: relative;
+  overflow: hidden;
+  padding: 24px 24px 72px;
+}
+.mkt-hero::before {
+  content: "";
+  position: absolute; top: 0; right: 0;
+  width: 220px; height: 26px;
+  background-image:
+    linear-gradient(45deg, var(--mkt-white) 25%, transparent 25%, transparent 75%, var(--mkt-white) 75%),
+    linear-gradient(45deg, var(--mkt-white) 25%, transparent 25%, transparent 75%, var(--mkt-white) 75%);
+  background-size: 22px 22px;
+  background-position: 0 0, 11px 11px;
+  opacity: 0.12;
+  pointer-events: none;
+}
+.mkt-hero-mascote {
+  object-fit: contain;
+  object-position: 100% 100%;
+  opacity: 0.05;
+  pointer-events: none;
+}
+/* Ambiente de fundo — silhuetas de carro/moto (ver HeroBackdrop.tsx) */
+.mkt-hero-backdrop {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  width: 100%; height: 170px;
+  color: var(--mkt-white);
+  opacity: 0.07;
+  pointer-events: none;
+}
+.mkt-backdrop-floor { stroke: currentColor; stroke-width: 1; opacity: 0.6; }
+.mkt-backdrop-vehicle { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
+.mkt-hero-grid {
+  position: relative;
+  max-width: 1280px; margin: 0 auto;
+  display: grid; grid-template-columns: 1.05fr 0.95fr;
+  gap: 48px; align-items: center;
+}
+.mkt-hero-copy h1 {
+  font-size: clamp(2.1rem, 4.4vw, 3.4rem);
+  line-height: 1.08;
+  margin-bottom: 20px;
+}
+.mkt-hero-lead {
+  font-size: 16px; color: var(--mkt-text);
+  max-width: 46ch; margin-bottom: 22px;
+}
+.mkt-trust-list {
+  list-style: none; margin: 0 0 28px; padding: 0;
+  display: flex; flex-direction: column; gap: 9px;
+}
+.mkt-trust-list li {
+  font-size: 13px; color: var(--mkt-text-dim);
+  padding-left: 22px; position: relative;
+}
+.mkt-trust-list li::before {
+  content: "✓";
+  position: absolute; left: 0; top: 0;
+  color: var(--mkt-blue); font-weight: 700;
+}
+.mkt-cta-primary {
+  display: inline-flex; align-items: center; gap: 10px;
+  background: var(--mkt-blue); color: var(--mkt-white);
+  border: none; border-radius: 6px;
+  padding: 13px 22px; font-size: 14px; font-weight: 600;
+  font-family: var(--font-inter), Inter, sans-serif;
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+.mkt-badge-soon {
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em;
+  background: rgba(255,255,255,.16); border-radius: 999px;
+  padding: 3px 8px;
+}
+
+/* Hero — chat animado (visual do WhatsApp modo escuro, propositalmente fora
+   da paleta de marca — é a reprodução da UI de um app de terceiro, não
+   identidade Vex; ver nota de decisão no HeroChatDemo.tsx) */
+.mkt-hero-demo { display: flex; justify-content: center; }
+.mkt-phone {
+  --wa-header: #202C33;
+  --wa-bg: #0B141A;
+  --wa-bubble-in: #202C33;
+  --wa-bubble-out: #005C4B;
+  --wa-tick-read: #53BDEB;
+  width: 100%; max-width: 340px;
+  background: var(--wa-bg);
+  border: 1px solid var(--mkt-border);
+  border-radius: 16px;
+  overflow: hidden;
+  box-shadow: 0 24px 64px rgba(0,0,0,.5);
+}
+.mkt-phone-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 14px 16px;
+  background: var(--wa-header);
+  border-bottom: 1px solid rgba(255,255,255,.06);
+}
+.mkt-phone-avatar {
+  width: 32px; height: 32px; border-radius: 50%;
+  background: var(--mkt-blue); color: #fff;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-anton), "Bebas Neue", sans-serif; font-size: 15px;
+  flex-shrink: 0;
+}
+.mkt-phone-name { font-size: 13.5px; font-weight: 600; }
+.mkt-phone-status { font-size: 11px; color: var(--mkt-text-dim); }
+.mkt-phone-body {
+  padding: 16px; height: 380px; overflow-y: auto; overscroll-behavior: contain;
+  display: flex; flex-direction: column; gap: 10px;
+}
+.mkt-bubble {
+  position: relative;
+  max-width: 82%; padding: 9px 12px; border-radius: 9px;
+  font-size: 13px; line-height: 1.45;
+  display: flex; flex-direction: column; gap: 3px;
+  animation: mkt-bubble-in .25s ease-out;
+}
+.mkt-bubble time { font-size: 10px; color: rgba(255,255,255,.45); align-self: flex-end; display: flex; align-items: center; gap: 3px; }
+.mkt-ticks { color: var(--wa-tick-read); flex-shrink: 0; }
+.mkt-bubble-lead {
+  align-self: flex-end;
+  background: var(--wa-bubble-out); color: #E9EDEF;
+  border-bottom-right-radius: 2px;
+}
+.mkt-bubble-lead::after {
+  content: ""; position: absolute; bottom: 0; right: -6px;
+  width: 0; height: 0;
+  border-style: solid; border-width: 0 0 8px 8px;
+  border-color: transparent transparent transparent var(--wa-bubble-out);
+}
+.mkt-bubble-ia {
+  align-self: flex-start;
+  background: var(--wa-bubble-in); color: #E9EDEF;
+  border-bottom-left-radius: 2px;
+}
+.mkt-bubble-ia::after {
+  content: ""; position: absolute; bottom: 0; left: -6px;
+  width: 0; height: 0;
+  border-style: solid; border-width: 0 8px 8px 0;
+  border-color: transparent var(--wa-bubble-in) transparent transparent;
+}
+.mkt-bubble-photos { display: flex; gap: 4px; margin-bottom: 2px; }
+.mkt-bubble-photos svg { width: 74px; height: 54px; display: block; border-radius: 6px; }
+.mkt-bubble-typing {
+  flex-direction: row; align-items: center; gap: 4px;
+  padding: 11px 14px;
+}
+.mkt-typing-dot {
+  width: 5px; height: 5px; border-radius: 50%;
+  background: rgba(255,255,255,.5);
+  animation: mkt-typing 1.1s infinite ease-in-out;
+}
+.mkt-typing-dot:nth-child(2) { animation-delay: .15s; }
+.mkt-typing-dot:nth-child(3) { animation-delay: .3s; }
+@keyframes mkt-typing {
+  0%, 60%, 100% { opacity: .3; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-2px); }
+}
+@keyframes mkt-bubble-in {
+  from { opacity: 0; transform: translateY(6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Como funciona — etapas */
+.mkt-steps { max-width: 1280px; margin: 0 auto; padding: 88px 24px; }
+.mkt-steps > h2 {
+  font-size: clamp(1.6rem, 3vw, 2.2rem);
+  text-align: center; margin-bottom: 64px;
+}
+.mkt-step-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 72px; }
+.mkt-step {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 56px; align-items: center;
+}
+.mkt-step-reverse .mkt-step-media { order: 2; }
+.mkt-step-reverse .mkt-step-copy { order: 1; }
+.mkt-eyebrow {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--mkt-blue); margin-bottom: 14px;
+}
+.mkt-step-copy h3 {
+  font-size: clamp(1.3rem, 2.2vw, 1.7rem);
+  margin-bottom: 14px;
+}
+.mkt-step-copy p { font-size: 14.5px; color: var(--mkt-text); margin-bottom: 18px; max-width: 48ch; }
+.mkt-callout {
+  background: rgba(0,91,254,.10);
+  border: 1px solid rgba(0,91,254,.28);
+  border-radius: 8px;
+  padding: 12px 14px;
+  font-size: 13px; font-weight: 600; color: var(--mkt-white);
+  max-width: 48ch;
+}
+
+/* Step media — ilustrações CSS, não screenshots */
+.mkt-step-media {
+  background: var(--mkt-panel);
+  border: 1px solid var(--mkt-border);
+  border-radius: 14px;
+  min-height: 220px;
+  display: flex; align-items: center; justify-content: center;
+  padding: 28px;
+}
+.mkt-media { width: 100%; }
+.mkt-media-chat { display: flex; flex-direction: column; gap: 10px; }
+.mkt-mini-bubble { padding: 9px 12px; border-radius: 12px; font-size: 12.5px; max-width: 85%; line-height: 1.4; }
+.mkt-mini-bubble-lead { align-self: flex-end; background: var(--mkt-blue); color: #fff; border-bottom-right-radius: 3px; margin-left: auto; }
+.mkt-mini-bubble-ia { background: var(--mkt-panel-2); border: 1px solid var(--mkt-border); border-bottom-left-radius: 3px; }
+.mkt-media-score { display: flex; align-items: center; gap: 18px; }
+.mkt-score-ring {
+  width: 84px; height: 84px; border-radius: 50%;
+  background: conic-gradient(var(--mkt-blue) 82%, rgba(255,255,255,.12) 0);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.mkt-score-value {
+  width: 66px; height: 66px; border-radius: 50%;
+  background: var(--mkt-panel);
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--font-anton), "Bebas Neue", sans-serif; font-size: 22px;
+}
+.mkt-score-label { display: flex; flex-direction: column; gap: 6px; font-size: 12px; color: var(--mkt-text-dim); }
+.mkt-score-pill {
+  align-self: flex-start;
+  background: rgba(249,115,22,.16); color: #F97316;
+  border: 1px solid rgba(249,115,22,.35);
+  border-radius: 999px; padding: 3px 10px;
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em;
+}
+.mkt-media-loop { text-align: center; }
+.mkt-loop-track { display: flex; align-items: center; justify-content: center; gap: 18px; margin-bottom: 12px; }
+.mkt-loop-dot { width: 12px; height: 12px; border-radius: 50%; background: var(--mkt-blue); }
+.mkt-loop-labels { display: flex; justify-content: center; gap: 30px; font-size: 12px; color: var(--mkt-text-dim); }
+.mkt-media-handoff { display: flex; justify-content: center; }
+.mkt-handoff-card {
+  display: flex; flex-direction: column; gap: 6px;
+  background: var(--mkt-panel-2); border: 1px solid var(--mkt-border);
+  border-radius: 10px; padding: 16px 18px; min-width: 220px;
+}
+.mkt-handoff-tag {
+  align-self: flex-start;
+  background: rgba(0,91,254,.16); color: var(--mkt-blue);
+  border-radius: 999px; padding: 3px 9px;
+  font-size: 10.5px; font-weight: 700; letter-spacing: 0.03em;
+}
+.mkt-handoff-card strong { font-size: 15px; }
+.mkt-handoff-card span:last-child { font-size: 12px; color: var(--mkt-text-dim); }
+.mkt-media-chart { width: 100%; }
+.mkt-bars { display: flex; align-items: flex-end; gap: 12px; height: 130px; }
+.mkt-bars span { flex: 1; background: var(--mkt-blue); border-radius: 4px 4px 0 0; opacity: 0.85; }
+
+/* Prova social */
+.mkt-social {
+  max-width: 760px; margin: 0 auto; padding: 0 24px 88px;
+  text-align: center;
+}
+.mkt-social h2 { font-size: clamp(1.4rem, 2.6vw, 1.9rem); margin-bottom: 16px; }
+.mkt-social p { font-size: 14.5px; color: var(--mkt-text); line-height: 1.7; }
+
+/* CTA — formulário de demonstração */
+.mkt-cta { background: var(--mkt-panel); border-top: 1px solid var(--mkt-border); padding: 72px 24px; }
+.marketing-cta-form {
+  max-width: 480px; margin: 0 auto;
+  display: flex; flex-direction: column; gap: 14px;
+}
+.marketing-cta-form h2 { font-size: clamp(1.4rem, 2.4vw, 1.8rem); margin-bottom: 4px; text-align: center; }
+.marketing-cta-form label { font-size: 12.5px; font-weight: 600; color: var(--mkt-text-dim); }
+.marketing-cta-form input,
+.marketing-cta-form textarea {
+  width: 100%; margin-top: 4px;
+  background: var(--mkt-panel-2); border: 1px solid var(--mkt-border);
+  border-radius: 6px; padding: 10px 12px;
+  color: var(--mkt-white); font-family: inherit; font-size: 13.5px;
+}
+.marketing-cta-form input:focus,
+.marketing-cta-form textarea:focus {
+  outline: none; border-color: var(--mkt-blue);
+}
+.marketing-cta-error { font-size: 12.5px; color: #F87171; }
+.marketing-cta-success {
+  max-width: 480px; margin: 0 auto; text-align: center;
+  background: rgba(0,91,254,.1); border: 1px solid rgba(0,91,254,.3);
+  border-radius: 10px; padding: 20px; font-size: 14px;
+}
+.marketing-landing .btn.btn-primary {
+  background: var(--mkt-blue); color: #fff; border: none;
+  border-radius: 6px; padding: 11px 18px;
+  font-family: var(--font-inter), Inter, sans-serif; font-size: 14px; font-weight: 600;
+  cursor: pointer; margin-top: 4px;
+}
+.marketing-landing .btn.btn-primary:hover { opacity: 0.86; }
+.marketing-landing .btn.btn-primary:disabled { opacity: 0.55; cursor: not-allowed; }
+
+/* Footer */
+.mkt-footer {
+  max-width: 1280px; margin: 0 auto; padding: 28px 24px 40px;
+  font-size: 12px; color: var(--mkt-text-dim);
+  border-top: 1px solid var(--mkt-border);
+}
+
+@media (max-width: 900px) {
+  .mkt-hero-grid { grid-template-columns: 1fr; }
+  .mkt-hero-demo { order: -1; }
+  .mkt-step { grid-template-columns: 1fr; gap: 24px; }
+  .mkt-step-reverse .mkt-step-media,
+  .mkt-step-reverse .mkt-step-copy { order: initial; }
+}
 .onboarding-progress-dot.done { background: var(--accent); }

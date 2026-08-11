@@ -1,5 +1,5 @@
 import "./globals.css";
-import { Exo_2, Barlow } from "next/font/google";
+import { Exo_2, Barlow, Inter } from "next/font/google";
 import localFont from "next/font/local";
 import { headers } from "next/headers";
 import { AppChrome } from "@/app/components/AppChrome";
@@ -20,6 +20,13 @@ const barlow = Barlow({
   weight: ["900"],
   style: ["italic"],
   variable: "--font-barlow",
+  display: "swap",
+});
+
+const inter = Inter({
+  subsets: ["latin"],
+  weight: ["400", "500", "600"],
+  variable: "--font-inter",
   display: "swap",
 });
 
@@ -52,7 +59,7 @@ export default async function RootLayout({
   const isPublicRoute = requestHeaders.get(PUBLIC_SITE_ROUTE_HEADER) === "1";
 
   return (
-    <html lang="pt-BR" className={`${exo2.variable} ${barlow.variable} ${bebasNeue.variable}`}>
+    <html lang="pt-BR" className={`${exo2.variable} ${barlow.variable} ${bebasNeue.variable} ${inter.variable}`}>
       <body>
         <AppChrome isPublicRoute={isPublicRoute} isAdmin={isSuperAdmin(user?.email)}>
           {children}
