@@ -1060,10 +1060,6 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
   max-width: 1280px; margin: 0 auto;
 }
 .mkt-logo { border-radius: 50%; flex-shrink: 0; }
-.mkt-wordmark {
-  font-family: var(--font-anton), "Bebas Neue", sans-serif;
-  font-size: 18px; letter-spacing: 0.08em;
-}
 
 /* Hero */
 .mkt-hero {
@@ -1089,6 +1085,16 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
   opacity: 0.05;
   pointer-events: none;
 }
+/* Ambiente de fundo — silhuetas de carro/moto (ver HeroBackdrop.tsx) */
+.mkt-hero-backdrop {
+  position: absolute; left: 0; right: 0; bottom: 0;
+  width: 100%; height: 170px;
+  color: var(--mkt-white);
+  opacity: 0.07;
+  pointer-events: none;
+}
+.mkt-backdrop-floor { stroke: currentColor; stroke-width: 1; opacity: 0.6; }
+.mkt-backdrop-vehicle { fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linejoin: round; stroke-linecap: round; }
 .mkt-hero-grid {
   position: relative;
   max-width: 1280px; margin: 0 auto;
@@ -1132,11 +1138,18 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
   padding: 3px 8px;
 }
 
-/* Hero — chat animado */
+/* Hero — chat animado (visual do WhatsApp modo escuro, propositalmente fora
+   da paleta de marca — é a reprodução da UI de um app de terceiro, não
+   identidade Vex; ver nota de decisão no HeroChatDemo.tsx) */
 .mkt-hero-demo { display: flex; justify-content: center; }
 .mkt-phone {
+  --wa-header: #202C33;
+  --wa-bg: #0B141A;
+  --wa-bubble-in: #202C33;
+  --wa-bubble-out: #005C4B;
+  --wa-tick-read: #53BDEB;
   width: 100%; max-width: 340px;
-  background: var(--mkt-panel);
+  background: var(--wa-bg);
   border: 1px solid var(--mkt-border);
   border-radius: 16px;
   overflow: hidden;
@@ -1145,8 +1158,8 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
 .mkt-phone-header {
   display: flex; align-items: center; gap: 10px;
   padding: 14px 16px;
-  background: var(--mkt-panel-2);
-  border-bottom: 1px solid var(--mkt-border);
+  background: var(--wa-header);
+  border-bottom: 1px solid rgba(255,255,255,.06);
 }
 .mkt-phone-avatar {
   width: 32px; height: 32px; border-radius: 50%;
@@ -1158,28 +1171,42 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
 .mkt-phone-name { font-size: 13.5px; font-weight: 600; }
 .mkt-phone-status { font-size: 11px; color: var(--mkt-text-dim); }
 .mkt-phone-body {
-  padding: 16px; min-height: 300px;
+  padding: 16px; height: 380px; overflow-y: auto; overscroll-behavior: contain;
   display: flex; flex-direction: column; gap: 10px;
 }
 .mkt-bubble {
-  max-width: 82%; padding: 9px 12px; border-radius: 12px;
+  position: relative;
+  max-width: 82%; padding: 9px 12px; border-radius: 9px;
   font-size: 13px; line-height: 1.45;
   display: flex; flex-direction: column; gap: 3px;
   animation: mkt-bubble-in .25s ease-out;
 }
-.mkt-bubble time { font-size: 10px; color: rgba(255,255,255,.4); align-self: flex-end; }
+.mkt-bubble time { font-size: 10px; color: rgba(255,255,255,.45); align-self: flex-end; display: flex; align-items: center; gap: 3px; }
+.mkt-ticks { color: var(--wa-tick-read); flex-shrink: 0; }
 .mkt-bubble-lead {
   align-self: flex-end;
-  background: var(--mkt-blue); color: #fff;
-  border-bottom-right-radius: 3px;
+  background: var(--wa-bubble-out); color: #E9EDEF;
+  border-bottom-right-radius: 2px;
 }
-.mkt-bubble-lead time { color: rgba(255,255,255,.65); }
+.mkt-bubble-lead::after {
+  content: ""; position: absolute; bottom: 0; right: -6px;
+  width: 0; height: 0;
+  border-style: solid; border-width: 0 0 8px 8px;
+  border-color: transparent transparent transparent var(--wa-bubble-out);
+}
 .mkt-bubble-ia {
   align-self: flex-start;
-  background: var(--mkt-panel-2); color: var(--mkt-white);
-  border: 1px solid var(--mkt-border);
-  border-bottom-left-radius: 3px;
+  background: var(--wa-bubble-in); color: #E9EDEF;
+  border-bottom-left-radius: 2px;
 }
+.mkt-bubble-ia::after {
+  content: ""; position: absolute; bottom: 0; left: -6px;
+  width: 0; height: 0;
+  border-style: solid; border-width: 0 8px 8px 0;
+  border-color: transparent var(--wa-bubble-in) transparent transparent;
+}
+.mkt-bubble-photos { display: flex; gap: 4px; margin-bottom: 2px; }
+.mkt-bubble-photos svg { width: 74px; height: 54px; display: block; border-radius: 6px; }
 .mkt-bubble-typing {
   flex-direction: row; align-items: center; gap: 4px;
   padding: 11px 14px;

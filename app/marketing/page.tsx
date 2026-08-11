@@ -1,5 +1,6 @@
 import Image from "next/image";
 import { DemoRequestForm } from "./DemoRequestForm";
+import { HeroBackdrop } from "./HeroBackdrop";
 import { HeroChatDemo } from "./HeroChatDemo";
 import { StepIcon } from "./StepIcon";
 import { StepMedia } from "./StepMedia";
@@ -17,10 +18,10 @@ export default function MarketingLandingPage() {
     <main className="marketing-landing">
       <header className="mkt-topbar">
         <Image src={logo} alt="Vex Auto" width={40} height={40} className="mkt-logo" priority />
-        <span className="mkt-wordmark">VEX AUTO</span>
       </header>
 
       <section className="mkt-hero">
+        <HeroBackdrop />
         <Image
           src={mascote}
           alt=""
