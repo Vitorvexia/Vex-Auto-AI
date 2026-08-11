@@ -2616,7 +2616,7 @@ P1 — motivado por necessidade de material de marketing. Fase 1 cobre só as te
 
 Status
 
-READY — paleta/tipografia já fechada (`DESIGN.md`), decisão de tema escuro aceita (DL-0015), mapeamento de telas do fluxo em andamento.
+IN_PROGRESS — tokens globais (`:root`) e todas as cores hardcoded de `globals.css` convertidos pra dark theme (PR #31, mergeado 2026-08-11). Tela de conversa/dossiê/handoff validada visualmente. Próximo: validação visual das demais telas (kanban, inbox, dashboard, equipe, analytics, estoque, agenda, admin, configurações).
 
 Owner
 

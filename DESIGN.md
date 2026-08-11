@@ -5,15 +5,15 @@ colors:
   vex-blue: "#005BFE"
   vex-black: "#000000"
   vex-white: "#FFFFFF"
-  navy-dark: "#1C2B3A"
-  bg: "#F5FAFC"
-  panel: "#FFFFFF"
-  panel-2: "#F0F7FC"
-  border: "#DDE8F0"
-  border-strong: "#B8CEDE"
-  text: "#334155"
-  text-strong: "#1C2B3A"
-  muted: "#64748B"
+  navy-dark: "#0A0E14"
+  bg: "#0A0E14"
+  panel: "#141A23"
+  panel-2: "#1A2332"
+  border: "#1E2A3A"
+  border-strong: "#2A3A4E"
+  text: "#B0BEC5"
+  text-strong: "#E8EDF2"
+  muted: "#6B7D8F"
 typography:
   display:
     fontFamily: "Bebas Neue, sans-serif"
@@ -57,16 +57,15 @@ components:
 
 **Creative North Star: "Motorsport Telemetry, Working Shift"**
 
-VEX Auto tem duas camadas visuais que não se confundem. A camada de **marca** (logo, favicon, mascote, marketing, Instagram, landing) é motorsport puro: fundo preto quase absoluto, wordmark itálico condensado, bandeira quadriculada como motivo estrutural, raposa geométrica low-poly como mascote de aquisição. A camada de **produto** (app logado — leads, kanban, conversas, dashboards) é uma superfície de trabalho clara e testada em produção real (Speed Motos), que herda da marca só o essencial: o azul de acento e, pontualmente, a tipografia de destaque em títulos de página. As duas camadas não tentam virar uma coisa só — misturar fundo preto motorsport com uma tela onde vendedor lê 40 leads por dia seria estética vencendo tarefa, e isso é exatamente o que o Operate mode proíbe.
-
-Essa distinção **não é provisória** — é a decisão de escopo confirmada nesta sessão: a marca fica inteira (preto/branco/azul/Bebas Neue/raposa) só em superfícies de aquisição; o produto evolui de forma cirúrgica (troca de accent, tipografia de título), preservando tudo que já funciona.
+VEX Auto tem duas camadas visuais que compartilham DNA mas diferem em intensidade. A camada de **marca** (logo, favicon, mascote, marketing, Instagram, landing) é motorsport puro: fundo preto quase absoluto, wordmark itálico condensado, bandeira quadriculada como motivo estrutural, raposa geométrica low-poly como mascote de aquisição. A camada de **produto** (app logado — leads, kanban, conversas, dashboards) agora usa **tema escuro** (DL-0015, 2026-08-11) — fundo `#0A0E14`, painéis `#141A23` — que herda da marca o azul de acento e a tipografia de destaque em títulos de página, sem o visual motorsport pesado (sem bandeira, sem itálico extremo, sem raposa).
 
 **Key Characteristics:**
 - Marca: preto quase-absoluto, wordmark itálico motorsport, bandeira quadriculada, raposa low-poly restrita a marketing
-- Produto: fundo claro, painéis brancos, cards com sombra ambiente suave — inalterado nesta rodada
+- Produto: **tema escuro** — fundo `#0A0E14`, painéis `#141A23`, texto `#B0BEC5`/`#E8EDF2`, bordas `#1E2A3A`
 - Um único azul de sistema (`#005BFE`) atravessa as duas camadas como fio condutor de marca
 - Bebas Neue entra no produto só em título de página/seção — nunca em KPI, preço, parágrafo ou botão pequeno
 - Cores de status (kanban/pill) são sinalização funcional, independentes da identidade de marca
+- Cores de texto em badges/pills usam variantes claras (ex: `#FB923C` em vez de `#C2410C`) para contraste WCAG AA sobre fundo escuro
 
 ## Colors
 
@@ -79,14 +78,14 @@ Dois grupos que não se misturam: cores de marca (para logo/favicon/mascote/mark
 - **VEX Black** (`#000000`): fundo do logo, favicon, mascote, landing page, Instagram. Nunca aparece no app logado.
 - **VEX White** (`#FFFFFF`): wordmark, favicon "V", pelagem da raposa, texto sobre fundo preto.
 
-### Neutral — Produto (app logado, inalterado nesta rodada)
-- **Navy Dark** (`#1C2B3A`): fundo do header fixo do app.
-- **Background** (`#F5FAFC`): fundo geral das páginas.
-- **Panel** (`#FFFFFF`): cards, colunas de kanban, chat, formulários.
-- **Panel 2** (`#F0F7FC`): superfície secundária (corpo de coluna kanban, badges neutros).
-- **Border** / **Border Strong** (`#DDE8F0` / `#B8CEDE`): divisórias e contornos de card.
-- **Text** / **Text Strong** (`#334155` / `#1C2B3A`): corpo de texto e texto de ênfase.
-- **Muted** (`#64748B`): metadados, timestamps, labels secundários.
+### Neutral — Produto (app logado, tema escuro — DL-0015)
+- **Navy Dark** (`#0A0E14`): fundo do header fixo do app.
+- **Background** (`#0A0E14`): fundo geral das páginas.
+- **Panel** (`#141A23`): cards, colunas de kanban, chat, formulários.
+- **Panel 2** (`#1A2332`): superfície secundária (corpo de coluna kanban, badges neutros).
+- **Border** / **Border Strong** (`#1E2A3A` / `#2A3A4E`): divisórias e contornos de card.
+- **Text** / **Text Strong** (`#B0BEC5` / `#E8EDF2`): corpo de texto e texto de ênfase.
+- **Muted** (`#6B7D8F`): metadados, timestamps, labels secundários (WCAG AA 4.6:1 contra `--bg`).
 
 ### Cores de status (fora do escopo de marca — não tocar)
 7 cores funcionais no funil (`--status-novo` `#94A3B8`, `--status-engajado` `#0EA5E9`, `--status-interessado` `#8B5CF6`, `--status-quente` `#F97316`, `--status-negociacao` `#22C55E`, `--status-fechado` `#10B981`, `--status-perdido` `#EF4444`) e as 3 cores de bolha de chat (lead/IA/humano). São sinalização de estado do funil, não identidade — `--status-engajado` coincide hoje com o azul antigo do accent por acaso de paleta, não por vínculo de marca; a troca de accent não deve arrastar esse valor junto sem decisão própria.
@@ -122,7 +121,7 @@ Container padrão 1400px max-width, padding 24px lateral. Kanban em colunas flex
 Duas filosofias distintas, cada uma correta no seu contexto — não convergem numa regra só:
 
 - **Marca**: **flat absoluto**. Sem cromado, gradiente ou bisel 3D no logo/favicon/mascote — decisão explícita do usuário, não omissão.
-- **Produto**: sombra ambiente suave e consistente (`box-shadow: 0 1px 3px rgba(28,43,58,.06)` em cards/painéis, escalando pra `0 2px 8px` em hover). Não é decorativa — é o sinal visual de "isto é clicável/hoverável" numa superfície densa de trabalho. Inalterada.
+- **Produto**: sombra ambiente (`box-shadow: 0 1px 3px rgba(0,0,0,.25)` em cards/painéis, escalando pra `0 2px 8px` em hover). Ajustada de `rgba(28,43,58,.06)` (tema claro) pra `rgba(0,0,0,.25)` (tema escuro) para visibilidade sobre fundo escuro.
 
 ### Named Rules
 **The Flat Brand, Soft Product Rule.** Marca nunca tem sombra ou gradiente. Produto sempre tem sombra ambiente sutil em superfícies interativas. Nunca aplicar a regra de um lado no outro.
@@ -142,7 +141,7 @@ Duas filosofias distintas, cada uma correta no seu contexto — não convergem n
 
 ### Cards / Containers (produto)
 - **Corner:** 8-10px
-- **Background:** `var(--panel)` (branco), corpo secundário `var(--panel-2)`
+- **Background:** `var(--panel)` (`#141A23`), corpo secundário `var(--panel-2)` (`#1A2332`)
 - **Shadow:** ambiente suave, ver Elevation
 - **Border:** 1px `var(--border)`, hover troca pra `var(--vex-blue)` em cards clicáveis (lead card, vehicle card, conv row)
 
@@ -168,7 +167,7 @@ Fundo `var(--navy-dark)` fixo, 56px altura, nav central, avatar/dropdown de usu�
 - **Do** manter a raposa fora do app logado — só Instagram e landing page.
 
 ### Don't:
-- **Don't** aplicar fundo preto, itálico motorsport ou bandeira quadriculada em qualquer tela do app operacional (leads, kanban, conversas, dashboards) — essa é a camada de marca, não de produto.
+- **Don't** aplicar itálico motorsport ou bandeira quadriculada em qualquer tela do app operacional (leads, kanban, conversas, dashboards) — essa é a camada de marca, não de produto. (Fundo escuro agora é permitido — DL-0015.)
 - **Don't** usar Bebas Neue em parágrafo, botão pequeno, KPI ou preço — regra herdada de `typography.txt`, sem exceção.
 - **Don't** usar `#0029A7` (azul legado da raposa v1) em qualquer trabalho novo — só existe porque já está aprovado nas 4 poses existentes.
 - **Don't** mostrar a raposa dentro do sistema logado, em nenhum contexto — o identificador ali é o favicon "V".
