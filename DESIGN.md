@@ -154,7 +154,7 @@ Fundo `var(--navy-dark)` fixo, 56px altura, nav central, avatar/dropdown de usu�
 
 ### Wordmark / Favicon / Mascote (marca — DL-0017 abriu exceção pro favicon, ver abaixo)
 - **Logo:** wordmark "VEX AUTO" itálico condensado, branco flat, bandeira quadriculada pequena acima (branco + `#005BFE`), fundo preto, crop circular. `docs/vex/assets/brand/LOGO.png`.
-- **Favicon/in-app:** ~~letra "V" isolada~~ — **atualizado por DL-0017 (2026-08-12, pedido direto do founder):** agora é o rosto da raposa (mascote), render frontal geométrico low-poly com glow, branco/azul sobre fundo preto, crop circular. Único elemento de marca dentro do app logado (aba do navegador + logo da sidebar). `docs/vex/assets/brand/FAVICON.png` — arquivo trocado no lugar, mesmo path.
+- **Favicon/in-app:** ~~letra "V" isolada~~ — **atualizado por DL-0017 (2026-08-12, pedido direto do founder):** agora é o rosto da raposa (mascote), geométrico low-poly, cores sólidas sobre fundo transparente. Único elemento de marca dentro do app logado (aba do navegador + logo da sidebar). Fonte: `docs/vex/assets/brand/FAVICONOFICIAL.png` (renomeado de `FAVICON.png` — é a versão definitiva, depois de 2 iterações no mesmo dia). Precisa ser copiado manualmente pra `Public/favicon.png`, que é o arquivo que o app de fato serve.
 - **Mascote (raposa):** geométrica low-poly flat, branco/off-white + azul pontual (olhos, orelha, facetas), bandeira quadriculada só na orelha direita, textura de grade automotiva no focinho. 4 poses aprovadas (frontal, perfil, andando, sentada 3/4) em `docs/vex/assets/brand/MASCOTE.png`. Continua fora do app logado **exceto** no favicon/logo da sidebar (DL-0017) — não usar em nenhuma outra superfície de produto (cards, empty states, loading etc.).
 
 ## Do's and Don'ts

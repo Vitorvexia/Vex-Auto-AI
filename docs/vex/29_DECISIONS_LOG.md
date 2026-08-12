@@ -275,7 +275,7 @@ DESIGN.md documentava como regra absoluta, em linguagem deliberadamente forte: "
 
 Decision
 
-`docs/vex/assets/brand/FAVICON.png` deixa de ser a letra "V" isolada e passa a ser um render frontal da raposa (geométrico low-poly, glow branco/azul sobre fundo preto, crop circular) — mesmo path de arquivo, conteúdo trocado. Esse arquivo é usado em dois lugares do app logado: aba do navegador (`app/layout.tsx` metadata.icons) e logo da sidebar (`app/components/Sidebar.tsx`). Resto da regra original continua de pé — raposa não aparece em nenhuma outra superfície de produto (cards, empty states, loading, e-mail transacional).
+O favicon in-app deixa de ser a letra "V" isolada e passa a ser um render da raposa. Asset final, depois de 3 iterações no mesmo dia (glow preto/azul → lobo sólido → confirmado o lobo como oficial), é `docs/vex/assets/brand/FAVICONOFICIAL.png` (170×172, ~36KB, fundo transparente, cores sólidas) — renomeado de `FAVICON.png` pra deixar explícito que é a versão definitiva, não mais uma iteração. Esse arquivo é copiado pra `Public/favicon.png`, que é o que `app/layout.tsx` (metadata.icons) e `app/components/Sidebar.tsx` de fato servem — a cópia em `docs/vex/assets/brand/` é só a fonte, precisa ser sincronizada manualmente a cada troca. Resto da regra original continua de pé — raposa não aparece em nenhuma outra superfície de produto (cards, empty states, loading, e-mail transacional).
 
 Reasoning
 
@@ -283,15 +283,15 @@ Decisão de marca é prerrogativa do founder. O escopo da exceção é estreito 
 
 Alternatives Considered
 
-Recriar a raposa como SVG vetorial a partir de referência visual, em vez de usar o arquivo exato do founder — descartado a pedido dele; preferiu subir o PNG original direto pro repo.
+Recriar a raposa como SVG vetorial a partir de referência visual, em vez de usar o arquivo exato do founder — descartado a pedido dele; preferiu subir o PNG original direto pro repo. Versão anterior (render com glow, 1536×1024, ~1.2MB) foi testada e descartada — trocada pela versão sólida/menor por decisão direta do founder no mesmo dia.
 
 Expected Impact
 
-Favicon/logo fica mais reconhecível como marca "Vex" (a raposa é o elemento de mascote mais forte visualmente) em troca de menor legibilidade em tamanho pequeno — o desenho é intrincado (wireframe fino), esperado ficar mais "textura" que forma nítida a 16-28px. Sem ferramenta de recorte/redimensionamento de imagem disponível neste ambiente pra gerar um favicon otimizado (arquivo final ~1.2MB, maior que o ideal pra um favicon).
+Favicon/logo fica mais reconhecível como marca "Vex" (a raposa é o elemento de mascote mais forte visualmente). Asset final (170×172, ~36KB) já resolve o problema de peso que a primeira iteração tinha — não precisa de otimização adicional.
 
 Potential Risks
 
-Arquivo de imagem grande (1.2MB) impacta levemente o tempo de carregamento da aba/sidebar — sem ferramenta de otimização de imagem disponível nesta sessão pra comprimir; considerar otimizar depois com sharp/imagemagick se virar problema real. Aspect ratio não é quadrado (1536×1024) — Sidebar.tsx usa `object-fit: cover` + crop circular pra evitar distorção, mas o favicon do navegador (link rel=icon puro) fica a critério de como cada browser lida com ícone não-quadrado.
+Nenhum técnico relevante com o asset atual. Ponto de atenção operacional: `docs/vex/assets/brand/FAVICONOFICIAL.png` e `Public/favicon.png` são arquivos independentes (cópia, não referência) — trocar um sem o outro deixa a marca-fonte e o que o app realmente serve dessincronizados, como já aconteceu uma vez nesta mesma sessão.
 
 Owner
 
