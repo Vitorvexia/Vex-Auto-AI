@@ -259,6 +259,72 @@ Date
 
 Decision ID
 
+DL-0017
+
+Title
+
+Mascote (raposa) autorizada como favicon/logo da sidebar do app logado — exceção pontual, não revogação da regra geral
+
+Category
+
+Product / Brand
+
+Context
+
+DESIGN.md documentava como regra absoluta, em linguagem deliberadamente forte: "a raposa nunca aparece no app logado, em nenhum contexto" — mascote restrita a marketing/Instagram/landing, favicon in-app definido como a letra "V" isolada. Vitor pediu diretamente, na mesma sessão de DL-0016, pra trocar o favicon (aba do navegador + logo da sidebar) pela raposa. Diferente da reversão de tema (DL-0016), essa regra não tinha ressalva de "pode mudar depois" no texto original — foi sinalizado explicitamente antes de implementar, e o founder confirmou querer prosseguir mesmo assim.
+
+Decision
+
+`docs/vex/assets/brand/FAVICON.png` deixa de ser a letra "V" isolada e passa a ser um render frontal da raposa (geométrico low-poly, glow branco/azul sobre fundo preto, crop circular) — mesmo path de arquivo, conteúdo trocado. Esse arquivo é usado em dois lugares do app logado: aba do navegador (`app/layout.tsx` metadata.icons) e logo da sidebar (`app/components/Sidebar.tsx`). Resto da regra original continua de pé — raposa não aparece em nenhuma outra superfície de produto (cards, empty states, loading, e-mail transacional).
+
+Reasoning
+
+Decisão de marca é prerrogativa do founder. O escopo da exceção é estreito o suficiente (só o ícone de identidade, não a raposa "solta" pelo produto) pra não comprometer a separação marca/produto que motivou a regra original — o app operacional continua sem fundo preto, sem itálico motorsport, sem bandeira quadriculada.
+
+Alternatives Considered
+
+Recriar a raposa como SVG vetorial a partir de referência visual, em vez de usar o arquivo exato do founder — descartado a pedido dele; preferiu subir o PNG original direto pro repo.
+
+Expected Impact
+
+Favicon/logo fica mais reconhecível como marca "Vex" (a raposa é o elemento de mascote mais forte visualmente) em troca de menor legibilidade em tamanho pequeno — o desenho é intrincado (wireframe fino), esperado ficar mais "textura" que forma nítida a 16-28px. Sem ferramenta de recorte/redimensionamento de imagem disponível neste ambiente pra gerar um favicon otimizado (arquivo final ~1.2MB, maior que o ideal pra um favicon).
+
+Potential Risks
+
+Arquivo de imagem grande (1.2MB) impacta levemente o tempo de carregamento da aba/sidebar — sem ferramenta de otimização de imagem disponível nesta sessão pra comprimir; considerar otimizar depois com sharp/imagemagick se virar problema real. Aspect ratio não é quadrado (1536×1024) — Sidebar.tsx usa `object-fit: cover` + crop circular pra evitar distorção, mas o favicon do navegador (link rel=icon puro) fica a critério de como cada browser lida com ícone não-quadrado.
+
+Owner
+
+Founder
+
+Related ADR
+
+None
+
+Related Issue
+
+DESIGN.md (regra original revisada), DL-0016 (mesma sessão), BL-0037
+
+Related Runbook
+
+None
+
+Review Date
+
+N/A — decisão de marca, não expira
+
+Status
+
+Active
+
+---
+
+Date
+
+2026-08-12
+
+Decision ID
+
 DL-0016
 
 Title

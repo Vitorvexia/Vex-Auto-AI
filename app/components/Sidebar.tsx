@@ -232,7 +232,13 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
     <aside className="sidebar">
       <div className="sidebar-header">
         <Link href="/leads" className="sidebar-logo" aria-label="VexAuto — início">
-          <Image src="/favicon.png" alt="VexAuto" width={28} height={28} style={{ display: "block", flexShrink: 0 }} />
+          <Image
+            src="/favicon.png"
+            alt="VexAuto"
+            width={28}
+            height={28}
+            style={{ display: "block", flexShrink: 0, objectFit: "cover", borderRadius: "50%" }}
+          />
         </Link>
         <button
           className="sidebar-toggle-btn"

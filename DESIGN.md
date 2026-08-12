@@ -152,10 +152,10 @@ Duas filosofias distintas, cada uma correta no seu contexto — não convergem n
 ### Header (produto)
 Fundo `var(--navy-dark)` fixo, 56px altura, nav central, avatar/dropdown de usuário à direita. Cor de marca (`#005BFE`) aparece no estado ativo do nav (`rgba(accent,.22)` de fundo) — este é o ponto de maior visibilidade do azul de marca dentro do produto.
 
-### Wordmark / Favicon / Mascote (marca — só marketing/Instagram/landing)
+### Wordmark / Favicon / Mascote (marca — DL-0017 abriu exceção pro favicon, ver abaixo)
 - **Logo:** wordmark "VEX AUTO" itálico condensado, branco flat, bandeira quadriculada pequena acima (branco + `#005BFE`), fundo preto, crop circular. `docs/vex/assets/brand/LOGO.png`.
-- **Favicon/in-app:** letra "V" isolada, mesma inclinação do wordmark, branco flat sólido, sem azul, sem bandeira — legível a 16px. É o único elemento de marca que aparece dentro do app logado (aba do navegador + qualquer avatar de sistema). `docs/vex/assets/brand/FAVICON.png`.
-- **Mascote (raposa):** geométrica low-poly flat, branco/off-white + azul pontual (olhos, orelha, facetas), bandeira quadriculada só na orelha direita, textura de grade automotiva no focinho. 4 poses aprovadas (frontal, perfil, andando, sentada 3/4) em `docs/vex/assets/brand/MASCOTE.png`. **Nunca aparece no app logado.**
+- **Favicon/in-app:** ~~letra "V" isolada~~ — **atualizado por DL-0017 (2026-08-12, pedido direto do founder):** agora é o rosto da raposa (mascote), render frontal geométrico low-poly com glow, branco/azul sobre fundo preto, crop circular. Único elemento de marca dentro do app logado (aba do navegador + logo da sidebar). `docs/vex/assets/brand/FAVICON.png` — arquivo trocado no lugar, mesmo path.
+- **Mascote (raposa):** geométrica low-poly flat, branco/off-white + azul pontual (olhos, orelha, facetas), bandeira quadriculada só na orelha direita, textura de grade automotiva no focinho. 4 poses aprovadas (frontal, perfil, andando, sentada 3/4) em `docs/vex/assets/brand/MASCOTE.png`. Continua fora do app logado **exceto** no favicon/logo da sidebar (DL-0017) — não usar em nenhuma outra superfície de produto (cards, empty states, loading etc.).
 
 ## Do's and Don'ts
 
@@ -165,11 +165,11 @@ Fundo `var(--navy-dark)` fixo, 56px altura, nav central, avatar/dropdown de usu�
 - **Do** usar Bebas Neue em título de página/seção dentro do app (lido uma vez) e full em qualquer peça de marketing/landing/Instagram.
 - **Do** manter Exo 2 italic em KPI/preço do app até validação de legibilidade própria — não é decisão adiada por esquecimento, é decisão deliberada desta rodada.
 - **Do** manter as 7 cores de status do funil e as 3 cores de bolha de chat exatamente como estão — são sinalização funcional, não superfície de marca.
-- **Do** manter a raposa fora do app logado — só Instagram e landing page.
+- **Do** manter a raposa fora do app logado, com a única exceção do favicon/logo da sidebar (DL-0017) — resto do produto (cards, empty states, loading) continua sem mascote, só Instagram/landing pra tudo o mais.
 
 ### Don't:
 - **Don't** aplicar fundo preto, itálico motorsport ou bandeira quadriculada em qualquer tela do app operacional (leads, kanban, conversas, dashboards) — essa é a camada de marca, não de produto.
 - **Don't** usar Bebas Neue em parágrafo, botão pequeno, KPI ou preço — regra herdada de `typography.txt`, sem exceção.
 - **Don't** usar `#0029A7` (azul legado da raposa v1) em qualquer trabalho novo — só existe porque já está aprovado nas 4 poses existentes.
-- **Don't** mostrar a raposa dentro do sistema logado, em nenhum contexto — o identificador ali é o favicon "V".
+- **Don't** mostrar a raposa em qualquer superfície do produto além do favicon/logo da sidebar (DL-0017 é a única exceção aberta, não um precedente geral) — nada de mascote em card, empty state, loading, e-mail transacional etc.
 - **Don't** inventar número ou depoimento de resultado pra Speed Motos em nenhuma copy — é piloto técnico validado, não case de sucesso (ver `PRODUCT.md`).
