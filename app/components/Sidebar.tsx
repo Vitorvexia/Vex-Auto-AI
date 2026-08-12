@@ -131,7 +131,17 @@ function IconMoon() {
 }
 
 const THEME_STORAGE_KEY = "vex-theme";
+const SIDEBAR_STORAGE_KEY = "vex-sidebar";
 type Theme = "dark" | "light";
+
+function IconPanelToggle() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <rect x="3" y="4" width="18" height="16" rx="2" />
+      <line x1="9" y1="4" x2="9" y2="20" />
+    </svg>
+  );
+}
 
 const NAV_ITEMS = [
   { href: "/inicio", label: "Início", icon: IconHome, match: (p: string) => p === "/inicio" || p === "/" },
@@ -149,14 +159,17 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const router = useRouter();
   const [dropOpen, setDropOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
-  // Default "dark" no primeiro render (SSR não sabe a preferência salva) —
-  // o script bloqueante em app/layout.tsx já aplicou o atributo real no
-  // <html> antes do paint, este estado só precisa sincronizar no mount pra
-  // o ícone/label do toggle não ficarem errados por um frame.
-  const [theme, setTheme] = useState<Theme>("dark");
+  // Default "light" no primeiro render, casando com o default real
+  // (DL-0016) — o script bloqueante em app/layout.tsx já aplicou o
+  // atributo verdadeiro no <html> antes do paint, este estado só
+  // precisa sincronizar no mount pra o ícone/label do toggle não
+  // ficarem errados por um frame.
+  const [theme, setTheme] = useState<Theme>("light");
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     setTheme(document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark");
+    setCollapsed(document.documentElement.getAttribute("data-sidebar") === "collapsed");
   }, []);
 
   function toggleTheme() {
@@ -172,6 +185,21 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
     } catch {
       // localStorage indisponível (modo privado/bloqueio) — preferência só
       // dura a sessão atual, sem quebrar o toggle em si.
+    }
+  }
+
+  function toggleCollapsed() {
+    const next = !collapsed;
+    setCollapsed(next);
+    if (next) {
+      document.documentElement.setAttribute("data-sidebar", "collapsed");
+    } else {
+      document.documentElement.removeAttribute("data-sidebar");
+    }
+    try {
+      localStorage.setItem(SIDEBAR_STORAGE_KEY, next ? "collapsed" : "expanded");
+    } catch {
+      // idem — sem localStorage, preferência não sobrevive a reload
     }
   }
 
@@ -202,9 +230,19 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
 
   return (
     <aside className="sidebar">
-      <Link href="/leads" className="sidebar-logo" aria-label="VexAuto — início">
-        <Image src="/favicon.png" alt="VexAuto" width={30} height={30} style={{ display: "block", flexShrink: 0 }} />
-      </Link>
+      <div className="sidebar-header">
+        <Link href="/leads" className="sidebar-logo" aria-label="VexAuto — início">
+          <Image src="/favicon.png" alt="VexAuto" width={28} height={28} style={{ display: "block", flexShrink: 0 }} />
+        </Link>
+        <button
+          className="sidebar-toggle-btn"
+          onClick={toggleCollapsed}
+          aria-label={collapsed ? "Expandir menu" : "Minimizar menu"}
+          aria-expanded={!collapsed}
+        >
+          <IconPanelToggle />
+        </button>
+      </div>
 
       <nav className="sidebar-nav">
         {NAV_ITEMS.map(({ href, label, icon: Icon, match }) => (

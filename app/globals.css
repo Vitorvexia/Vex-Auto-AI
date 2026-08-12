@@ -1,4 +1,8 @@
-/* ─── Brand Design Tokens (Dark Theme) ───────── */
+/* ─── Brand Design Tokens (Dark Theme — não é mais o default visual,
+   ver bloco Light Theme abaixo; continua sendo o :root "base" no CSS
+   por simplicidade de cascata, mas app/layout.tsx aplica
+   data-theme="light" no <html> antes do paint pra todo mundo que não
+   escolheu escuro explicitamente. Ver DL-0016.) ───────── */
 :root {
   --navy-dark:    #0A0E14;
   --sky:          #005BFE;
@@ -27,12 +31,14 @@
   --bubble-humano: #0A1E14;
 }
 
-/* ─── Light Theme (opt-in via data-theme="light" on <html>) ───
-   Valores restaurados do tema claro original (pre-DL-0015, commit
-   a276b62^) — já validado em produção antes da reversão pra escuro.
-   Sidebar/navy-dark fica escura em ambos os temas por design (ver
-   DESIGN.md "Header Fundo var(--navy-dark) fixo") — só os tokens de
-   superfície/texto do restante do produto mudam aqui. */
+/* ─── Light Theme — DEFAULT desde DL-0016 (aplicado via
+   data-theme="light" no <html>, setado por app/layout.tsx antes do
+   paint pra todo usuário que não escolheu escuro no toggle da
+   sidebar). Valores restaurados do tema claro original (pre-DL-0015,
+   commit a276b62^) — já validado em produção antes da reversão pra
+   escuro. Sidebar/navy-dark fica escura nos dois temas por design
+   (ver DESIGN.md "Header Fundo var(--navy-dark) fixo") — só os
+   tokens de superfície/texto do restante do produto mudam aqui. */
 :root[data-theme="light"] {
   --navy-dark:    #1C2B3A;
   --sky-light:    #BAE6FD;
@@ -96,22 +102,31 @@ a { color: inherit; text-decoration: none; }
 .app-main  { flex: 1; min-width: 0; }
 
 .sidebar {
-  flex: 0 0 224px;
+  flex: 0 0 196px;
   position: sticky; top: 0; align-self: flex-start;
   height: 100vh; z-index: 50;
   display: flex; flex-direction: column;
   background: var(--navy-dark);
   border-right: 1px solid rgba(255,255,255,0.06);
   box-shadow: 1px 0 4px rgba(0,0,0,0.18);
-  overflow-y: auto;
+  transition: flex-basis 0.15s;
 }
-.sidebar-logo {
-  display: flex; align-items: center; flex-shrink: 0;
-  padding: 16px 20px 12px;
+.sidebar-header {
+  display: flex; align-items: center; justify-content: space-between;
+  flex-shrink: 0; padding: 14px 14px 12px;
 }
+.sidebar-logo { display: flex; align-items: center; flex-shrink: 0; }
+.sidebar-toggle-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 6px; flex-shrink: 0;
+  background: transparent; border: none; color: rgba(255,255,255,0.4);
+  cursor: pointer; transition: color 0.12s, background 0.12s;
+}
+.sidebar-toggle-btn:hover { color: rgba(255,255,255,0.88); background: rgba(255,255,255,0.08); }
 .sidebar-nav {
   display: flex; flex-direction: column; gap: 2px;
-  padding: 4px 12px; flex: 1;
+  padding: 4px 12px; flex: 1; min-height: 0;
+  overflow-y: auto; overflow-x: visible;
 }
 .sidebar-nav-link {
   display: flex; align-items: center; gap: 11px;
@@ -130,12 +145,20 @@ a { color: inherit; text-decoration: none; }
   position: relative; flex-shrink: 0;
   padding: 12px; border-top: 1px solid rgba(255,255,255,0.06);
 }
-@media (max-width: 900px) {
-  .sidebar { flex-basis: 64px; }
-  .sidebar-logo { justify-content: center; padding: 16px 0 12px; }
-  .sidebar-nav-link { justify-content: center; padding: 0; }
-  .sidebar-nav-label { display: none; }
-}
+
+/* Colapsado — manual (:root[data-sidebar="collapsed"], toggle no header
+   da sidebar) ou automático (viewport < 900px). Mesmas regras nos dois
+   casos: só o texto some, ícone continua — pedido explícito do founder. */
+@media (max-width: 900px) { .sidebar { flex-basis: 64px; } }
+:root[data-sidebar="collapsed"] .sidebar { flex-basis: 64px; }
+@media (max-width: 900px) { .sidebar-header { flex-direction: column; gap: 8px; padding: 14px 0 12px; } }
+:root[data-sidebar="collapsed"] .sidebar-header { flex-direction: column; gap: 8px; padding: 14px 0 12px; }
+@media (max-width: 900px) { .sidebar-logo { justify-content: center; } }
+:root[data-sidebar="collapsed"] .sidebar-logo { justify-content: center; }
+@media (max-width: 900px) { .sidebar-nav-link { justify-content: center; padding: 0; } }
+:root[data-sidebar="collapsed"] .sidebar-nav-link { justify-content: center; padding: 0; }
+@media (max-width: 900px) { .sidebar-nav-label { display: none; } }
+:root[data-sidebar="collapsed"] .sidebar-nav-label { display: none; }
 
 /* ─── Layout ─────────────────────────── */
 .container { max-width: 1400px; margin: 0 auto; padding: 28px 24px; }
@@ -867,6 +890,8 @@ a { color: inherit; text-decoration: none; }
   .sidebar-user-btn { justify-content: center; padding: 0; }
   .sidebar-dropdown { left: 8px; right: auto; bottom: 0; }
 }
+:root[data-sidebar="collapsed"] .sidebar-user-btn { justify-content: center; padding: 0; }
+:root[data-sidebar="collapsed"] .sidebar-dropdown { left: 8px; right: auto; bottom: 0; }
 
 /* ─── Conv list preview text ─────────────────── */
 .conv-preview {
@@ -1100,7 +1125,8 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
 .onboarding-progress-dot { flex: 1; height: 4px; border-radius: 999px; background: var(--border); }
 
 /* ═══════════════════════════════════════════════════════════════
-   LIGHT THEME OVERRIDES (data-theme="light" on <html>)
+   LIGHT THEME OVERRIDES (data-theme="light" on <html> — é o DEFAULT
+   desde DL-0016, aplicado por app/layout.tsx antes do paint)
    Tokens já foram redefinidos no bloco :root[data-theme="light"] no
    topo do arquivo — a maior parte do produto re-tema sozinha por já
    usar var(--bg)/var(--panel)/var(--text) etc. As regras abaixo
@@ -1110,7 +1136,7 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
    original. Valores restaurados de app/globals.css@a276b62^ (tema
    claro validado em produção antes de DL-0015) — não são estimados,
    são o mesmo tema que já rodou meses em produção. Ver
-   docs/vex/29_DECISIONS_LOG.md DL-0015.
+   docs/vex/29_DECISIONS_LOG.md DL-0015 e DL-0016.
    ═══════════════════════════════════════════════════════════════ */
 
 /* Sombras — dependem do fundo, invertidas do preto pro navy translúcido */
