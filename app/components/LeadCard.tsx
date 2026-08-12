@@ -66,12 +66,16 @@ export function LeadCard({
   const sc          = scoreClass(score);
   const urgency     = urgencyLevel(ultima_atividade);
   const transitions = LEAD_TRANSITIONS[lead_status] ?? [];
+  const initial      = (nome ?? "?").trim().charAt(0).toUpperCase() || "?";
 
   return (
     <div className={`lead-card-wrap${transitions.length > 0 ? " has-move" : ""}`}>
       <Link href={href} className="lead-card">
         <div className="lead-card-top">
-          <span className="lead-card-name">{nome ?? "Sem nome"}</span>
+          <div className="lead-card-identity">
+            <span className="lead-card-avatar" data-priority={priority}>{initial}</span>
+            <span className="lead-card-name">{nome ?? "Sem nome"}</span>
+          </div>
           <span className={`score-badge ${sc}`}>{score}</span>
         </div>
 
@@ -79,11 +83,12 @@ export function LeadCard({
 
         <div className="lead-card-phone">{phone_normalized}</div>
 
-        <div className={`priority-badge ${priority}`}>{priority_label}</div>
-
-        {urgency && (
-          <div className={`urgency-badge ${urgency}`}>{URGENCY_LABEL[urgency]}</div>
-        )}
+        <div className="lead-card-badges">
+          <span className={`priority-badge ${priority}`}>{priority_label}</span>
+          {urgency && (
+            <span className={`urgency-badge ${urgency}`}>{URGENCY_LABEL[urgency]}</span>
+          )}
+        </div>
 
         <div className="lead-card-footer">
           <span className="lead-card-time">{relativeTime(ultima_atividade)}</span>
