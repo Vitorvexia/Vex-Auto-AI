@@ -60,6 +60,18 @@ export default async function RootLayout({
 
   return (
     <html lang="pt-BR" className={`${exo2.variable} ${barlow.variable} ${bebasNeue.variable} ${inter.variable}`}>
+      <head>
+        {/* Aplica o tema salvo ANTES do primeiro paint — evita flash do tema
+            errado (script bloqueante clássico, mesma técnica de next-themes).
+            Default é escuro (DL-0015); só precisa agir se o usuário
+            escolheu claro alguma vez. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(localStorage.getItem('vex-theme')==='light'){document.documentElement.setAttribute('data-theme','light');}}catch(e){}",
+          }}
+        />
+      </head>
       <body>
         <AppChrome isPublicRoute={isPublicRoute} isAdmin={isSuperAdmin(user?.email)}>
           {children}

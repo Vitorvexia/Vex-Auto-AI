@@ -92,8 +92,8 @@ function IconUser() {
 function IconSettings() {
   return (
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82A1.65 1.65 0 0 0 3 13.09H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
       <circle cx="12" cy="12" r="3" />
-      <path d="M12 1v3M12 20v3M4.22 4.22l2.12 2.12M17.66 17.66l2.12 2.12M1 12h3M20 12h3M4.22 19.78l2.12-2.12M17.66 6.34l2.12-2.12" />
     </svg>
   );
 }
@@ -114,6 +114,24 @@ function IconLogout() {
     </svg>
   );
 }
+function IconSun() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="4" />
+      <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
+    </svg>
+  );
+}
+function IconMoon() {
+  return (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8Z" />
+    </svg>
+  );
+}
+
+const THEME_STORAGE_KEY = "vex-theme";
+type Theme = "dark" | "light";
 
 const NAV_ITEMS = [
   { href: "/inicio", label: "Início", icon: IconHome, match: (p: string) => p === "/inicio" || p === "/" },
@@ -131,6 +149,31 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   const router = useRouter();
   const [dropOpen, setDropOpen] = useState(false);
   const dropRef = useRef<HTMLDivElement>(null);
+  // Default "dark" no primeiro render (SSR não sabe a preferência salva) —
+  // o script bloqueante em app/layout.tsx já aplicou o atributo real no
+  // <html> antes do paint, este estado só precisa sincronizar no mount pra
+  // o ícone/label do toggle não ficarem errados por um frame.
+  const [theme, setTheme] = useState<Theme>("dark");
+
+  useEffect(() => {
+    setTheme(document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark");
+  }, []);
+
+  function toggleTheme() {
+    const next: Theme = theme === "light" ? "dark" : "light";
+    setTheme(next);
+    if (next === "light") {
+      document.documentElement.setAttribute("data-theme", "light");
+    } else {
+      document.documentElement.removeAttribute("data-theme");
+    }
+    try {
+      localStorage.setItem(THEME_STORAGE_KEY, next);
+    } catch {
+      // localStorage indisponível (modo privado/bloqueio) — preferência só
+      // dura a sessão atual, sem quebrar o toggle em si.
+    }
+  }
 
   async function handleLogout() {
     const supabase = createBrowserClient(
@@ -197,6 +240,14 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
         </button>
         {dropOpen && (
           <div className="sidebar-dropdown" role="menu">
+            <button
+              className="sidebar-dropdown-item"
+              onClick={() => { toggleTheme(); setDropOpen(false); }}
+            >
+              {theme === "light" ? <IconMoon /> : <IconSun />}
+              {theme === "light" ? "Tema escuro" : "Tema claro"}
+            </button>
+            <div className="sidebar-dropdown-sep" />
             <Link href="/configuracoes" className="sidebar-dropdown-item" onClick={() => setDropOpen(false)}>
               <IconSettings /> Configurações
             </Link>

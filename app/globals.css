@@ -27,6 +27,30 @@
   --bubble-humano: #0A1E14;
 }
 
+/* ─── Light Theme (opt-in via data-theme="light" on <html>) ───
+   Valores restaurados do tema claro original (pre-DL-0015, commit
+   a276b62^) — já validado em produção antes da reversão pra escuro.
+   Sidebar/navy-dark fica escura em ambos os temas por design (ver
+   DESIGN.md "Header Fundo var(--navy-dark) fixo") — só os tokens de
+   superfície/texto do restante do produto mudam aqui. */
+:root[data-theme="light"] {
+  --navy-dark:    #1C2B3A;
+  --sky-light:    #BAE6FD;
+
+  --bg:           #F5FAFC;
+  --panel:        #FFFFFF;
+  --panel-2:      #F0F7FC;
+  --border:       #DDE8F0;
+  --border-strong:#B8CEDE;
+  --text:         #334155;
+  --text-strong:  #1C2B3A;
+  --muted:        #64748B;
+
+  --bubble-lead:   #F1F5F9;
+  --bubble-ia:     #EFF8FF;
+  --bubble-humano: #F0FDF4;
+}
+
 * { box-sizing: border-box; }
 input, select, textarea, button {
   font-family: inherit; color: var(--text-strong);
@@ -1074,6 +1098,147 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
 .onboarding-desc { font-size: 13px; color: var(--muted); margin-bottom: 20px; line-height: 1.5; }
 .onboarding-progress { display: flex; gap: 6px; margin-bottom: 24px; }
 .onboarding-progress-dot { flex: 1; height: 4px; border-radius: 999px; background: var(--border); }
+
+/* ═══════════════════════════════════════════════════════════════
+   LIGHT THEME OVERRIDES (data-theme="light" on <html>)
+   Tokens já foram redefinidos no bloco :root[data-theme="light"] no
+   topo do arquivo — a maior parte do produto re-tema sozinha por já
+   usar var(--bg)/var(--panel)/var(--text) etc. As regras abaixo
+   cobrem só o que usa cor hardcoded (não-var): status/prioridade/
+   handoff/score/urgência, sombras dependentes de fundo, e os 2-3
+   componentes novos desta sessão sem precedente no tema claro
+   original. Valores restaurados de app/globals.css@a276b62^ (tema
+   claro validado em produção antes de DL-0015) — não são estimados,
+   são o mesmo tema que já rodou meses em produção. Ver
+   docs/vex/29_DECISIONS_LOG.md DL-0015.
+   ═══════════════════════════════════════════════════════════════ */
+
+/* Sombras — dependem do fundo, invertidas do preto pro navy translúcido */
+:root[data-theme="light"] .kanban-col            { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .lead-card             { box-shadow: 0 1px 2px rgba(28,43,58,.05); }
+:root[data-theme="light"] .inbox-header          { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .chat                  { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .reply-form            { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .conv-row              { box-shadow: 0 1px 2px rgba(28,43,58,.05); }
+:root[data-theme="light"] .kpi-card              { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .section-card          { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .vehicle-card          { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .team-card             { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .chart-wrap            { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .leads-kpi-chip        { box-shadow: 0 1px 2px rgba(28,43,58,.05); }
+:root[data-theme="light"] .seller-metrics-table  { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .conv-sidebar          { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .sidebar-dropdown      { box-shadow: 0 6px 20px rgba(28,43,58,.14); }
+:root[data-theme="light"] .dossie-card           { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .import-card           { box-shadow: 0 1px 3px rgba(28,43,58,.06); }
+:root[data-theme="light"] .onboarding-card       { box-shadow: 0 4px 24px rgba(28,43,58,.08); }
+:root[data-theme="light"] .site-vehicle-card:hover { box-shadow: 0 4px 16px rgba(28,43,58,.08); }
+:root[data-theme="light"] .leads-kpi-chip.alert,
+:root[data-theme="light"] .leads-kpi-chip { box-shadow: 0 1px 2px rgba(28,43,58,.05); }
+:root[data-theme="light"] .lead-card-move { box-shadow: none; }
+
+/* Score badge */
+:root[data-theme="light"] .score-badge.s-hot  { background: rgba(249,115,22,.12); color: #C2410C; border-color: rgba(249,115,22,.3); }
+:root[data-theme="light"] .score-badge.s-warm { background: rgba(234,179,8,.12);  color: #92400E; border-color: rgba(234,179,8,.3); }
+:root[data-theme="light"] .score-badge.s-cool { background: rgba(0,91,254,.12);   color: #0369A1; border-color: rgba(0,91,254,.3); }
+
+/* Pills — status do lead / status da conversa */
+:root[data-theme="light"] .pill[data-status="NOVO"]        { background: rgba(148,163,184,.12); color: #475569; border-color: rgba(148,163,184,.35); }
+:root[data-theme="light"] .pill[data-status="ENGAJADO"]    { background: rgba(0,91,254,.1);     color: #0369A1; border-color: rgba(0,91,254,.3); }
+:root[data-theme="light"] .pill[data-status="INTERESSADO"] { background: rgba(139,92,246,.1);   color: #6D28D9; border-color: rgba(139,92,246,.3); }
+:root[data-theme="light"] .pill[data-status="QUENTE"]      { background: rgba(249,115,22,.1);   color: #C2410C; border-color: rgba(249,115,22,.3); }
+:root[data-theme="light"] .pill[data-status="NEGOCIACAO"]  { background: rgba(34,197,94,.1);    color: #15803D; border-color: rgba(34,197,94,.3); }
+:root[data-theme="light"] .pill[data-status="FECHADO"]     { background: rgba(16,185,129,.1);   color: #047857; border-color: rgba(16,185,129,.3); }
+:root[data-theme="light"] .pill[data-status="PERDIDO"]     { background: rgba(239,68,68,.1);    color: #B91C1C; border-color: rgba(239,68,68,.3); }
+:root[data-theme="light"] .pill[data-handoff="IA"]         { background: rgba(0,91,254,.1);     color: #0369A1; border-color: rgba(0,91,254,.3); }
+:root[data-theme="light"] .pill[data-handoff="HUMANO"]     { background: rgba(139,92,246,.1);   color: #6D28D9; border-color: rgba(139,92,246,.3); }
+:root[data-theme="light"] .pill[data-conv-status="ATIVA"]             { background: rgba(34,197,94,.1);   color: #15803D; border-color: rgba(34,197,94,.3); }
+:root[data-theme="light"] .pill[data-conv-status="AGUARDANDO_HUMANO"] { background: rgba(249,115,22,.1);  color: #C2410C; border-color: rgba(249,115,22,.3); }
+:root[data-theme="light"] .pill[data-conv-status="PAUSADA"]           { background: rgba(148,163,184,.12); color: #475569; border-color: rgba(148,163,184,.35); }
+:root[data-theme="light"] .pill[data-conv-status="ENCERRADA"]         { background: rgba(100,116,139,.1); color: #475569; border-color: rgba(100,116,139,.25); }
+
+/* Chat bubbles */
+:root[data-theme="light"] .msg-bubble.lead   { border-color: var(--border); color: var(--text); }
+:root[data-theme="light"] .msg-bubble.ia     { border-color: rgba(0,91,254,.2); color: #0369A1; }
+:root[data-theme="light"] .msg-bubble.humano { border-color: rgba(34,197,94,.2); color: #15803D; }
+
+/* Erro */
+:root[data-theme="light"] .error { background: rgba(254,226,226,.7); color: #991B1B; }
+:root[data-theme="light"] .site-contact-error { color: #B91C1C; }
+
+/* KPI delta / analytics */
+:root[data-theme="light"] .kpi-delta.up   { color: #15803D; }
+:root[data-theme="light"] .kpi-delta.down { color: #B91C1C; }
+:root[data-theme="light"] .insight-card.hot  .insight-title { color: #B91C1C; }
+:root[data-theme="light"] .insight-card.warn .insight-title { color: #C2410C; }
+:root[data-theme="light"] .insight-card.info .insight-title { color: #0369A1; }
+:root[data-theme="light"] .insight-card.ok   .insight-title { color: #15803D; }
+
+/* Alert item */
+:root[data-theme="light"] .alert-item.hot  { color: #B91C1C; }
+:root[data-theme="light"] .alert-item.warn { color: #C2410C; }
+:root[data-theme="light"] .alert-item.info { color: #0369A1; }
+:root[data-theme="light"] .alert-item.ok   { color: #15803D; }
+
+/* Estoque — margem, status, giro */
+:root[data-theme="light"] .vehicle-margin.ok   { color: #15803D; }
+:root[data-theme="light"] .vehicle-margin.warn { color: #C2410C; }
+:root[data-theme="light"] .vehicle-status-pill.disponivel { background: rgba(34,197,94,.1);  color: #15803D; }
+:root[data-theme="light"] .vehicle-status-pill.reservado  { background: rgba(249,115,22,.1); color: #C2410C; }
+:root[data-theme="light"] .vehicle-status-pill.vendido    { background: rgba(100,116,139,.1); color: #475569; }
+:root[data-theme="light"] .site-status-pill.publicado { color: #0369A1; }
+:root[data-theme="light"] .site-status-pill.oculto    { color: #475569; }
+:root[data-theme="light"] .giro-badge.ok   { color: #15803D; }
+:root[data-theme="light"] .giro-badge.mid  { color: #92400E; }
+:root[data-theme="light"] .giro-badge.slow { color: #B91C1C; }
+:root[data-theme="light"] .import-feedback.success { color: #15803D; }
+:root[data-theme="light"] .import-feedback.warning { color: #C2410C; }
+:root[data-theme="light"] .import-feedback.error   { color: #B91C1C; }
+:root[data-theme="light"] .site-contact-success    { color: #15803D; }
+
+/* Equipe — badge operacional */
+:root[data-theme="light"] .card-cta { color: #0369A1; }
+:root[data-theme="light"] .op-badge.quente     { color: #B91C1C; }
+:root[data-theme="light"] .op-badge.atendendo  { color: #0369A1; }
+:root[data-theme="light"] .op-badge.disponivel { color: #15803D; }
+
+/* Conversas — urgência, handoff, kanban destaque */
+:root[data-theme="light"] .conv-time.urgent { color: #C2410C; }
+:root[data-theme="light"] .conv-handoff-tag.ia     { color: #0369A1; }
+:root[data-theme="light"] .conv-handoff-tag.humano { color: #6D28D9; }
+:root[data-theme="light"] .conv-sidebar-item.active { background: rgba(0,91,254,.08); }
+:root[data-theme="light"] .kanban-col[data-status="QUENTE"] .kanban-col-title     { color: #C2410C; }
+:root[data-theme="light"] .kanban-col[data-status="NEGOCIACAO"] .kanban-col-title { color: #15803D; }
+
+/* Lead card — prioridade, urgência, avatar */
+:root[data-theme="light"] .priority-badge.hot  { background: rgba(249,115,22,.12); color: #C2410C; }
+:root[data-theme="light"] .priority-badge.warm { background: rgba(234,179,8,.12);  color: #854d0e; }
+:root[data-theme="light"] .priority-badge.cold { background: rgba(0,91,254,.10);   color: #0369a1; }
+:root[data-theme="light"] .urgency-badge.cooling { background: rgba(234,179,8,.1); color: #92400E; }
+:root[data-theme="light"] .urgency-badge.urgent  { background: rgba(239,68,68,.1); color: #B91C1C; }
+:root[data-theme="light"] .urgency-badge.stale   { background: rgba(239,68,68,.08); color: #B91C1C; }
+:root[data-theme="light"] .lead-card-avatar[data-priority="hot"]  { background: rgba(249,115,22,.12); color: #C2410C; border-color: rgba(249,115,22,.3); }
+:root[data-theme="light"] .lead-card-avatar[data-priority="warm"] { background: rgba(234,179,8,.12);  color: #92400E; border-color: rgba(234,179,8,.3); }
+:root[data-theme="light"] .lead-card-avatar[data-priority="cold"] { background: rgba(0,91,254,.12);   color: #0369A1; border-color: rgba(0,91,254,.3); }
+
+/* Leads KPI bar */
+:root[data-theme="light"] .leads-kpi-chip.hot  .leads-kpi-chip-value { color: #C2410C; }
+:root[data-theme="light"] .leads-kpi-chip.nego .leads-kpi-chip-value { color: #15803D; }
+:root[data-theme="light"] .leads-kpi-chip.alert .leads-kpi-chip-value { color: #B91C1C; }
+:root[data-theme="light"] .inbox-waiting-count { color: #C2410C; }
+
+/* Inbox — avatar por handoff */
+:root[data-theme="light"] .conv-row-avatar.ia     { background: rgba(14,165,233,.12); color: #0369A1; border-color: rgba(14,165,233,.3); }
+:root[data-theme="light"] .conv-row-avatar.humano { background: rgba(139,92,246,.1);  color: #6D28D9; border-color: rgba(139,92,246,.3); }
+
+/* Dossiê */
+:root[data-theme="light"] .dossie-warnings.moderate { background: rgba(234,179,8,.08); color: #854d0e; }
+:root[data-theme="light"] .dossie-warnings.moderate .dossie-label { color: #854d0e; }
+:root[data-theme="light"] .dossie-warnings.critical { background: rgba(239,68,68,.08); color: #B91C1C; }
+:root[data-theme="light"] .dossie-warnings.critical .dossie-label { color: #B91C1C; }
+
+/* Sidebar — dropdown "Sair" */
+:root[data-theme="light"] .sidebar-dropdown-item.danger { color: #B91C1C; }
 
 /* ─── Marketing Landing (camada de marca — preto/branco/#005BFE, ver DESIGN.md) ─── */
 .marketing-landing {
