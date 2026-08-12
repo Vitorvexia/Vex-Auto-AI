@@ -395,11 +395,22 @@ a { color: inherit; text-decoration: none; }
   border-color: var(--sky);
   box-shadow: 0 2px 8px rgba(0,91,254,0.1);
 }
+.conv-row-identity { display: flex; align-items: flex-start; gap: 11px; flex: 1; min-width: 0; }
+.conv-row-avatar {
+  display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+  width: 30px; height: 30px; border-radius: 50%; margin-top: 1px;
+  font-size: 13px; font-weight: 700;
+  background: var(--panel-2); color: var(--muted); border: 1px solid var(--border);
+}
+.conv-row-avatar.ia     { background: rgba(14,165,233,.15);  color: #38BDF8; border-color: rgba(14,165,233,.3); }
+.conv-row-avatar.humano { background: rgba(139,92,246,.15);  color: #A78BFA; border-color: rgba(139,92,246,.3); }
 .conv-row-main { display: flex; flex-direction: column; gap: 2px; flex: 1; min-width: 0; }
+.conv-row-name-line { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 .conv-lead-name { font-size: 13.5px; font-weight: 600; color: var(--text-strong); }
 .conv-lead-phone { font-size: 12px; color: var(--muted); }
 .conv-row-meta { display: flex; align-items: center; gap: 6px; flex-shrink: 0; flex-wrap: wrap; margin-top: 2px; }
 .conv-time { font-size: 11.5px; color: var(--muted); }
+.inbox-waiting-count { color: #FB923C; font-weight: 700; margin-left: 10px; }
 
 /* ─── KPI Cards ──────────────────────────────── */
 .kpi-grid {
