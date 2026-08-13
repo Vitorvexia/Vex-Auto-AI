@@ -2656,6 +2656,74 @@ Regras de design: paleta preto/branco/azul canônico (`DESIGN.md`) + Bebas Neue 
 
 ---
 
+BL-0038
+
+Title
+
+Alerta "conversa aguardando vendedor há mais de 40min" em /inicio — falta decisão de arquitetura pra fonte do timestamp
+
+Problem
+
+Consolidação de Início+Analytics (2026-08-13) tornou reais os outros 2 alertas que antes eram mock (`sem resposta >24h`, `margem <5% no estoque`), mas este terceiro alerta do mock original ficou de fora por decisão consciente: não existe hoje um timestamp exato de "quando a conversa entrou em handoff" persistido de forma barata de consultar. `conversations.handoff_to='HUMANO'` marca o estado atual, mas não quando a transição aconteceu. O único registro do momento exato é `audit_logs` (ação `conversation.handoff_to_human`, roadmap 0.5) — tabela pensada pra auditoria/rastreamento, não pra alimentar leitura de dashboard em todo carregamento de página.
+
+Business Value
+
+Fecha o conjunto original de 3 alertas operacionais do painel — hoje só 2 de 3 são reais. Alerta de handoff parado é sinal direto de lead esfriando por falta de atendimento humano, mesma classe de problema que motivou `BL-0009`/`BL-0010`/`BL-0011`.
+
+Customer Value
+
+Vendedor/dono da loja vê no painel principal quando uma conversa está esperando atendimento humano há muito tempo, sem precisar abrir `/conversations` pra descobrir.
+
+Priority
+
+P3 — não bloqueia a consolidação (os outros 2 alertas já cobrem a maior parte do valor). Vira P2 se o painel `/inicio` passar a ser o principal ponto de operação diária.
+
+Status
+
+IDEA — não implementado, decisão de arquitetura pendente.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixa a Média, dependendo do caminho escolhido — duas opções, nenhuma implementada:
+
+(a) Consultar `audit_logs` filtrando `action='conversation.handoff_to_human'`, pegar o evento mais recente por `conversation_id` ainda em `handoff_to='HUMANO'`. Zero schema novo, mas usa uma tabela de auditoria (write-once, sem índice pensado pra essa leitura) como fonte de dado operacional recorrente — pode não escalar bem e mistura responsabilidade (auditoria vira dependência funcional).
+
+(b) Coluna nova `conversations.handoff_at` (timestamp, nullable), setada em `assignConversationToHuman`/toda transição pra `HUMANO`. Leitura trivial e rápida, mas mexe em schema — exige migration + backfill (linhas já em `HUMANO` sem esse campo) + decisão de qual timestamp usar no backfill (aproximação, não exata).
+
+Dependencies
+
+Nenhuma técnica bloqueante. Reaproveita `countStaleLeads` (`lib/lead-priority.ts`, já genérica por threshold) se o dado de "há quanto tempo" virar um array simples de timestamps — mesmo padrão dos outros 2 alertas.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Consolidação Início+Analytics (2026-08-13) — os outros 2 alertas do mesmo conjunto original já viraram reais nessa sessão.
+
+Target Version
+
+Sem agendamento
+
+Success Metrics
+
+Não definido — depende de qual caminho (a/b) for escolhido.
+
+Notes
+
+Registrado no mesmo escopo de decisão que descartou a Fase 2/3 original desta sessão (integração Meta Marketing API, cancelada — DL-0011 permanece válida, não revertida).
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

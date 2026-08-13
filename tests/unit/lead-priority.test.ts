@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   calculateLeadPriority,
   sortLeads,
+  countStaleLeads,
   type PriorityInput,
   type PriorityTier,
 } from "@/lib/lead-priority";
@@ -183,5 +184,43 @@ describe("sortLeads", () => {
     expect(sorted[0].ultima_atividade).toBe("2024-01-03T10:00:00Z");
     expect(sorted[1].ultima_atividade).toBe("2024-01-01T10:00:00Z");
     expect(sorted[2].ultima_atividade).toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// countStaleLeads — generaliza o cálculo inline de app/leads/page.tsx
+// (staleLeads), threshold configurável (2h em /leads, 24h em /inicio)
+// ---------------------------------------------------------------------------
+
+describe("countStaleLeads", () => {
+  const TWO_HOURS = 2 * 60 * 60 * 1000;
+  const now = new Date("2026-08-13T15:00:00Z");
+
+  it("T1: array vazio → 0", () => {
+    expect(countStaleLeads([], TWO_HOURS, now)).toBe(0);
+  });
+
+  it("T2: atividade dentro do threshold não conta", () => {
+    const leads = [{ ultima_atividade: "2026-08-13T14:00:00Z" }]; // 1h atrás
+    expect(countStaleLeads(leads, TWO_HOURS, now)).toBe(0);
+  });
+
+  it("T3: atividade fora do threshold conta", () => {
+    const leads = [{ ultima_atividade: "2026-08-13T12:00:00Z" }]; // 3h atrás
+    expect(countStaleLeads(leads, TWO_HOURS, now)).toBe(1);
+  });
+
+  it("T4: exatamente no limiar não conta (> estrito, não >=)", () => {
+    const leads = [{ ultima_atividade: "2026-08-13T13:00:00Z" }]; // exatos 2h atrás
+    expect(countStaleLeads(leads, TWO_HOURS, now)).toBe(0);
+  });
+
+  it("T5: threshold diferente (24h) sobre a mesma lista muda o resultado", () => {
+    const leads = [
+      { ultima_atividade: "2026-08-13T12:00:00Z" }, // 3h atrás — stale em 2h, não em 24h
+      { ultima_atividade: "2026-08-10T12:00:00Z" }, // dias atrás — stale nos dois
+    ];
+    expect(countStaleLeads(leads, TWO_HOURS, now)).toBe(2);
+    expect(countStaleLeads(leads, 24 * 60 * 60 * 1000, now)).toBe(1);
   });
 });

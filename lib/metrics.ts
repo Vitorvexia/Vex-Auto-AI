@@ -36,6 +36,16 @@ export type OperationalMetrics = {
   reactivation_response_rate: number;
 };
 
+// UTC calendar day — servidor roda em UTC (Vercel), timestamps são ISO UTC;
+// comparar por dia local do processo seria ambíguo entre ambientes.
+export function countLeadsToday(
+  leads: Array<{ created_at: string }>,
+  now: Date = new Date()
+): number {
+  const todayKey = now.toISOString().slice(0, 10);
+  return leads.filter((l) => l.created_at.slice(0, 10) === todayKey).length;
+}
+
 export function calculateOperationalMetrics(input: MetricsInput): OperationalMetrics {
   const { leads, conversations, messages, followUpLogs, reactivationLogs } = input;
 

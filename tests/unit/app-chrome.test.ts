@@ -7,7 +7,7 @@
  * próprio raiz.
  *
  * Regressão coberta: antes deste componente, app/site/[slug]/page.tsx
- * herdava a nav inteira (Leads/Estoque/Equipe/RENAVE/Agenda/Analytics +
+ * herdava a nav inteira (Leads/Estoque/Equipe/RENAVE/Agenda +
  * dropdown de usuário + "Sair") na rota pública sem sessão — clicar em
  * qualquer link daquela nav a partir de um subdomínio de loja rewrita pra
  * uma rota /site/[slug]/<path> inexistente (404), incluindo o próprio
