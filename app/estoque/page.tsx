@@ -13,6 +13,7 @@ import {
 import { uploadVehiclePhotos } from "@/lib/vehicle-photo-actions";
 import { MAX_PHOTOS_PER_VEHICLE } from "@/lib/vehicle-photos";
 import { VehiclePhotoUpload } from "@/app/components/VehiclePhotoUpload";
+import { marginPercent } from "@/lib/vehicle-margin";
 
 type Vehicle = {
   id: string;
@@ -27,11 +28,6 @@ type Vehicle = {
   created_at: string;
   photo_url: string[];
 };
-
-function margin(preco: number, custo: number) {
-  if (custo <= 0) return 0;
-  return ((preco - custo) / preco) * 100;
-}
 
 function diasEstoque(createdAt: string): number {
   return Math.floor((Date.now() - new Date(createdAt).getTime()) / (1000 * 60 * 60 * 24));
@@ -235,7 +231,7 @@ export default async function EstoquePage({ searchParams }: PageProps) {
               <span>
                 <strong>{slowMovers.length} veículo{slowMovers.length > 1 ? "s" : ""} com giro lento</strong>
                 {" "}— acima de 20 dias no estoque. Considere ajuste de preço ou promoção.{" "}
-                <Link href="/analytics" style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}>
+                <Link href="/inicio" style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}>
                   Ver análise →
                 </Link>
               </span>
@@ -260,7 +256,7 @@ export default async function EstoquePage({ searchParams }: PageProps) {
       {all.length > 0 && !showNovo && !editId && (
         <div className="vehicle-grid">
           {all.map((v) => {
-            const mg = margin(v.preco, v.custo);
+            const mg = marginPercent(v.preco, v.custo);
             const mgClass = mg < 8 ? "warn" : "ok";
             const dias = diasEstoque(v.created_at);
             const gc = giroClass(dias);

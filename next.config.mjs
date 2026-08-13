@@ -4,6 +4,10 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig = {
   // Next 14.2 ainda não estabilizou instrumentation.ts sem essa flag.
   experimental: { instrumentationHook: true },
+  // /analytics foi consolidada em /inicio — preserva link salvo/bookmark antigo.
+  async redirects() {
+    return [{ source: "/analytics", destination: "/inicio", permanent: true }];
+  },
 };
 
 export default withSentryConfig(nextConfig, {

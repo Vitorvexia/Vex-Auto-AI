@@ -6,7 +6,7 @@
  * rotas) — a supressão precisa ser condicional dentro do próprio raiz.
  *
  * Regressão coberta: antes deste componente, app/site/[slug]/page.tsx
- * herdava o Header inteiro (nav Leads/Estoque/Equipe/RENAVE/Agenda/Analytics
+ * herdava o Header inteiro (nav Leads/Estoque/Equipe/RENAVE/Agenda
  * + dropdown de usuário + "Sair") na rota pública sem sessão — clicar em
  * qualquer link daquele Header a partir de um subdomínio de loja rewrita
  * pra uma rota /site/[slug]/<path> inexistente (404), incluindo o próprio

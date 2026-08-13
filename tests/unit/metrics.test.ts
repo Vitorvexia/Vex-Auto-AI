@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculateOperationalMetrics } from "@/lib/metrics";
+import { calculateOperationalMetrics, countLeadsToday } from "@/lib/metrics";
 import type { MetricsInput } from "@/lib/metrics";
 
 function emptyInput(): MetricsInput {
@@ -174,5 +174,44 @@ describe("calculateOperationalMetrics", () => {
     const result = calculateOperationalMetrics(input);
     expect(result.reactivation_response_rate).toBe(0);
     expect(Number.isFinite(result.reactivation_response_rate)).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// countLeadsToday
+// ---------------------------------------------------------------------------
+
+describe("countLeadsToday", () => {
+  it("T1: array vazio → 0", () => {
+    expect(countLeadsToday([], new Date("2026-08-13T15:00:00Z"))).toBe(0);
+  });
+
+  it("T2: conta lead criado hoje mais cedo", () => {
+    const now = new Date("2026-08-13T15:00:00Z");
+    const leads = [{ created_at: "2026-08-13T09:00:00Z" }];
+    expect(countLeadsToday(leads, now)).toBe(1);
+  });
+
+  it("T3: não conta lead criado ontem", () => {
+    const now = new Date("2026-08-13T15:00:00Z");
+    const leads = [{ created_at: "2026-08-12T23:00:00Z" }];
+    expect(countLeadsToday(leads, now)).toBe(0);
+  });
+
+  it("T4: não conta lead criado amanhã (clock skew)", () => {
+    const now = new Date("2026-08-13T15:00:00Z");
+    const leads = [{ created_at: "2026-08-14T01:00:00Z" }];
+    expect(countLeadsToday(leads, now)).toBe(0);
+  });
+
+  it("T5: conta só os de hoje numa lista mista", () => {
+    const now = new Date("2026-08-13T15:00:00Z");
+    const leads = [
+      { created_at: "2026-08-13T00:00:01Z" }, // hoje, bem cedo
+      { created_at: "2026-08-13T23:59:59Z" }, // hoje, bem tarde
+      { created_at: "2026-08-12T23:59:59Z" }, // ontem
+      { created_at: "2026-08-11T10:00:00Z" }, // dias atrás
+    ];
+    expect(countLeadsToday(leads, now)).toBe(2);
   });
 });
