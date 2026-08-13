@@ -2616,7 +2616,7 @@ P1 — motivado por necessidade de material de marketing. Fase 1 cobre só as te
 
 Status
 
-READY — paleta/tipografia já fechada (`DESIGN.md`), decisão de tema escuro aceita (DL-0015), mapeamento de telas do fluxo em andamento.
+IN PROGRESS — sidebar (nav vertical, largura, esquema de cor), `/inicio` (ops-strip + consolidação com Analytics, dado real), `/login` e `/agenda` (calendário mensal) redesenhados. Conversa/dossiê/handoff (`/conversations`) e kanban de leads (`/leads`) já validados visualmente pelo founder em sessão anterior. Tudo na branch `claude/vex-redesign-visual-fase1-sqkmmf`, commitado e pushado, **não mergeado em main / não em produção** — aguardando validação visual final antes do merge. Ver `27_PROJECT_STATUS.md` (2026-08-13) para detalhe completo.
 
 Owner
 
