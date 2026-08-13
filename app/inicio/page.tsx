@@ -30,6 +30,7 @@ const CHECKLIST = [
 ];
 
 export default function InicioPage() {
+  const setupDone = CHECKLIST.filter((c) => c.done).length;
   return (
     <main className="container">
       <div className="page-header">
@@ -39,26 +40,45 @@ export default function InicioPage() {
         </div>
       </div>
 
-      <div className="kpi-grid">
-        <div className="kpi-card">
+      <div className="ops-strip">
+        <div className="ops-strip-live">
+          <span className="ops-strip-live-dot" aria-hidden="true" />
+          <span className="ops-strip-live-label">IA operando</span>
+        </div>
+        <div className="ops-metric" data-tick="engajado">
           <div className="kpi-label">Leads Hoje</div>
           <div className="kpi-value">8</div>
           <div className="kpi-delta up">↑ +3 vs ontem</div>
         </div>
-        <div className="kpi-card">
+        <div className="ops-metric" data-tick="quente">
           <div className="kpi-label">Leads Quentes</div>
           <div className="kpi-value" style={{ color: "#F97316" }}>3</div>
           <div className="kpi-delta">score acima de 70</div>
         </div>
-        <div className="kpi-card">
+        <div className="ops-metric" data-tick="negociacao">
           <div className="kpi-label">Em Negociação</div>
           <div className="kpi-value">5</div>
           <div className="kpi-delta">2 aguardando proposta</div>
         </div>
-        <div className="kpi-card">
+        <div className="ops-metric" data-tick="fechado">
           <div className="kpi-label">Fechamentos / Mês</div>
           <div className="kpi-value" style={{ color: "#10B981" }}>12</div>
           <div className="kpi-delta up">↑ R$ 148k em vendas</div>
+        </div>
+      </div>
+
+      <div className="section-card alert-rail">
+        <div className="section-card-head">
+          <span className="section-card-title">Alertas</span>
+          <span className="kpi-delta">{ALERTS.length} pendentes</span>
+        </div>
+        <div className="section-card-body alert-rail-body">
+          {ALERTS.map((a, i) => (
+            <div key={i} className={`alert-item ${a.type}`}>
+              <span className="alert-icon">{a.icon}</span>
+              <span>{a.text}</span>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -103,23 +123,11 @@ export default function InicioPage() {
         <div className="dash-col">
           <div className="section-card">
             <div className="section-card-head">
-              <span className="section-card-title">Alertas</span>
-              <span className="kpi-delta">{ALERTS.length} pendentes</span>
-            </div>
-            <div className="section-card-body">
-              {ALERTS.map((a, i) => (
-                <div key={i} className={`alert-item ${a.type}`}>
-                  <span className="alert-icon">{a.icon}</span>
-                  <span>{a.text}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="section-card">
-            <div className="section-card-head">
               <span className="section-card-title">Setup Inicial</span>
-              <span className="kpi-delta up">3 / 5 concluídos</span>
+              <span className="kpi-delta up">{setupDone} / {CHECKLIST.length} concluídos</span>
+            </div>
+            <div className="setup-progress-track">
+              <div className="setup-progress-fill" style={{ transform: `scaleX(${setupDone / CHECKLIST.length})` }} />
             </div>
             <div style={{ padding: "4px 16px 10px" }}>
               {CHECKLIST.map((c, i) => (
