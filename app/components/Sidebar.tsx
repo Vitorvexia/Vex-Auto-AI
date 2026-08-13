@@ -215,7 +215,7 @@ export function Sidebar({ isAdmin = false }: { isAdmin?: boolean }) {
   // Wizard de onboarding (BL-0026) roda em tela cheia, sem nav do app —
   // dono_loja com onboarding pendente nunca deveria ver as outras seções
   // mesmo antes de terminar o setup.
-  if (pathname === "/onboarding") return null;
+  if (pathname === "/onboarding" || pathname === "/login") return null;
 
   return (
     <aside className="sidebar">

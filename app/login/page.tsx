@@ -1,6 +1,7 @@
 "use client";
 
 import { Suspense, useState } from "react";
+import Image from "next/image";
 import { createBrowserClient } from "@supabase/ssr";
 import { useRouter, useSearchParams } from "next/navigation";
 
@@ -14,6 +15,11 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // Estado à parte de `loading` — cobre o intervalo entre o botão voltar ao
+  // normal (regra já testada: nunca fica preso em "Entrando...") e a
+  // próxima página de fato pintar. Nunca é resetado a false no sucesso:
+  // o componente desmonta com a navegação, não precisa.
+  const [navigating, setNavigating] = useState(false);
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault();
@@ -35,6 +41,7 @@ function LoginForm() {
         return;
       }
 
+      setNavigating(true);
       router.push(redirectTo);
       router.refresh();
     } finally {
@@ -45,17 +52,46 @@ function LoginForm() {
   return (
     <main
       style={{
+        position: "relative",
         minHeight: "100vh",
         display: "flex",
         alignItems: "center",
         justifyContent: "center",
         background: "#0a0a0a",
+        overflow: "hidden",
       }}
     >
+      {/* Fundo ofuscado — mostra só um recorte da imagem (lado da logo),
+          desfocado o bastante pra virar textura ambiente, nunca foto legível. */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: "-40px",
+          backgroundImage: "url(/login-bg.png)",
+          backgroundSize: "cover",
+          backgroundPosition: "78% center",
+          filter: "blur(6px) brightness(0.75)",
+          transform: "scale(1.05)",
+        }}
+      />
+      <div
+        aria-hidden="true"
+        style={{
+          position: "absolute",
+          inset: 0,
+          background:
+            "radial-gradient(circle at 50% 40%, rgba(10,10,10,.25) 0%, rgba(10,10,10,.65) 70%)",
+        }}
+      />
+
       <form
         onSubmit={handleLogin}
         style={{
-          background: "#111",
+          position: "relative",
+          zIndex: 1,
+          background: "rgba(17,17,17,0.92)",
+          backdropFilter: "blur(6px)",
           border: "1px solid #222",
           borderRadius: "12px",
           padding: "40px",
@@ -66,18 +102,20 @@ function LoginForm() {
           gap: "16px",
         }}
       >
-        <div style={{ marginBottom: "8px" }}>
-          <div
+        <div style={{ marginBottom: "8px", display: "flex", flexDirection: "column", alignItems: "center", textAlign: "center" }}>
+          <Image
+            src="/logo-vex-auto.png"
+            alt="Vex Auto"
+            width={72}
+            height={72}
             style={{
-              fontSize: "22px",
-              fontWeight: 800,
-              color: "#fff",
-              letterSpacing: "-0.5px",
+              display: "block",
+              borderRadius: "50%",
+              marginBottom: "12px",
+              boxShadow: "0 0 0 1px rgba(255,255,255,0.14), 0 0 20px rgba(0,91,254,0.25)",
             }}
-          >
-            Vex Auto
-          </div>
-          <div style={{ fontSize: "13px", color: "#666", marginTop: "4px" }}>
+          />
+          <div style={{ fontSize: "13px", color: "#666" }}>
             Acesse sua conta
           </div>
         </div>
@@ -159,6 +197,36 @@ function LoginForm() {
           {loading ? "Entrando..." : "Entrar"}
         </button>
       </form>
+
+      {navigating && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 10,
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: "14px",
+            background: "rgba(10,10,10,0.75)",
+            backdropFilter: "blur(2px)",
+          }}
+        >
+          <div
+            style={{
+              width: "34px",
+              height: "34px",
+              borderRadius: "50%",
+              border: "3px solid rgba(255,255,255,0.18)",
+              borderTopColor: "#2563eb",
+              animation: "vex-login-spin 0.7s linear infinite",
+            }}
+          />
+          <div style={{ fontSize: "13px", color: "#aaa" }}>Entrando…</div>
+        </div>
+      )}
+      <style>{`@keyframes vex-login-spin { to { transform: rotate(360deg); } }`}</style>
     </main>
   );
 }
