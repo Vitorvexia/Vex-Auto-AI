@@ -315,7 +315,7 @@ N/A — decisão de marca, não expira
 
 Status
 
-Active
+Superseded (2026-08-13) — exceção não está mais em uso. Favicon final não é a raposa: virou uma 3ª iteração no dia seguinte (`faviconv.png`, a letra "V" com glow + acento de bandeira quadriculada), pedido direto do founder. A regra original do DESIGN.md ("raposa nunca aparece no app logado") volta a valer sem ressalva — este DL fica registrado como histórico de por que ela foi aberta e fechada no mesmo ciclo, não como exceção ativa.
 
 ---
 

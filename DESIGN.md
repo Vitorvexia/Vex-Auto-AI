@@ -154,8 +154,8 @@ Fundo `var(--navy-dark)` fixo, 56px altura, nav central, avatar/dropdown de usu�
 
 ### Wordmark / Favicon / Mascote (marca — DL-0017 abriu exceção pro favicon, ver abaixo)
 - **Logo:** wordmark "VEX AUTO" itálico condensado, branco flat, bandeira quadriculada pequena acima (branco + `#005BFE`), fundo preto, crop circular. `docs/vex/assets/brand/LOGO.png`.
-- **Favicon/in-app:** ~~letra "V" isolada~~ — **atualizado por DL-0017 (2026-08-12, pedido direto do founder):** agora é o rosto da raposa (mascote), geométrico low-poly, cores sólidas sobre fundo transparente. Único elemento de marca dentro do app logado (aba do navegador + logo da sidebar). Fonte: `docs/vex/assets/brand/FAVICONOFICIAL.png` (renomeado de `FAVICON.png` — é a versão definitiva, depois de 2 iterações no mesmo dia). Precisa ser copiado manualmente pra `Public/favicon.png`, que é o arquivo que o app de fato serve.
-- **Mascote (raposa):** geométrica low-poly flat, branco/off-white + azul pontual (olhos, orelha, facetas), bandeira quadriculada só na orelha direita, textura de grade automotiva no focinho. 4 poses aprovadas (frontal, perfil, andando, sentada 3/4) em `docs/vex/assets/brand/MASCOTE.png`. Continua fora do app logado **exceto** no favicon/logo da sidebar (DL-0017) — não usar em nenhuma outra superfície de produto (cards, empty states, loading etc.).
+- **Favicon/in-app:** letra "V" isolada com glow, mesma inclinação do wordmark, branco/gradiente + acento de bandeira quadriculada azul num dos traços — versão final depois de 3 iterações no mesmo dia (raposa com glow → lobo sólido → "V" com bandeira, DL-0017). Único elemento de marca dentro do app logado (aba do navegador + logo da sidebar). Fonte: `docs/vex/assets/brand/faviconv.png`, 1254×1254 (quadrado, sem distorção). Precisa ser copiado manualmente pra `Public/favicon.png`, que é o arquivo que o app de fato serve.
+- **Mascote (raposa):** geométrica low-poly flat, branco/off-white + azul pontual (olhos, orelha, facetas), bandeira quadriculada só na orelha direita, textura de grade automotiva no focinho. 4 poses aprovadas (frontal, perfil, andando, sentada 3/4) em `docs/vex/assets/brand/MASCOTE.png`. Voltou a nunca aparecer no app logado — a exceção aberta por DL-0017 não está mais em uso depois da troca pra `faviconv.png` (ver nota de atualização no decisions log).
 
 ## Do's and Don'ts
 
@@ -165,11 +165,11 @@ Fundo `var(--navy-dark)` fixo, 56px altura, nav central, avatar/dropdown de usu�
 - **Do** usar Bebas Neue em título de página/seção dentro do app (lido uma vez) e full em qualquer peça de marketing/landing/Instagram.
 - **Do** manter Exo 2 italic em KPI/preço do app até validação de legibilidade própria — não é decisão adiada por esquecimento, é decisão deliberada desta rodada.
 - **Do** manter as 7 cores de status do funil e as 3 cores de bolha de chat exatamente como estão — são sinalização funcional, não superfície de marca.
-- **Do** manter a raposa fora do app logado, com a única exceção do favicon/logo da sidebar (DL-0017) — resto do produto (cards, empty states, loading) continua sem mascote, só Instagram/landing pra tudo o mais.
+- **Do** manter a raposa fora do app logado — só Instagram e landing page. Favicon/logo da sidebar usa a "V" com bandeira quadriculada (`faviconv.png`), não a raposa — a exceção aberta por DL-0017 não está mais em uso.
 
 ### Don't:
 - **Don't** aplicar fundo preto, itálico motorsport ou bandeira quadriculada em qualquer tela do app operacional (leads, kanban, conversas, dashboards) — essa é a camada de marca, não de produto.
 - **Don't** usar Bebas Neue em parágrafo, botão pequeno, KPI ou preço — regra herdada de `typography.txt`, sem exceção.
 - **Don't** usar `#0029A7` (azul legado da raposa v1) em qualquer trabalho novo — só existe porque já está aprovado nas 4 poses existentes.
-- **Don't** mostrar a raposa em qualquer superfície do produto além do favicon/logo da sidebar (DL-0017 é a única exceção aberta, não um precedente geral) — nada de mascote em card, empty state, loading, e-mail transacional etc.
+- **Don't** mostrar a raposa dentro do sistema logado, em nenhum contexto — favicon/logo da sidebar hoje é a "V", não a raposa (DL-0017 abriu uma exceção pontual que não está mais em uso).
 - **Don't** inventar número ou depoimento de resultado pra Speed Motos em nenhuma copy — é piloto técnico validado, não case de sucesso (ver `PRODUCT.md`).
