@@ -117,6 +117,28 @@ describe("calculateSellerMetrics", () => {
     expect(bob.closed_leads).toBe(1);
   });
 
+  it("revenue soma valor_final apenas dos leads FECHADO do vendedor", () => {
+    const users = [makeUser({ id: "u1" })];
+    const leads = [
+      makeLead({ id: "l1", assigned_to: "u1", lead_status: "FECHADO", valor_final: 15000 }),
+      makeLead({ id: "l2", assigned_to: "u1", lead_status: "FECHADO", valor_final: 22000 }),
+      makeLead({ id: "l3", assigned_to: "u1", lead_status: "NEGOCIACAO", valor_final: 9000 }),
+    ];
+    const result = calculateSellerMetrics(leads, users);
+    expect(result[0].revenue).toBe(37000);
+  });
+
+  it("revenue trata valor_final nulo/ausente como 0, sem NaN", () => {
+    const users = [makeUser({ id: "u1" })];
+    const leads = [
+      makeLead({ id: "l1", assigned_to: "u1", lead_status: "FECHADO", valor_final: null }),
+      makeLead({ id: "l2", assigned_to: "u1", lead_status: "FECHADO" }),
+    ];
+    const result = calculateSellerMetrics(leads, users);
+    expect(Number.isFinite(result[0].revenue)).toBe(true);
+    expect(result[0].revenue).toBe(0);
+  });
+
   it("não inclui leads com assigned_to = null nas métricas de vendedor", () => {
     const users = [makeUser({ id: "u1" })];
     const leads = [

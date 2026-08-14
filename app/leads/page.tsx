@@ -181,9 +181,8 @@ export default async function LeadsPage({
             {sorted.length} {sorted.length === 1 ? "lead" : "leads"} em atendimento
           </div>
         </div>
+        <LeadImportCard />
       </div>
-
-      <LeadImportCard />
 
       <div className="leads-kpi-bar">
         <div className="leads-kpi-chip">

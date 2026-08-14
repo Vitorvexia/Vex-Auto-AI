@@ -67,9 +67,10 @@ export function LeadCard({
   const urgency     = urgencyLevel(ultima_atividade);
   const transitions = LEAD_TRANSITIONS[lead_status] ?? [];
   const initial      = (nome ?? "?").trim().charAt(0).toUpperCase() || "?";
+  const hasTray       = transitions.length > 0 || !!vendedores;
 
   return (
-    <div className={`lead-card-wrap${transitions.length > 0 ? " has-move" : ""}`}>
+    <div className={`lead-card-wrap${hasTray ? " has-move" : ""}`}>
       <Link href={href} className="lead-card">
         <div className="lead-card-top">
           <div className="lead-card-identity">
@@ -98,25 +99,29 @@ export function LeadCard({
         </div>
       </Link>
 
-      {transitions.length > 0 && (
-        <form action={moveLeadStatus.bind(null, id)} className="lead-card-move">
-          <select name="lead_status" defaultValue="">
-            <option value="" disabled>Mover para…</option>
-            {transitions.map((s) => (
-              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-            ))}
-          </select>
-          <button type="submit" aria-label="Mover lead">→</button>
-        </form>
-      )}
+      {(transitions.length > 0 || vendedores) && (
+        <div className="lead-card-tray">
+          {transitions.length > 0 && (
+            <form action={moveLeadStatus.bind(null, id)} className="lead-card-move">
+              <select name="lead_status" defaultValue="">
+                <option value="" disabled>Mover para…</option>
+                {transitions.map((s) => (
+                  <option key={s} value={s}>{STATUS_LABELS[s]}</option>
+                ))}
+              </select>
+              <button type="submit" aria-label="Mover lead">→</button>
+            </form>
+          )}
 
-      {vendedores && (
-        <LeadAssignmentSelect
-          leadId={id}
-          assignedTo={assignedTo ?? null}
-          vendedores={vendedores}
-          canReassign={canReassign}
-        />
+          {vendedores && (
+            <LeadAssignmentSelect
+              leadId={id}
+              assignedTo={assignedTo ?? null}
+              vendedores={vendedores}
+              canReassign={canReassign}
+            />
+          )}
+        </div>
       )}
     </div>
   );

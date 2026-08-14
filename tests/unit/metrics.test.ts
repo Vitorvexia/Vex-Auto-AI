@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { calculateOperationalMetrics, countLeadsToday } from "@/lib/metrics";
+import { calculateOperationalMetrics, countLeadsToday, buildDailyTrend, countLeadsByStatus, calculateReactivationRevenue } from "@/lib/metrics";
 import type { MetricsInput } from "@/lib/metrics";
 
 function emptyInput(): MetricsInput {
@@ -54,6 +54,27 @@ describe("calculateOperationalMetrics", () => {
       { lead_status: "NOVO",    created_at: ts(0) },
     ];
     expect(calculateOperationalMetrics(input).closed_leads).toBe(1);
+  });
+
+  it("T4b: revenue_generated soma valor_final apenas dos FECHADO", () => {
+    const input = emptyInput();
+    input.leads = [
+      { lead_status: "FECHADO", created_at: ts(0), valor_final: 15000 },
+      { lead_status: "FECHADO", created_at: ts(0), valor_final: 22000 },
+      { lead_status: "NOVO",    created_at: ts(0), valor_final: 9000 },
+    ];
+    expect(calculateOperationalMetrics(input).revenue_generated).toBe(37000);
+  });
+
+  it("T4c: revenue_generated trata valor_final nulo/ausente como 0, sem NaN", () => {
+    const input = emptyInput();
+    input.leads = [
+      { lead_status: "FECHADO", created_at: ts(0), valor_final: null },
+      { lead_status: "FECHADO", created_at: ts(0) },
+    ];
+    const revenue = calculateOperationalMetrics(input).revenue_generated;
+    expect(Number.isFinite(revenue)).toBe(true);
+    expect(revenue).toBe(0);
   });
 
   it("T5: lost_leads conta apenas PERDIDO", () => {
@@ -213,5 +234,156 @@ describe("countLeadsToday", () => {
       { created_at: "2026-08-11T10:00:00Z" }, // dias atrás
     ];
     expect(countLeadsToday(leads, now)).toBe(2);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// buildDailyTrend
+// ---------------------------------------------------------------------------
+
+describe("buildDailyTrend", () => {
+  it("T1: retorna `days` pontos, oldest → newest, terminando hoje", () => {
+    const now = new Date("2026-08-13T15:00:00Z");
+    const trend = buildDailyTrend([], [], [], 5, now);
+    expect(trend.map((p) => p.date)).toEqual([
+      "2026-08-09",
+      "2026-08-10",
+      "2026-08-11",
+      "2026-08-12",
+      "2026-08-13",
+    ]);
+  });
+
+  it("T2: input vazio → todos os pontos zerados", () => {
+    const now = new Date("2026-08-13T15:00:00Z");
+    const trend = buildDailyTrend([], [], [], 3, now);
+    for (const p of trend) {
+      expect(p.novos).toBe(0);
+      expect(p.followups).toBe(0);
+      expect(p.reativacoes).toBe(0);
+    }
+  });
+
+  it("T3: agrupa leads novos por dia UTC de created_at", () => {
+    const now = new Date("2026-08-13T15:00:00Z");
+    const leads = [
+      { created_at: "2026-08-13T09:00:00Z" },
+      { created_at: "2026-08-13T20:00:00Z" },
+      { created_at: "2026-08-12T09:00:00Z" },
+    ];
+    const trend = buildDailyTrend(leads, [], [], 3, now);
+    const byDate = Object.fromEntries(trend.map((p) => [p.date, p.novos]));
+    expect(byDate["2026-08-13"]).toBe(2);
+    expect(byDate["2026-08-12"]).toBe(1);
+    expect(byDate["2026-08-11"]).toBe(0);
+  });
+
+  it("T4: conta só follow-ups/reativações com status 'sent'", () => {
+    const now = new Date("2026-08-13T15:00:00Z");
+    const followUpLogs = [
+      { logged_at: "2026-08-13T09:00:00Z", status: "sent" },
+      { logged_at: "2026-08-13T09:00:00Z", status: "failed" },
+    ];
+    const reactivationLogs = [
+      { logged_at: "2026-08-13T09:00:00Z", status: "sent" },
+      { logged_at: "2026-08-13T09:00:00Z", status: "sent" },
+    ];
+    const trend = buildDailyTrend([], followUpLogs, reactivationLogs, 1, now);
+    expect(trend[0].followups).toBe(1);
+    expect(trend[0].reativacoes).toBe(2);
+  });
+
+  it("T5: ignora registros fora da janela de `days`", () => {
+    const now = new Date("2026-08-13T15:00:00Z");
+    const leads = [{ created_at: "2026-08-01T09:00:00Z" }];
+    const trend = buildDailyTrend(leads, [], [], 3, now);
+    expect(trend.reduce((sum, p) => sum + p.novos, 0)).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// countLeadsByStatus
+// ---------------------------------------------------------------------------
+
+describe("countLeadsByStatus", () => {
+  it("T1: array vazio → todos os status zerados", () => {
+    const counts = countLeadsByStatus([]);
+    expect(counts).toEqual({
+      NOVO: 0,
+      ENGAJADO: 0,
+      INTERESSADO: 0,
+      QUENTE: 0,
+      NEGOCIACAO: 0,
+      FECHADO: 0,
+      PERDIDO: 0,
+    });
+  });
+
+  it("T2: conta leads por status", () => {
+    const leads = [
+      { lead_status: "NOVO" as const },
+      { lead_status: "NOVO" as const },
+      { lead_status: "FECHADO" as const },
+      { lead_status: "PERDIDO" as const },
+    ];
+    const counts = countLeadsByStatus(leads);
+    expect(counts.NOVO).toBe(2);
+    expect(counts.FECHADO).toBe(1);
+    expect(counts.PERDIDO).toBe(1);
+    expect(counts.ENGAJADO).toBe(0);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// calculateReactivationRevenue
+// ---------------------------------------------------------------------------
+
+describe("calculateReactivationRevenue", () => {
+  it("T1: input vazio → zeros, sem NaN", () => {
+    const result = calculateReactivationRevenue([], []);
+    expect(result).toEqual({ converted_leads: 0, revenue: 0 });
+  });
+
+  it("T2: soma valor_final apenas dos leads com reativação convertida", () => {
+    const leads = [
+      { id: "l1", valor_final: 15000 },
+      { id: "l2", valor_final: 8000 },
+      { id: "l3", valor_final: 30000 },
+    ];
+    const reactivationLogs = [
+      { lead_id: "l1", converted_at: "2026-08-01T10:00:00Z" },
+      { lead_id: "l2", converted_at: null },
+      { lead_id: "l3", converted_at: "2026-08-05T10:00:00Z" },
+    ];
+    const result = calculateReactivationRevenue(leads, reactivationLogs);
+    expect(result.converted_leads).toBe(2);
+    expect(result.revenue).toBe(45000);
+  });
+
+  it("T3: não duplica quando lead tem múltiplos logs convertidos (várias tentativas)", () => {
+    const leads = [{ id: "l1", valor_final: 15000 }];
+    const reactivationLogs = [
+      { lead_id: "l1", converted_at: "2026-08-01T10:00:00Z" },
+      { lead_id: "l1", converted_at: "2026-08-01T10:00:01Z" },
+    ];
+    const result = calculateReactivationRevenue(leads, reactivationLogs);
+    expect(result.converted_leads).toBe(1);
+    expect(result.revenue).toBe(15000);
+  });
+
+  it("T4: valor_final nulo/ausente vira 0, sem NaN", () => {
+    const leads = [{ id: "l1", valor_final: null }];
+    const reactivationLogs = [{ lead_id: "l1", converted_at: "2026-08-01T10:00:00Z" }];
+    const result = calculateReactivationRevenue(leads, reactivationLogs);
+    expect(Number.isFinite(result.revenue)).toBe(true);
+    expect(result.revenue).toBe(0);
+  });
+
+  it("T5: lead convertido sem correspondência em `leads` não quebra (revenue 0 pra ele)", () => {
+    const leads: Array<{ id: string; valor_final: number | null }> = [];
+    const reactivationLogs = [{ lead_id: "l1", converted_at: "2026-08-01T10:00:00Z" }];
+    const result = calculateReactivationRevenue(leads, reactivationLogs);
+    expect(result.converted_leads).toBe(1);
+    expect(result.revenue).toBe(0);
   });
 });

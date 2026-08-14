@@ -28,6 +28,7 @@ export interface Lead {
   assigned_to: string | null;       // UUID of responsible vendor. NULL = no owner
   conversation_status?: string | null; // active conversation status — used for hot-via-handoff detection
   updated_at: string;
+  valor_final?: number | null;
 }
 
 /** Estados de conversa que ainda nao foram encerrados. */
