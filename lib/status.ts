@@ -4,6 +4,9 @@ import type {
   ConversationStatus,
   HandoffTo,
 } from "@/types/domain";
+import { LEAD_TRANSITIONS, canTransitionLead } from "@/lib/lead-transitions";
+
+export { LEAD_TRANSITIONS, canTransitionLead };
 
 /**
  * ============================================================================
@@ -36,16 +39,6 @@ import type {
 // SELECT FOR UPDATE no RPC é o fallback para concorrência entre processos.
 const pendingLeadTransitions = new Map<string, true>();
 
-export const LEAD_TRANSITIONS: Record<LeadStatus, LeadStatus[]> = {
-  NOVO:        ["ENGAJADO", "PERDIDO"],
-  ENGAJADO:    ["INTERESSADO", "QUENTE", "PERDIDO"],
-  INTERESSADO: ["QUENTE", "ENGAJADO", "PERDIDO"],
-  QUENTE:      ["NEGOCIACAO", "INTERESSADO", "PERDIDO"],
-  NEGOCIACAO:  ["FECHADO", "PERDIDO", "QUENTE"],
-  FECHADO:     [],
-  PERDIDO:     ["ENGAJADO"],
-};
-
 const CONVERSATION_TRANSITIONS: Record<
   ConversationStatus,
   ConversationStatus[]
@@ -72,11 +65,6 @@ export class ConcurrentTransitionError extends Error {
     super(`Transicao concorrente detectada em ${kind} ${id}`);
     this.name = "ConcurrentTransitionError";
   }
-}
-
-export function canTransitionLead(from: LeadStatus, to: LeadStatus): boolean {
-  if (from === to) return true;
-  return LEAD_TRANSITIONS[from].includes(to);
 }
 
 export function canTransitionConversation(
