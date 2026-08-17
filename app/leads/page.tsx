@@ -6,6 +6,7 @@ import { KanbanColumn } from "@/app/components/KanbanColumn";
 import { LeadCard } from "@/app/components/LeadCard";
 import { LeadImportCard } from "@/app/components/LeadImportCard";
 import { calculateSellerMetrics, getStoreAssignmentSummary } from "@/lib/seller-metrics";
+import { resolveAssignedToFilter } from "@/lib/lead-filter";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -45,13 +46,8 @@ export default async function LeadsPage({
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) throw new AuthError();
 
-  // Fix 6: validate assignedToParam — reject malformed UUIDs silently (treat as no filter)
-  const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   const rawParam = searchParams?.assignedTo;
-  const assignedToParam =
-    rawParam === "none" ? "none" :
-    rawParam && UUID_REGEX.test(rawParam) ? rawParam :
-    undefined;
+  const assignedToParam = resolveAssignedToFilter(rawParam, user.id);
 
   // Build leads query
   let leadsQuery = supabase
@@ -213,7 +209,7 @@ export default async function LeadsPage({
       </div>
 
       <div className="vendor-filter">
-        <a href="/leads" className={!assignedToParam ? "active" : ""}>Todos</a>
+        <a href="/leads?assignedTo=all" className={!assignedToParam ? "active" : ""}>Todos</a>
         {vendedores.map(v => (
           <a
             key={v.id}
