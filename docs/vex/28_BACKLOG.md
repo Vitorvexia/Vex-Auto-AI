@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Product & Engineering
 
-Last Updated: 2026-07-31
+Last Updated: 2026-08-17
 
 ---
 
@@ -2616,7 +2616,7 @@ P1 — motivado por necessidade de material de marketing. Fase 1 cobre só as te
 
 Status
 
-IN PROGRESS — sidebar (nav vertical, largura, esquema de cor), `/inicio` (ops-strip + consolidação com Analytics, dado real), `/login` e `/agenda` (calendário mensal) redesenhados. Conversa/dossiê/handoff (`/conversations`) e kanban de leads (`/leads`) já validados visualmente pelo founder em sessão anterior. Tudo na branch `claude/vex-redesign-visual-fase1-sqkmmf`, commitado e pushado, **não mergeado em main / não em produção** — aguardando validação visual final antes do merge. Ver `27_PROJECT_STATUS.md` (2026-08-13) para detalhe completo.
+IN PROGRESS — sidebar (nav vertical, largura, esquema de cor), `/inicio` (ops-strip + consolidação com Analytics, dado real), `/login` e `/agenda` (calendário mensal) redesenhados. Conversa/dossiê/handoff (`/conversations`) validado visualmente pelo founder em sessão anterior. `/leads` ganhou uma segunda rodada de trabalho (2026-08-17): filtro por vendedor default-próprio, kanban com drag-and-drop nativo (substitui dropdown "Mover para..."), filtro "Todos/Sem responsável/Atrasados/Vendedores", gráfico "Leads por Status" (`BarChart` reaproveitado de `/inicio`) e badge flutuante "Lead Atrasado" — ver `27_PROJECT_STATUS.md` (2026-08-17) para detalhe completo. Tudo na branch `claude/vex-redesign-visual-fase1-sqkmmf`, **6 commits desta rodada commitados mas ainda não pushados**, branch como um todo não mergeada em main / não em produção — aguardando validação visual final antes do merge.
 
 Owner
 
@@ -2721,6 +2721,70 @@ Não definido — depende de qual caminho (a/b) for escolhido.
 Notes
 
 Registrado no mesmo escopo de decisão que descartou a Fase 2/3 original desta sessão (integração Meta Marketing API, cancelada — DL-0011 permanece válida, não revertida).
+
+---
+
+BL-0039
+
+Title
+
+Sugestão inteligente de modelo/veículo em `/inicio` — dado interno + pesquisa de mercado externa
+
+Problem
+
+Founder quer que a Central de Operações (`/inicio`) sugira ao lojista qual modelo de veículo reforçar no estoque — combinando o que já performou bem dentro do sistema (leads/conversões por modelo) com o que está "girando" no mercado fora do VEX (tendência externa, não só dado interno).
+
+Business Value
+
+Ajuda o lojista a decidir compra de estoque com dado real em vez de intuição — liga diretamente a faturamento/margem (mesmo teste de "Princípio de Execução" do `CLAUDE.md`: aumenta conversão ao garantir que o estoque tenha o que o mercado quer).
+
+Customer Value
+
+Lojista abre `/inicio` e vê uma recomendação acionável ("Honda CG 160 está performando bem aqui E em alta no mercado — considere repor estoque"), sem precisar cruzar dado manualmente.
+
+Priority
+
+Não definida — pedido explícito do founder nesta sessão (2026-08-17), mas classificado como **arquitetural** (não bounded) na sessão de brainstorming: não existe hoje nenhuma integração de dado de mercado automotivo externo no projeto (`FIPE`/`Portais de veículos` seguem "Planejado" no `CLAUDE.md`, nunca implementados). Decomposição proposta na sessão: (A) parte interna (ranking de modelo por performance de lead/venda, 100% dado já existente em `leads`/`vehicles`) é bounded e pode sair primeiro; (B) parte externa (pesquisa de mercado/tendência) precisa de uma fonte de dado ainda não escolhida — brainstorming arquitetural próprio, não iniciado.
+
+Status
+
+IDEA — não implementado. Brainstorming arquitetural (fonte de dado externo, custo, frequência de atualização, guardrails de "IA nunca decide compra sozinha") ainda não rodado. Aguardando o founder pra essa sessão.
+
+Owner
+
+Engineering / Founder (direção de produto + escolha de fonte externa)
+
+Estimated Complexity
+
+Alta — parte interna é baixa (agregação pura sobre dado já existente), parte externa é incerta até a fonte ser escolhida (API paga de mercado automotivo? scraping de portal? LLM com web search via Anthropic?). Cada opção tem custo/manutenção/confiabilidade muito diferentes.
+
+Dependencies
+
+Nenhuma técnica bloqueante pra parte interna. Parte externa depende de decisão de fonte de dado (não escolhida).
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Pedido direto do founder em sessão de 2026-08-17, mesma conversa que produziu as mudanças de `/leads` registradas em `27_PROJECT_STATUS.md`.
+
+Target Version
+
+Sem agendamento — depende de sessão de brainstorming arquitetural própria.
+
+Success Metrics
+
+Não definido — depende da fonte de dado externa escolhida e do formato final da recomendação.
+
+Notes
+
+Guardrail a preservar desde já (mesmo antes do desenho): IA sugere, nunca decide compra sozinha — mesma filosofia de "Human in the Loop" do `CLAUDE.md` (aprovação humana em decisões financeiras). Nunca modelar como ação automática de compra/pedido.
 
 ---
 

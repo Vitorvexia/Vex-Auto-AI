@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-08-14
+Last Updated: 2026-08-17
 
 ---
 
@@ -330,6 +330,17 @@ Resolved (2026-08-01)
 # RECENT COMPLETED WORK
 
 Most recent accomplishments (source: git log, most recent first).
+
+🟡 BL-0037 (Fase 1, continuação) — `/leads` ganha filtro por vendedor default-próprio, kanban drag-and-drop nativo e gráfico de status, substituindo dropdown/chips/tabela redundantes (2026-08-17, mesma branch `claude/vex-redesign-visual-fase1-sqkmmf`, **6 commits, commitados mas não pushados ainda**). Sessão conduzida via `superpowers:brainstorming` (bounded) em cada mudança — desenho curto no chat, aprovação explícita do founder antes de cada implementação.
+
+- **Filtro default no próprio usuário** (`67783c5`): `/leads` sem `?assignedTo` na URL passa a filtrar `assigned_to` pelo usuário logado em vez de mostrar todos — `resolveAssignedToFilter` extraído pra `lib/lead-filter.ts` (TDD, puro). Link "Todos" passa a exigir `?assignedTo=all` explícito, pra distinguir do estado default. Nav lateral continua indo pra `/leads` puro → sempre entra filtrado na própria pessoa. Vale pra qualquer role (vendedor/dono_loja/super_admin).
+- **Kanban mais largo** (`ec2d7e9`): colunas 216px/206px → 264px/250px.
+- **Drag-and-drop nativo no kanban** (`d4d1efc`): dropdown "Mover para..." removido do `LeadCard` — card vira `draggable`, solta em cima da coluna alvo. `KanbanColumn` valida a transição em tempo real (`canTransitionLead`) e destaca coluna válida/inválida durante o arraste; `FECHADO` nunca aceita drop (mesmo guardrail de margem que `moveLeadStatus` já impõe no server — dupla camada preservada). **Achado técnico no meio do caminho**: `lib/status.ts` importa `supabaseAdmin` (service_role) no topo do módulo — `LeadCard`/`KanbanColumn` virando `"use client"` não podiam importar de lá sem vazar a service key pro bundle do browser (throw no module load do client). `LEAD_TRANSITIONS`/`canTransitionLead` extraídos pra `lib/lead-transitions.ts` (módulo puro, zero I/O); `lib/status.ts` reexporta as duas — todo import existente (`@/lib/status`) continua funcionando sem mudança de comportamento (`status-transitions.test.ts` seguiu verde). `dataTransfer.getData()` só é legível em `dragstart`/`drop` (bloqueado em `dragover`/`dragenter` pelo browser) — o status de origem viaja num tipo MIME próprio (`dragFromMime`), legível via `.types` durante o arraste, pra dar highlight em tempo real sem esperar o drop.
+- **Filtro "Todos/Sem responsável/Vendedores" + KPIs viram gráfico** (`10dae71`): fileira de pill por vendedor vira 3 itens fixos, "Vendedores" abre `<details>` nativo (sem lib) com a lista — summary mostra o nome do vendedor ativo. Chips "No pipeline"/"Quentes"/"Em negociação"/"Ativos hoje" viram `BarChart` "Leads por Status" (mesmo componente já usado em `/inicio`, reaproveitado) — "Quentes" (prioridade por score+handoff) e "Ativos hoje" (corte de tempo) não entram na barra por serem dimensão diferente do status puro do funil.
+- **Badge "Lead Atrasado" + filtro `?atrasado=1`** (`b030620`): badge flutuante (mesmo padrão visual de `AlertsWidget` de `/inicio`, mas link direto em vez de painel popover) substitui o chip "Sem resposta >2h". `isStaleLead` extraído pra `lib/lead-filter.ts` (TDD) — mesmo limiar de 2h usado no contador do badge e no filtro, fonte única de verdade. Tabela "Vendedor/Leads/Quentes/Fechados" removida de `/leads` — decisão do founder de que isso é escopo de `/equipe` (feature futura), não do pipeline.
+- **Reordena filtro + move gráfico + polish premium no drag** (`cca90a6`): "Atrasados" vira pill permanente ao lado de "Sem responsável" (era condicional). Gráfico desce pra depois do kanban. Drag ganha lift de verdade (`scale(1.045) rotate(-1.5deg)` + sombra funda) no lugar de só opacidade cair; coluna-alvo ganha anel de glow inset (accent azul/vermelho) no lugar da borda tracejada; cards ganham entrada suave no mount (respeita `prefers-reduced-motion`) — pedido explícito do founder ("está muito cru... quero algo saas que fatura bilhões").
+
+1168 testes unitários verdes (11 novos desta sessão: `resolveAssignedToFilter`/`isStaleLead` em `lead-filter.test.ts`), lint/typecheck limpos em cada commit. Validado ao vivo no browser (Chrome DevTools MCP) a cada mudança — dev server local, drag válido/inválido testado manualmente, filtro+gráfico+badge conferidos com dado real de teste. **Sem push ainda, sem validação em produção real** — mesma branch não mergeada de BL-0037.
 
 🟡 BL-0037 (Fase 1) — Redesign visual continuado + consolidação Início/Analytics + Agenda com calendário real (2026-08-13, branch `claude/vex-redesign-visual-fase1-sqkmmf`, **não mergeada em main, não em produção** — aguardando validação visual do founder). Sessão longa cobrindo várias frentes:
 
