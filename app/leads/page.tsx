@@ -202,6 +202,12 @@ export default async function LeadsPage({
         <a href="/leads?assignedTo=none" className={assignedToParam === "none" ? "active" : ""}>
           Sem responsável
         </a>
+        <a
+          href={atrasadoActive ? clearAtrasadoHref : `/leads?${atrasadoHref}`}
+          className={atrasadoActive ? "active vendor-filter-clear" : ""}
+        >
+          Atrasados{atrasadoActive ? " ✕" : ""}
+        </a>
         <details className="vendor-filter-dropdown">
           <summary className={activeVendedor ? "active" : ""}>
             {activeVendedor ? `Vendedores: ${activeVendedor.nome}` : "Vendedores"}
@@ -218,20 +224,6 @@ export default async function LeadsPage({
             ))}
           </div>
         </details>
-        {atrasadoActive && (
-          <a href={clearAtrasadoHref} className="active vendor-filter-clear">
-            Atrasados ✕
-          </a>
-        )}
-      </div>
-
-      <div className="section-card leads-status-chart">
-        <div className="section-card-head">
-          <span className="section-card-title">Leads por Status</span>
-        </div>
-        <div className="section-card-body">
-          <BarChart bars={statusBars} />
-        </div>
       </div>
 
       {/* Fix 4: always visible — shows "0 com responsável · N sem responsável" even before any assignment */}
@@ -261,6 +253,15 @@ export default async function LeadsPage({
             </KanbanColumn>
           );
         })}
+      </div>
+
+      <div className="section-card leads-status-chart">
+        <div className="section-card-head">
+          <span className="section-card-title">Leads por Status</span>
+        </div>
+        <div className="section-card-body">
+          <BarChart bars={statusBars} />
+        </div>
       </div>
 
       <DelayedLeadsBadge count={staleLeads} href={`/leads?${atrasadoHref}`} />
