@@ -247,8 +247,8 @@ a { color: inherit; text-decoration: none; }
 
 /* ─── Kanban column ──────────────────────────── */
 .kanban-col {
-  flex: 0 0 216px;
-  min-width: 206px;
+  flex: 0 0 264px;
+  min-width: 250px;
   display: flex;
   flex-direction: column;
   background: var(--panel);
