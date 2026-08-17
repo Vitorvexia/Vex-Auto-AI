@@ -881,8 +881,6 @@ a { color: inherit; text-decoration: none; }
 .leads-kpi-chip-label { font-size: 11.5px; color: var(--muted); }
 .leads-kpi-chip.hot  { border-color: rgba(249,115,22,.3);  background: rgba(249,115,22,.04); }
 .leads-kpi-chip.hot  .leads-kpi-chip-value { color: #FB923C; }
-.leads-kpi-chip.nego { border-color: rgba(34,197,94,.3);   background: rgba(34,197,94,.04); }
-.leads-kpi-chip.nego .leads-kpi-chip-value { color: #4ADE80; }
 .leads-kpi-chip.alert{ border-color: rgba(239,68,68,.45); background: rgba(239,68,68,.07); animation: kpi-alert-pulse 2.8s ease-in-out infinite; }
 .leads-kpi-chip.alert .leads-kpi-chip-value { color: #F87171; }
 @keyframes kpi-alert-pulse {
@@ -906,6 +904,37 @@ a { color: inherit; text-decoration: none; }
   background: rgba(0,91,254,.1); border-color: rgba(0,91,254,.35);
   color: var(--accent); font-weight: 700;
 }
+.vendor-filter-dropdown { position: relative; }
+.vendor-filter-dropdown summary {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 5px 12px; border-radius: 999px;
+  background: var(--panel-2); border: 1px solid var(--border);
+  color: var(--text); font-size: 12.5px; font-weight: 600;
+  cursor: pointer; list-style: none;
+  transition: border-color .12s, background .12s, color .12s;
+}
+.vendor-filter-dropdown summary::-webkit-details-marker { display: none; }
+.vendor-filter-dropdown summary::after { content: "▾"; font-size: 10px; }
+.vendor-filter-dropdown summary:hover { border-color: var(--accent); }
+.vendor-filter-dropdown summary.active {
+  background: rgba(0,91,254,.1); border-color: rgba(0,91,254,.35);
+  color: var(--accent); font-weight: 700;
+}
+.vendor-filter-dropdown-list {
+  position: absolute; top: calc(100% + 6px); left: 0; z-index: 10;
+  display: flex; flex-direction: column; gap: 2px; min-width: 160px;
+  padding: 6px; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 4px 14px rgba(0,0,0,.28);
+}
+.vendor-filter-dropdown-list a {
+  padding: 6px 9px; border-radius: 5px;
+  color: var(--text); font-size: 12.5px; font-weight: 600;
+  transition: background .12s, color .12s;
+}
+.vendor-filter-dropdown-list a:hover { background: var(--panel-2); }
+.vendor-filter-dropdown-list a.active { color: var(--accent); background: rgba(0,91,254,.08); }
+
+.leads-status-chart { margin-bottom: 16px; }
 
 /* ─── Seller metrics table (leads page) ──────── */
 .seller-metrics-table {
@@ -1400,7 +1429,6 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
 
 /* Leads KPI bar */
 :root[data-theme="light"] .leads-kpi-chip.hot  .leads-kpi-chip-value { color: #C2410C; }
-:root[data-theme="light"] .leads-kpi-chip.nego .leads-kpi-chip-value { color: #15803D; }
 :root[data-theme="light"] .leads-kpi-chip.alert .leads-kpi-chip-value { color: #B91C1C; }
 :root[data-theme="light"] .inbox-waiting-count { color: #C2410C; }
 

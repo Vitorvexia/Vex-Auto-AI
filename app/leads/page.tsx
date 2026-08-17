@@ -7,6 +7,7 @@ import { LeadCard } from "@/app/components/LeadCard";
 import { LeadImportCard } from "@/app/components/LeadImportCard";
 import { calculateSellerMetrics, getStoreAssignmentSummary } from "@/lib/seller-metrics";
 import { resolveAssignedToFilter } from "@/lib/lead-filter";
+import { BarChart } from "@/app/components/BarChart";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -168,6 +169,18 @@ export default async function LeadsPage({
   const sellerMetrics = calculateSellerMetrics(leadsForMetrics, vendedores);
   const assignmentSummary = getStoreAssignmentSummary(leadsForMetrics);
 
+  const statusBars = [
+    { label: "Novo", value: byStatus.NOVO.length, color: "var(--status-novo)" },
+    { label: "Engajado", value: byStatus.ENGAJADO.length, color: "var(--status-engajado)" },
+    { label: "Interessado", value: byStatus.INTERESSADO.length, color: "var(--status-interessado)" },
+    { label: "Quente", value: byStatus.QUENTE.length, color: "var(--status-quente)" },
+    { label: "Negociação", value: byStatus.NEGOCIACAO.length, color: "var(--status-negociacao)" },
+    { label: "Fechado", value: byStatus.FECHADO.length, color: "var(--status-fechado)" },
+    { label: "Perdido", value: byStatus.PERDIDO.length, color: "var(--status-perdido)" },
+  ];
+
+  const activeVendedor = vendedores.find((v) => v.id === assignedToParam);
+
   return (
     <main className="container">
       <div className="page-header">
@@ -181,17 +194,9 @@ export default async function LeadsPage({
       </div>
 
       <div className="leads-kpi-bar">
-        <div className="leads-kpi-chip">
-          <div className="leads-kpi-chip-value">{sorted.length}</div>
-          <div className="leads-kpi-chip-label">No pipeline</div>
-        </div>
         <div className="leads-kpi-chip hot">
           <div className="leads-kpi-chip-value">{hotCount}</div>
           <div className="leads-kpi-chip-label">Quentes</div>
-        </div>
-        <div className="leads-kpi-chip nego">
-          <div className="leads-kpi-chip-value">{byStatus.NEGOCIACAO.length}</div>
-          <div className="leads-kpi-chip-label">Em negociação</div>
         </div>
         <div className="leads-kpi-chip">
           <div className="leads-kpi-chip-value">{activeToday}</div>
@@ -210,18 +215,34 @@ export default async function LeadsPage({
 
       <div className="vendor-filter">
         <a href="/leads?assignedTo=all" className={!assignedToParam ? "active" : ""}>Todos</a>
-        {vendedores.map(v => (
-          <a
-            key={v.id}
-            href={`/leads?assignedTo=${v.id}`}
-            className={assignedToParam === v.id ? "active" : ""}
-          >
-            {v.nome}
-          </a>
-        ))}
         <a href="/leads?assignedTo=none" className={assignedToParam === "none" ? "active" : ""}>
           Sem responsável
         </a>
+        <details className="vendor-filter-dropdown">
+          <summary className={activeVendedor ? "active" : ""}>
+            {activeVendedor ? `Vendedores: ${activeVendedor.nome}` : "Vendedores"}
+          </summary>
+          <div className="vendor-filter-dropdown-list">
+            {vendedores.map(v => (
+              <a
+                key={v.id}
+                href={`/leads?assignedTo=${v.id}`}
+                className={assignedToParam === v.id ? "active" : ""}
+              >
+                {v.nome}
+              </a>
+            ))}
+          </div>
+        </details>
+      </div>
+
+      <div className="section-card leads-status-chart">
+        <div className="section-card-head">
+          <span className="section-card-title">Leads por Status</span>
+        </div>
+        <div className="section-card-body">
+          <BarChart bars={statusBars} />
+        </div>
       </div>
 
       {sellerMetrics.length > 0 && (
