@@ -5,9 +5,10 @@ import { calculateLeadPriority, sortLeads, type PriorityTier } from "@/lib/lead-
 import { KanbanColumn } from "@/app/components/KanbanColumn";
 import { LeadCard } from "@/app/components/LeadCard";
 import { LeadImportCard } from "@/app/components/LeadImportCard";
-import { calculateSellerMetrics, getStoreAssignmentSummary } from "@/lib/seller-metrics";
-import { resolveAssignedToFilter } from "@/lib/lead-filter";
+import { getStoreAssignmentSummary } from "@/lib/seller-metrics";
+import { resolveAssignedToFilter, isStaleLead } from "@/lib/lead-filter";
 import { BarChart } from "@/app/components/BarChart";
+import { DelayedLeadsBadge } from "@/app/components/DelayedLeadsBadge";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -41,7 +42,7 @@ type Enriched = {
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams?: { assignedTo?: string };
+  searchParams?: { assignedTo?: string; atrasado?: string };
 }) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -49,6 +50,7 @@ export default async function LeadsPage({
 
   const rawParam = searchParams?.assignedTo;
   const assignedToParam = resolveAssignedToFilter(rawParam, user.id);
+  const atrasadoActive = searchParams?.atrasado === "1";
 
   // Build leads query
   let leadsQuery = supabase
@@ -132,6 +134,12 @@ export default async function LeadsPage({
 
   const sorted = sortLeads(enriched);
 
+  // staleLeads é sempre calculado sobre o escopo de vendedor (sorted), não
+  // sobre o resultado já filtrado por "atrasado" — é o contador do badge,
+  // precisa refletir o total disponível pra clicar, não o que já tá visível.
+  const staleLeads = sorted.filter((l) => isStaleLead(l.ultima_atividade)).length;
+  const visible = atrasadoActive ? sorted.filter((l) => isStaleLead(l.ultima_atividade)) : sorted;
+
   const byStatus: Record<LeadStatus, Enriched[]> = {
     NOVO: [],
     ENGAJADO: [],
@@ -141,16 +149,9 @@ export default async function LeadsPage({
     FECHADO: [],
     PERDIDO: [],
   };
-  sorted.forEach((l) => byStatus[l.lead_status].push(l));
+  visible.forEach((l) => byStatus[l.lead_status].push(l));
 
-  const now = Date.now();
-  const staleLeads  = sorted.filter((l) => now - new Date(l.ultima_atividade).getTime() > 2 * 60 * 60 * 1000).length;
-  const todayStart  = new Date(); todayStart.setHours(0, 0, 0, 0);
-  const activeToday = sorted.filter((l) => new Date(l.ultima_atividade) >= todayStart).length;
-  const hotCount    = sorted.filter((l) => l.priority === "hot").length;
-
-  // Seller metrics (computed from ALL leads in the store, not filtered)
-  // Extract active conversation_status per lead for hot-via-handoff detection (same rule as KPI bar)
+  // Extract active conversation_status per lead (assignment summary abaixo)
   const leadsForMetrics: Lead[] = (allLeadsResult.data ?? []).map((l) => {
     const convs = (l as { conversations?: { conversation_status: string | null }[] }).conversations ?? [];
     const activeConv = convs.find((c) => (OPEN_CONVERSATION_STATUSES as string[]).includes(c.conversation_status ?? ""));
@@ -166,7 +167,6 @@ export default async function LeadsPage({
     };
   });
 
-  const sellerMetrics = calculateSellerMetrics(leadsForMetrics, vendedores);
   const assignmentSummary = getStoreAssignmentSummary(leadsForMetrics);
 
   const statusBars = [
@@ -180,6 +180,10 @@ export default async function LeadsPage({
   ];
 
   const activeVendedor = vendedores.find((v) => v.id === assignedToParam);
+  // Preserva o filtro de vendedor ao ligar/desligar "atrasado" na URL.
+  const vendedorQuery = rawParam ? `assignedTo=${rawParam}` : "";
+  const atrasadoHref = [vendedorQuery, "atrasado=1"].filter(Boolean).join("&");
+  const clearAtrasadoHref = rawParam ? `/leads?assignedTo=${rawParam}` : "/leads";
 
   return (
     <main className="container">
@@ -187,30 +191,10 @@ export default async function LeadsPage({
         <div>
           <h1 className="page-title">Pipeline de Leads</h1>
           <div className="subtitle">
-            {sorted.length} {sorted.length === 1 ? "lead" : "leads"} em atendimento
+            {visible.length} {visible.length === 1 ? "lead" : "leads"} em atendimento
           </div>
         </div>
         <LeadImportCard />
-      </div>
-
-      <div className="leads-kpi-bar">
-        <div className="leads-kpi-chip hot">
-          <div className="leads-kpi-chip-value">{hotCount}</div>
-          <div className="leads-kpi-chip-label">Quentes</div>
-        </div>
-        <div className="leads-kpi-chip">
-          <div className="leads-kpi-chip-value">{activeToday}</div>
-          <div className="leads-kpi-chip-label">Ativos hoje</div>
-        </div>
-        {staleLeads > 0 && (
-          <div className="leads-kpi-chip alert">
-            <span style={{ fontSize: "15px", lineHeight: 1, flexShrink: 0 }}>⚠</span>
-            <div>
-              <div className="leads-kpi-chip-value">{staleLeads}</div>
-              <div className="leads-kpi-chip-label">Sem resposta &gt;2h</div>
-            </div>
-          </div>
-        )}
       </div>
 
       <div className="vendor-filter">
@@ -234,6 +218,11 @@ export default async function LeadsPage({
             ))}
           </div>
         </details>
+        {atrasadoActive && (
+          <a href={clearAtrasadoHref} className="active vendor-filter-clear">
+            Atrasados ✕
+          </a>
+        )}
       </div>
 
       <div className="section-card leads-status-chart">
@@ -244,31 +233,6 @@ export default async function LeadsPage({
           <BarChart bars={statusBars} />
         </div>
       </div>
-
-      {sellerMetrics.length > 0 && (
-        <div className="seller-metrics-table">
-          <table>
-            <thead>
-              <tr>
-                <th>Vendedor</th>
-                <th>Leads</th>
-                <th>Quentes</th>
-                <th>Fechados</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sellerMetrics.map((m) => (
-                <tr key={m.userId}>
-                  <td>{m.nome}</td>
-                  <td>{m.total_leads}</td>
-                  <td>{m.hot_leads}</td>
-                  <td>{m.closed_leads}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
 
       {/* Fix 4: always visible — shows "0 com responsável · N sem responsável" even before any assignment */}
       <p className="assignment-summary">
@@ -298,6 +262,8 @@ export default async function LeadsPage({
           );
         })}
       </div>
+
+      <DelayedLeadsBadge count={staleLeads} href={`/leads?${atrasadoHref}`} />
     </main>
   );
 }

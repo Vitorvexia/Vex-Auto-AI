@@ -18,3 +18,14 @@ export function resolveAssignedToFilter(
   if (rawParam && UUID_REGEX.test(rawParam)) return rawParam;
   return currentUserId;
 }
+
+// ============================================================================
+// isStaleLead
+// ============================================================================
+
+const STALE_THRESHOLD_MS = 2 * 60 * 60 * 1000;
+
+/** Lead sem atividade há mais de 2h — mesmo limiar usado no badge "Lead Atrasado". */
+export function isStaleLead(ultimaAtividade: string, now: number = Date.now()): boolean {
+  return now - new Date(ultimaAtividade).getTime() > STALE_THRESHOLD_MS;
+}
