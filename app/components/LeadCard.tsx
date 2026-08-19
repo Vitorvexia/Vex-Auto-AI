@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import { relativeTime, scoreClass } from "@/lib/format";
 import type { LeadStatus } from "@/types/domain";
@@ -62,6 +63,7 @@ export function LeadCard({
   const initial   = (nome ?? "?").trim().charAt(0).toUpperCase() || "?";
   const [isDragging, setIsDragging] = useState(false);
   const drag = useKanbanDrag();
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   // Distingue clique (abre a conversa) de arraste (move de coluna) sem
   // depender do drag nativo HTML5 — cujo ghost translúcido é o problema
@@ -69,6 +71,13 @@ export function LeadCard({
   // tremor de mouse no clique já dispare modo arraste.
   const pressRef = useRef<{ startX: number; startY: number; dragging: boolean } | null>(null);
   const draggedRef = useRef(false);
+
+  // .kanban-col-body tem overflow-y:auto pro scroll da coluna — qualquer
+  // elemento "elevado" (position:relative + z-index) que more dentro dela
+  // é cortado nas bordas do container durante o drag. Guarda a posição de
+  // origem em px de viewport pra desenhar o card arrastado num portal em
+  // document.body (position:fixed), fora do overflow de qualquer coluna.
+  const originRef = useRef({ left: 0, top: 0, width: 0 });
 
   // pointermove dispara a cada pixel — atualizar estado do Context (delta +
   // hover column via elementFromPoint) em cada evento saturava a main thread
@@ -102,6 +111,8 @@ export function LeadCard({
     if (!press.dragging) {
       if (Math.hypot(dx, dy) < DRAG_START_THRESHOLD) return;
       press.dragging = true;
+      const rect = wrapRef.current?.getBoundingClientRect();
+      if (rect) originRef.current = { left: rect.left, top: rect.top, width: rect.width };
       setIsDragging(true);
       drag.beginDrag({ id, from: lead_status }, press.startX, press.startY);
     }
@@ -138,20 +149,8 @@ export function LeadCard({
     }
   }
 
-  const style = isDragging
-    ? { transform: `translate3d(${drag.delta.dx}px, ${drag.delta.dy}px, 0) scale(1.045) rotate(-1.5deg)` }
-    : undefined;
-
-  return (
-    <div
-      className={`lead-card-wrap${vendedores ? " has-move" : ""}${isDragging ? " is-dragging" : ""}`}
-      style={style}
-      onPointerDown={onPointerDown}
-      onPointerMove={onPointerMove}
-      onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
-      onClickCapture={onClickCapture}
-    >
+  const cardBody = (
+    <>
       <Link href={href} className="lead-card" draggable={false}>
         <div className="lead-card-top">
           <div className="lead-card-identity">
@@ -190,6 +189,36 @@ export function LeadCard({
           />
         </div>
       )}
-    </div>
+    </>
+  );
+
+  return (
+    <>
+      <div
+        ref={wrapRef}
+        className={`lead-card-wrap${vendedores ? " has-move" : ""}${isDragging ? " is-dragging" : ""}`}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
+        onClickCapture={onClickCapture}
+      >
+        {cardBody}
+      </div>
+
+      {isDragging && typeof document !== "undefined" && createPortal(
+        <div
+          className={`lead-card-wrap lead-card-drag-ghost${vendedores ? " has-move" : ""}`}
+          style={{
+            left: originRef.current.left + drag.delta.dx,
+            top: originRef.current.top + drag.delta.dy,
+            width: originRef.current.width,
+          }}
+        >
+          {cardBody}
+        </div>,
+        document.body
+      )}
+    </>
   );
 }
