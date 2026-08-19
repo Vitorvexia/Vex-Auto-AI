@@ -7,10 +7,9 @@ import { LeadCard } from "@/app/components/LeadCard";
 import { LeadImportCard } from "@/app/components/LeadImportCard";
 import { getStoreAssignmentSummary } from "@/lib/seller-metrics";
 import { resolveAssignedToFilter, isStaleLead } from "@/lib/lead-filter";
+import { BarChart } from "@/app/components/BarChart";
 import { DelayedLeadsBadge } from "@/app/components/DelayedLeadsBadge";
 import { KanbanDragProvider } from "@/lib/kanban-drag";
-import { LeadsFunnel } from "@/app/components/LeadsFunnel";
-import { calculateFunnelCounts } from "@/lib/lead-funnel";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -171,12 +170,15 @@ export default async function LeadsPage({
 
   const assignmentSummary = getStoreAssignmentSummary(leadsForMetrics);
 
-  // "Filtrado" = mesmo escopo de vendedor já aplicado em `sorted` (pill
-  // Todos/Sem responsável/Vendedor) — não o "atrasado", que é um recorte
-  // de exibição ortogonal ao funil. "Total" = leadsForMetrics, já
-  // buscado sem filtro de vendedor pras métricas de atribuição.
-  const funnelFiltered = calculateFunnelCounts(sorted.map((l) => l.lead_status));
-  const funnelTotal = calculateFunnelCounts(leadsForMetrics.map((l) => l.lead_status));
+  const statusBars = [
+    { label: "Novo", value: byStatus.NOVO.length, color: "var(--status-novo)" },
+    { label: "Engajado", value: byStatus.ENGAJADO.length, color: "var(--status-engajado)" },
+    { label: "Interessado", value: byStatus.INTERESSADO.length, color: "var(--status-interessado)" },
+    { label: "Quente", value: byStatus.QUENTE.length, color: "var(--status-quente)" },
+    { label: "Negociação", value: byStatus.NEGOCIACAO.length, color: "var(--status-negociacao)" },
+    { label: "Fechado", value: byStatus.FECHADO.length, color: "var(--status-fechado)" },
+    { label: "Perdido", value: byStatus.PERDIDO.length, color: "var(--status-perdido)" },
+  ];
 
   const activeVendedor = vendedores.find((v) => v.id === assignedToParam);
   // Preserva o filtro de vendedor ao ligar/desligar "atrasado" na URL.
@@ -257,7 +259,12 @@ export default async function LeadsPage({
       </KanbanDragProvider>
 
       <div className="section-card leads-status-chart">
-        <LeadsFunnel filtered={funnelFiltered} total={funnelTotal} />
+        <div className="section-card-head">
+          <span className="section-card-title">Leads por Status</span>
+        </div>
+        <div className="section-card-body">
+          <BarChart bars={statusBars} />
+        </div>
       </div>
 
       <DelayedLeadsBadge count={staleLeads} href={`/leads?${atrasadoHref}`} />

@@ -12,9 +12,11 @@ const STAGES: { key: FunnelStage; label: string; color: string }[] = [
 type Props = {
   filtered: FunnelCounts;
   total: FunnelCounts;
+  filteredLabel?: string;
+  totalLabel?: string;
 };
 
-export function LeadsFunnel({ filtered, total }: Props) {
+export function LeadsFunnel({ filtered, total, filteredLabel = "Filtrado", totalLabel = "Total" }: Props) {
   const [showTotal, setShowTotal] = useState(false);
   const counts = showTotal ? total : filtered;
   const max = Math.max(1, counts.frio, counts.morno, counts.quente);
@@ -30,14 +32,14 @@ export function LeadsFunnel({ filtered, total }: Props) {
             className={!showTotal ? "active" : ""}
             onClick={() => setShowTotal(false)}
           >
-            Filtrado
+            {filteredLabel}
           </button>
           <button
             type="button"
             className={showTotal ? "active" : ""}
             onClick={() => setShowTotal(true)}
           >
-            Total
+            {totalLabel}
           </button>
         </div>
       </div>

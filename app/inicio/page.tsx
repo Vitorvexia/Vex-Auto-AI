@@ -1,9 +1,11 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthError } from "@/lib/auth";
-import { calculateOperationalMetrics, countLeadsToday, buildDailyTrend, countLeadsByStatus, calculateReactivationRevenue } from "@/lib/metrics";
+import { calculateOperationalMetrics, countLeadsToday, buildDailyTrend, calculateReactivationRevenue } from "@/lib/metrics";
 import { calculateSellerMetrics } from "@/lib/seller-metrics";
 import { TrendChart } from "@/app/components/TrendChart";
 import { BarChart } from "@/app/components/BarChart";
+import { LeadsFunnel } from "@/app/components/LeadsFunnel";
+import { calculateFunnelCounts } from "@/lib/lead-funnel";
 import { SetupWidget } from "@/app/components/SetupWidget";
 import { AlertsWidget } from "@/app/components/AlertsWidget";
 import { countStaleLeads } from "@/lib/lead-priority";
@@ -57,6 +59,15 @@ async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
   const followUpLogs = followRes.data ?? [];
   const reactivationLogs = reactRes.data ?? [];
 
+  // Funil de Temperatura: "leads" já é a base inteira (sem filtro de
+  // período na query) — reaproveita pra "Total" e filtra client-side por
+  // created_at pra "últimos WINDOW_DAYS dias", mesma janela usada no
+  // resto do dashboard (evita nova query só pra isso).
+  const funnelTotal = calculateFunnelCounts(leads.map((l) => l.lead_status as LeadStatus));
+  const funnelFiltered = calculateFunnelCounts(
+    leads.filter((l) => (l.created_at ?? "") >= since).map((l) => l.lead_status as LeadStatus)
+  );
+
   return {
     metrics: calculateOperationalMetrics({
       leads,
@@ -67,7 +78,8 @@ async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
     }),
     leadsToday: countLeadsToday(leads),
     trend: buildDailyTrend(leads, followUpLogs, reactivationLogs, WINDOW_DAYS),
-    statusCounts: countLeadsByStatus(leads),
+    funnelFiltered,
+    funnelTotal,
     reactivationRevenue: calculateReactivationRevenue(leads, reactivationLogs),
   };
 }
@@ -139,7 +151,7 @@ export default async function InicioPage() {
   if (!user) throw new AuthError();
 
   const [
-    { metrics: m, leadsToday, trend, statusCounts, reactivationRevenue },
+    { metrics: m, leadsToday, trend, funnelFiltered, funnelTotal, reactivationRevenue },
     staleCount,
     lowMarginCount,
     sellerRanking,
@@ -151,16 +163,6 @@ export default async function InicioPage() {
   ]);
 
   const convRate = m.total_leads > 0 ? pct(m.closed_leads / m.total_leads) : "—";
-
-  const statusBars = [
-    { label: "Novo", value: statusCounts.NOVO, color: "var(--status-novo)" },
-    { label: "Engajado", value: statusCounts.ENGAJADO, color: "var(--status-engajado)" },
-    { label: "Interessado", value: statusCounts.INTERESSADO, color: "var(--status-interessado)" },
-    { label: "Quente", value: statusCounts.QUENTE, color: "var(--status-quente)" },
-    { label: "Negociação", value: statusCounts.NEGOCIACAO, color: "var(--status-negociacao)" },
-    { label: "Fechado", value: statusCounts.FECHADO, color: "var(--status-fechado)" },
-    { label: "Perdido", value: statusCounts.PERDIDO, color: "var(--status-perdido)" },
-  ];
 
   const aiVsHumanBars = [
     { label: "Atendidos pela IA", value: m.ai_handled_leads, color: "var(--accent)" },
@@ -267,12 +269,12 @@ export default async function InicioPage() {
 
       <div className="chart-grid">
         <div className="section-card">
-          <div className="section-card-head">
-            <span className="section-card-title">Leads por Status</span>
-          </div>
-          <div className="section-card-body">
-            <BarChart bars={statusBars} />
-          </div>
+          <LeadsFunnel
+            filtered={funnelFiltered}
+            total={funnelTotal}
+            filteredLabel={`${WINDOW_DAYS} dias`}
+            totalLabel="Total"
+          />
         </div>
 
         <div className="section-card">
