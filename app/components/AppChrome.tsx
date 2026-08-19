@@ -1,13 +1,14 @@
-import { Header } from "@/app/components/Header";
+import { Sidebar } from "@/app/components/Sidebar";
 
-// Decide se o Header do app autenticado renderiza. Existe como componente
-// isolado (em vez de inline no root layout) por causa de uma restrição do
-// Next.js App Router: um layout aninhado (app/site/[slug]/layout.tsx) NÃO
-// consegue remover JSX renderizado por um layout ancestral — app/layout.tsx
-// envolve TODAS as rotas, incluindo o site público da loja (roadmap 1.3).
-// A decisão precisa morar aqui, no layout raiz, controlada por uma prop
-// booleana computada a partir do header que middleware.ts marca em toda
-// request reescrita pro site público (PUBLIC_SITE_ROUTE_HEADER).
+// Decide se o chrome (sidebar) do app autenticado renderiza. Existe como
+// componente isolado (em vez de inline no root layout) por causa de uma
+// restrição do Next.js App Router: um layout aninhado
+// (app/site/[slug]/layout.tsx) NÃO consegue remover JSX renderizado por um
+// layout ancestral — app/layout.tsx envolve TODAS as rotas, incluindo o
+// site público da loja (roadmap 1.3). A decisão precisa morar aqui, no
+// layout raiz, controlada por uma prop booleana computada a partir do
+// header que middleware.ts marca em toda request reescrita pro site
+// público (PUBLIC_SITE_ROUTE_HEADER).
 export function AppChrome({
   isPublicRoute,
   isAdmin,
@@ -19,9 +20,9 @@ export function AppChrome({
 }) {
   if (isPublicRoute) return <>{children}</>;
   return (
-    <>
-      <Header isAdmin={isAdmin} />
-      {children}
-    </>
+    <div className="app-shell">
+      <Sidebar isAdmin={isAdmin} />
+      <div className="app-main">{children}</div>
+    </div>
   );
 }

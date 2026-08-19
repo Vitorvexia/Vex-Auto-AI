@@ -84,6 +84,19 @@ export function calculateLeadPriority(input: PriorityInput): PriorityResult {
 // sortLeads
 // ============================================================================
 
+// Generaliza o cálculo inline de app/leads/page.tsx (staleLeads) — threshold
+// configurável em ms pra caber tanto o chip de "/leads" (2h) quanto o alerta
+// de "/inicio" (24h) sem duplicar a comparação.
+export function countStaleLeads(
+  leads: Array<{ ultima_atividade: string }>,
+  thresholdMs: number,
+  now: Date = new Date()
+): number {
+  return leads.filter(
+    (l) => now.getTime() - new Date(l.ultima_atividade).getTime() > thresholdMs
+  ).length;
+}
+
 export function sortLeads<
   T extends {
     priority: PriorityTier;

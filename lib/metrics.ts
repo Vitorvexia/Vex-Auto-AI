@@ -1,5 +1,5 @@
 export type MetricsInput = {
-  leads: Array<{ lead_status: string; created_at: string }>;
+  leads: Array<{ lead_status: string; created_at: string; valor_final?: number | null }>;
   conversations: Array<{ id: string; handoff_to: string; lead_id: string }>;
   messages: Array<{
     conversation_id: string;
@@ -34,7 +34,89 @@ export type OperationalMetrics = {
   avg_first_response_minutes: number;
   followup_response_rate: number;
   reactivation_response_rate: number;
+  revenue_generated: number;
 };
+
+// UTC calendar day — servidor roda em UTC (Vercel), timestamps são ISO UTC;
+// comparar por dia local do processo seria ambíguo entre ambientes.
+export function countLeadsToday(
+  leads: Array<{ created_at: string }>,
+  now: Date = new Date()
+): number {
+  const todayKey = now.toISOString().slice(0, 10);
+  return leads.filter((l) => l.created_at.slice(0, 10) === todayKey).length;
+}
+
+export type DailyTrendPoint = {
+  date: string;
+  novos: number;
+  followups: number;
+  reativacoes: number;
+};
+
+// UTC calendar day — mesmo racional de countLeadsToday (servidor em UTC,
+// timestamps ISO UTC; dia local do processo seria ambíguo entre ambientes).
+export function buildDailyTrend(
+  leads: Array<{ created_at: string }>,
+  followUpLogs: Array<{ logged_at: string; status: string }>,
+  reactivationLogs: Array<{ logged_at: string; status: string }>,
+  days: number,
+  now: Date = new Date()
+): DailyTrendPoint[] {
+  const points: DailyTrendPoint[] = [];
+  for (let i = days - 1; i >= 0; i--) {
+    const d = new Date(now);
+    d.setUTCDate(d.getUTCDate() - i);
+    points.push({ date: d.toISOString().slice(0, 10), novos: 0, followups: 0, reativacoes: 0 });
+  }
+
+  const byDate = new Map(points.map((p) => [p.date, p]));
+
+  for (const l of leads) {
+    const p = byDate.get(l.created_at.slice(0, 10));
+    if (p) p.novos++;
+  }
+  for (const f of followUpLogs) {
+    if (f.status !== "sent") continue;
+    const p = byDate.get(f.logged_at.slice(0, 10));
+    if (p) p.followups++;
+  }
+  for (const r of reactivationLogs) {
+    if (r.status !== "sent") continue;
+    const p = byDate.get(r.logged_at.slice(0, 10));
+    if (p) p.reativacoes++;
+  }
+
+  return points;
+}
+
+export type LeadStatusCounts = {
+  NOVO: number;
+  ENGAJADO: number;
+  INTERESSADO: number;
+  QUENTE: number;
+  NEGOCIACAO: number;
+  FECHADO: number;
+  PERDIDO: number;
+};
+
+export function countLeadsByStatus(
+  leads: Array<{ lead_status: string }>
+): LeadStatusCounts {
+  const counts: LeadStatusCounts = {
+    NOVO: 0,
+    ENGAJADO: 0,
+    INTERESSADO: 0,
+    QUENTE: 0,
+    NEGOCIACAO: 0,
+    FECHADO: 0,
+    PERDIDO: 0,
+  };
+  for (const l of leads) {
+    if (l.lead_status in counts) counts[l.lead_status as keyof LeadStatusCounts]++;
+  }
+  return counts;
+}
 
 export function calculateOperationalMetrics(input: MetricsInput): OperationalMetrics {
   const { leads, conversations, messages, followUpLogs, reactivationLogs } = input;
@@ -44,6 +126,10 @@ export function calculateOperationalMetrics(input: MetricsInput): OperationalMet
   const negotiation_leads = leads.filter((l) => l.lead_status === "NEGOCIACAO").length;
   const closed_leads      = leads.filter((l) => l.lead_status === "FECHADO").length;
   const lost_leads        = leads.filter((l) => l.lead_status === "PERDIDO").length;
+
+  const revenue_generated = leads
+    .filter((l) => l.lead_status === "FECHADO")
+    .reduce((sum, l) => sum + (l.valor_final ?? 0), 0);
 
   // Count historical handoffs via system message — handoff_to is current state only
   const human_handoff_count = messages.filter(
@@ -133,5 +219,25 @@ export function calculateOperationalMetrics(input: MetricsInput): OperationalMet
     avg_first_response_minutes,
     followup_response_rate,
     reactivation_response_rate,
+    revenue_generated,
   };
+}
+
+export type ReactivationRevenue = { converted_leads: number; revenue: number };
+
+// Faturamento recuperado de leads que estavam inativos, foram reativados
+// pela IA e fecharam — a prova mais direta de ROI da Mina de Ouro.
+export function calculateReactivationRevenue(
+  leads: Array<{ id: string; valor_final?: number | null }>,
+  reactivationLogs: Array<{ lead_id: string; converted_at: string | null }>
+): ReactivationRevenue {
+  const convertedLeadIds = new Set(
+    reactivationLogs.filter((r) => r.converted_at !== null).map((r) => r.lead_id)
+  );
+  const leadsById = new Map(leads.map((l) => [l.id, l]));
+  let revenue = 0;
+  for (const leadId of convertedLeadIds) {
+    revenue += leadsById.get(leadId)?.valor_final ?? 0;
+  }
+  return { converted_leads: convertedLeadIds.size, revenue };
 }

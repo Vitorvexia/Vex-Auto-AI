@@ -60,6 +60,21 @@ export default async function RootLayout({
 
   return (
     <html lang="pt-BR" className={`${exo2.variable} ${barlow.variable} ${bebasNeue.variable} ${inter.variable}`}>
+      <head>
+        {/* Aplica tema e estado da sidebar ANTES do primeiro paint — evita
+            flash do tema errado / layout pulando ao expandir-colapsar
+            (script bloqueante clássico, mesma técnica de next-themes).
+            Default é CLARO desde DL-0016 (reversão de DL-0015, pedido
+            direto do founder) — só fica escuro se o usuário escolheu
+            explicitamente no toggle da sidebar. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html:
+              "try{if(localStorage.getItem('vex-theme')!=='dark'){document.documentElement.setAttribute('data-theme','light');}}catch(e){document.documentElement.setAttribute('data-theme','light');}" +
+              "try{if(localStorage.getItem('vex-sidebar')==='collapsed'){document.documentElement.setAttribute('data-sidebar','collapsed');}}catch(e){}",
+          }}
+        />
+      </head>
       <body>
         <AppChrome isPublicRoute={isPublicRoute} isAdmin={isSuperAdmin(user?.email)}>
           {children}

@@ -255,6 +255,138 @@ Active
 
 Date
 
+2026-08-12
+
+Decision ID
+
+DL-0017
+
+Title
+
+Mascote (raposa) autorizada como favicon/logo da sidebar do app logado — exceção pontual, não revogação da regra geral
+
+Category
+
+Product / Brand
+
+Context
+
+DESIGN.md documentava como regra absoluta, em linguagem deliberadamente forte: "a raposa nunca aparece no app logado, em nenhum contexto" — mascote restrita a marketing/Instagram/landing, favicon in-app definido como a letra "V" isolada. Vitor pediu diretamente, na mesma sessão de DL-0016, pra trocar o favicon (aba do navegador + logo da sidebar) pela raposa. Diferente da reversão de tema (DL-0016), essa regra não tinha ressalva de "pode mudar depois" no texto original — foi sinalizado explicitamente antes de implementar, e o founder confirmou querer prosseguir mesmo assim.
+
+Decision
+
+O favicon in-app deixa de ser a letra "V" isolada e passa a ser um render da raposa. Asset final, depois de 3 iterações no mesmo dia (glow preto/azul → lobo sólido → confirmado o lobo como oficial), é `docs/vex/assets/brand/FAVICONOFICIAL.png` (170×172, ~36KB, fundo transparente, cores sólidas) — renomeado de `FAVICON.png` pra deixar explícito que é a versão definitiva, não mais uma iteração. Esse arquivo é copiado pra `Public/favicon.png`, que é o que `app/layout.tsx` (metadata.icons) e `app/components/Sidebar.tsx` de fato servem — a cópia em `docs/vex/assets/brand/` é só a fonte, precisa ser sincronizada manualmente a cada troca. Resto da regra original continua de pé — raposa não aparece em nenhuma outra superfície de produto (cards, empty states, loading, e-mail transacional).
+
+Reasoning
+
+Decisão de marca é prerrogativa do founder. O escopo da exceção é estreito o suficiente (só o ícone de identidade, não a raposa "solta" pelo produto) pra não comprometer a separação marca/produto que motivou a regra original — o app operacional continua sem fundo preto, sem itálico motorsport, sem bandeira quadriculada.
+
+Alternatives Considered
+
+Recriar a raposa como SVG vetorial a partir de referência visual, em vez de usar o arquivo exato do founder — descartado a pedido dele; preferiu subir o PNG original direto pro repo. Versão anterior (render com glow, 1536×1024, ~1.2MB) foi testada e descartada — trocada pela versão sólida/menor por decisão direta do founder no mesmo dia.
+
+Expected Impact
+
+Favicon/logo fica mais reconhecível como marca "Vex" (a raposa é o elemento de mascote mais forte visualmente). Asset final (170×172, ~36KB) já resolve o problema de peso que a primeira iteração tinha — não precisa de otimização adicional.
+
+Potential Risks
+
+Nenhum técnico relevante com o asset atual. Ponto de atenção operacional: `docs/vex/assets/brand/FAVICONOFICIAL.png` e `Public/favicon.png` são arquivos independentes (cópia, não referência) — trocar um sem o outro deixa a marca-fonte e o que o app realmente serve dessincronizados, como já aconteceu uma vez nesta mesma sessão.
+
+Owner
+
+Founder
+
+Related ADR
+
+None
+
+Related Issue
+
+DESIGN.md (regra original revisada), DL-0016 (mesma sessão), BL-0037
+
+Related Runbook
+
+None
+
+Review Date
+
+N/A — decisão de marca, não expira
+
+Status
+
+Superseded (2026-08-13) — exceção não está mais em uso. Favicon final não é a raposa: virou uma 3ª iteração no dia seguinte (`faviconv.png`, a letra "V" com glow + acento de bandeira quadriculada), pedido direto do founder. A regra original do DESIGN.md ("raposa nunca aparece no app logado") volta a valer sem ressalva — este DL fica registrado como histórico de por que ela foi aberta e fechada no mesmo ciclo, não como exceção ativa.
+
+---
+
+Date
+
+2026-08-12
+
+Decision ID
+
+DL-0016
+
+Title
+
+Tema claro volta a ser o default do app operacional — escuro vira opt-in via toggle
+
+Category
+
+Product
+
+Context
+
+DL-0015 (dia anterior) aceitou fundo escuro como default do app operacional, com ressalva explícita: "Se vendedores reportarem desconforto, reverter pra claro ou oferecer toggle é trabalho de UI, não de arquitetura." Fase 1 do redesign (BL-0037) entregou Sidebar, Kanban e Inbox em escuro; ao revisar localmente, Vitor pediu claro como default de volta, com escuro disponível via toggle — sem esperar por sinal de fadiga de uso real, decisão direta do founder.
+
+Decision
+
+Tema claro passa a ser o default de todo usuário sem preferência salva. Escuro continua existindo e disponível a qualquer momento via toggle no dropdown de "Conta" da sidebar (implementado na mesma sessão), persistido em localStorage por navegador/usuário.
+
+Reasoning
+
+Implementação já tinha os dois temas prontos e validados (o claro é o tema histórico restaurado do commit pre-DL-0015, não uma paleta nova) — trocar qual dos dois é o default é mudança de uma linha no script de aplicação de tema (`app/layout.tsx`), não retrabalho de CSS. Não há custo técnico relevante em atender o pedido imediatamente em vez de esperar validação de campo.
+
+Alternatives Considered
+
+Manter escuro como default e só confiar no toggle pra quem quiser claro — rejeitado, pedido explícito e direto do founder não deixou ambiguidade.
+
+Expected Impact
+
+Novo usuário (sem localStorage ainda) vê claro. Screenshots futuros pra landing (motivação original de BL-0037) devem ser tirados com o toggle em escuro se a intenção for mostrar a versão dark, já que não é mais o que a maioria dos usuários vê por padrão.
+
+Potential Risks
+
+Nenhum técnico. Risco de produto é nenhum — ambos os temas são primeira classe, escolha é só de qual lado começa ligado.
+
+Owner
+
+Founder
+
+Related ADR
+
+None
+
+Related Issue
+
+DL-0015 (decisão anterior, parcialmente revertida), BL-0037 (redesign visual fase 1)
+
+Related Runbook
+
+None
+
+Review Date
+
+N/A — decisão de preferência de UI, não expira
+
+Status
+
+Active
+
+---
+
+Date
+
 2026-08-11
 
 Decision ID
@@ -315,7 +447,7 @@ Primeiras semanas de uso real pós-redesign — monitorar feedback de vendedores
 
 Status
 
-Active
+Active — parcialmente atualizada por DL-0016 (2026-08-12): tema claro voltou a ser o DEFAULT do app (era escuro aqui). O restante desta decisão continua válido — tema escuro existe, foi aceito como opção de primeira classe, e o redesign visual (BL-0037) seguiu em frente sobre essa base; só a pergunta "qual tema liga sozinho" mudou de resposta.
 
 ---
 

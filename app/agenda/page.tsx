@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthError } from "@/lib/auth";
+import { buildMonthGrid, addMonths, monthRange } from "@/lib/agenda-calendar";
 
 type AgendaLead = {
   id: string;
@@ -15,19 +16,20 @@ function toISODate(d: Date): string {
   return d.toISOString().slice(0, 10);
 }
 
-function addDays(iso: string, days: number): string {
-  const d = new Date(`${iso}T00:00:00.000Z`);
-  d.setUTCDate(d.getUTCDate() + days);
-  return toISODate(d);
-}
-
 function formatDiaLabel(iso: string): string {
   const d = new Date(`${iso}T00:00:00.000Z`);
   return d.toLocaleDateString("pt-BR", { weekday: "long", day: "2-digit", month: "2-digit", timeZone: "UTC" });
 }
 
+function formatMesLabel(monthISO: string): string {
+  const d = new Date(`${monthISO}-01T00:00:00.000Z`);
+  return d.toLocaleDateString("pt-BR", { month: "long", year: "numeric", timeZone: "UTC" });
+}
+
+const DIAS_SEMANA = ["Dom", "Seg", "Ter", "Qua", "Qui", "Sex", "Sáb"];
+
 type PageProps = {
-  searchParams?: { dia?: string };
+  searchParams?: { mes?: string; dia?: string };
 };
 
 export default async function AgendaPage({ searchParams }: PageProps) {
@@ -36,15 +38,38 @@ export default async function AgendaPage({ searchParams }: PageProps) {
   if (!user) throw new AuthError();
 
   const hoje = toISODate(new Date());
+  const mes = searchParams?.mes && /^\d{4}-\d{2}$/.test(searchParams.mes) ? searchParams.mes : hoje.slice(0, 7);
   const dia = searchParams?.dia && /^\d{4}-\d{2}-\d{2}$/.test(searchParams.dia) ? searchParams.dia : hoje;
 
-  const { data, error } = await supabase
-    .from("leads")
-    .select("id, nome, phone_normalized, agendamento_data, agendamento_horario, contexto")
-    .eq("agendamento_data", dia)
-    .order("agendamento_horario", { ascending: true });
+  const { start, end } = monthRange(mes);
 
-  const leads = (data ?? []) as AgendaLead[];
+  const [monthRes, dayRes] = await Promise.all([
+    supabase
+      .from("leads")
+      .select("id, nome, agendamento_data, agendamento_horario")
+      .gte("agendamento_data", start)
+      .lte("agendamento_data", end)
+      .order("agendamento_horario", { ascending: true }),
+    supabase
+      .from("leads")
+      .select("id, nome, phone_normalized, agendamento_data, agendamento_horario, contexto")
+      .eq("agendamento_data", dia)
+      .order("agendamento_horario", { ascending: true }),
+  ]);
+
+  const monthLeads = (monthRes.data ?? []) as Pick<AgendaLead, "id" | "nome" | "agendamento_data" | "agendamento_horario">[];
+  const dayLeads = (dayRes.data ?? []) as AgendaLead[];
+
+  const leadsByDay = new Map<string, typeof monthLeads>();
+  for (const l of monthLeads) {
+    if (!l.agendamento_data) continue;
+    const list = leadsByDay.get(l.agendamento_data) ?? [];
+    list.push(l);
+    leadsByDay.set(l.agendamento_data, list);
+  }
+
+  const grid = buildMonthGrid(mes, hoje);
+  const error = monthRes.error ?? dayRes.error;
 
   return (
     <main className="container">
@@ -55,12 +80,6 @@ export default async function AgendaPage({ searchParams }: PageProps) {
         </div>
       </div>
 
-      <div style={{ display: "flex", alignItems: "center", gap: "12px", marginBottom: "16px" }}>
-        <Link href={`/agenda?dia=${addDays(dia, -1)}`} className="header-nav-link">← Dia anterior</Link>
-        <strong style={{ textTransform: "capitalize" }}>{formatDiaLabel(dia)}</strong>
-        <Link href={`/agenda?dia=${addDays(dia, 1)}`} className="header-nav-link">Próximo dia →</Link>
-      </div>
-
       {error && (
         <div className="alert-item warn" style={{ marginBottom: "16px" }}>
           <span className="alert-icon">⚠</span>
@@ -68,12 +87,59 @@ export default async function AgendaPage({ searchParams }: PageProps) {
         </div>
       )}
 
-      {!error && leads.length === 0 ? (
+      <div className="agenda-cal">
+        <div className="agenda-cal-head">
+          <Link href={`/agenda?mes=${addMonths(mes, -1)}&dia=${dia}`} className="agenda-cal-nav">←</Link>
+          <strong className="agenda-cal-title">{formatMesLabel(mes)}</strong>
+          <Link href={`/agenda?mes=${addMonths(mes, 1)}&dia=${dia}`} className="agenda-cal-nav">→</Link>
+        </div>
+
+        <div className="agenda-cal-weekdays">
+          {DIAS_SEMANA.map((d) => (
+            <div key={d} className="agenda-cal-weekday">{d}</div>
+          ))}
+        </div>
+
+        <div className="agenda-cal-grid">
+          {grid.flat().map((cell) => {
+            const cellLeads = leadsByDay.get(cell.date) ?? [];
+            const isSelected = cell.date === dia;
+            return (
+              <Link
+                key={cell.date}
+                href={`/agenda?mes=${mes}&dia=${cell.date}`}
+                className={`agenda-cal-day${cell.inMonth ? "" : " outside"}${cell.isToday ? " today" : ""}${isSelected ? " selected" : ""}`}
+              >
+                <span className="agenda-cal-day-num">{Number(cell.date.slice(8, 10))}</span>
+                {cellLeads.length > 0 && (
+                  <div className="agenda-cal-chips">
+                    {cellLeads.slice(0, 2).map((l) => (
+                      <span key={l.id} className="agenda-cal-chip">
+                        {l.agendamento_horario ? `${l.agendamento_horario} ` : ""}{l.nome ?? "lead"}
+                      </span>
+                    ))}
+                    {cellLeads.length > 2 && (
+                      <span className="agenda-cal-chip-more">+{cellLeads.length - 2}</span>
+                    )}
+                  </div>
+                )}
+              </Link>
+            );
+          })}
+        </div>
+      </div>
+
+      <div style={{ margin: "20px 0 12px" }}>
+        <strong style={{ textTransform: "capitalize" }}>{formatDiaLabel(dia)}</strong>
+      </div>
+
+      {!error && dayLeads.length === 0 ? (
         <div className="alert-item info">
           <span className="alert-icon">ℹ</span>
           <span>Nenhum agendamento para este dia.</span>
         </div>
       ) : (
+        <div className="section-card">
         <table className="table">
           <thead>
             <tr>
@@ -84,7 +150,7 @@ export default async function AgendaPage({ searchParams }: PageProps) {
             </tr>
           </thead>
           <tbody>
-            {leads.map((l) => (
+            {dayLeads.map((l) => (
               <tr key={l.id}>
                 <td>{l.agendamento_horario ?? "—"}</td>
                 <td>{l.nome ?? "não informado"}</td>
@@ -98,6 +164,7 @@ export default async function AgendaPage({ searchParams }: PageProps) {
             ))}
           </tbody>
         </table>
+        </div>
       )}
     </main>
   );

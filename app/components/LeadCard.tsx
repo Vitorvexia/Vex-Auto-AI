@@ -1,20 +1,20 @@
+"use client";
+
+import { useState } from "react";
 import Link from "next/link";
 import { relativeTime, scoreClass } from "@/lib/format";
 import type { LeadStatus } from "@/types/domain";
 import type { PriorityTier } from "@/lib/lead-priority";
-import { LEAD_TRANSITIONS } from "@/lib/status";
-import { moveLeadStatus } from "@/lib/actions";
 import { LeadAssignmentSelect } from "./LeadAssignmentSelect";
 
-const STATUS_LABELS: Record<LeadStatus, string> = {
-  NOVO: "Novo",
-  ENGAJADO: "Engajado",
-  INTERESSADO: "Interessado",
-  QUENTE: "Quente",
-  NEGOCIACAO: "Negociação",
-  FECHADO: "Fechado",
-  PERDIDO: "Perdido",
-};
+export const DRAG_MIME = "application/x-vex-lead";
+
+// dataTransfer.getData() só é legível em dragstart/drop (bloqueado em
+// dragover/dragenter por segurança do browser) — o status de origem
+// precisa viajar no próprio tipo MIME, que .types expõe durante o drag.
+export const dragFromMime = (status: LeadStatus) => `${DRAG_MIME}/from-${status.toLowerCase()}`;
+
+export type DragPayload = { id: string; from: LeadStatus };
 
 type Props = {
   id: string;
@@ -62,16 +62,31 @@ export function LeadCard({
   canReassign,
   interesse,
 }: Props) {
-  const href        = conversation_id ? `/conversations/${conversation_id}` : "#";
-  const sc          = scoreClass(score);
-  const urgency     = urgencyLevel(ultima_atividade);
-  const transitions = LEAD_TRANSITIONS[lead_status] ?? [];
+  const href      = conversation_id ? `/conversations/${conversation_id}` : "#";
+  const sc        = scoreClass(score);
+  const urgency   = urgencyLevel(ultima_atividade);
+  const initial   = (nome ?? "?").trim().charAt(0).toUpperCase() || "?";
+  const [isDragging, setIsDragging] = useState(false);
 
   return (
-    <div className={`lead-card-wrap${transitions.length > 0 ? " has-move" : ""}`}>
-      <Link href={href} className="lead-card">
+    <div
+      className={`lead-card-wrap${vendedores ? " has-move" : ""}${isDragging ? " is-dragging" : ""}`}
+      draggable
+      onDragStart={(e) => {
+        const payload: DragPayload = { id, from: lead_status };
+        e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
+        e.dataTransfer.setData(dragFromMime(lead_status), "");
+        e.dataTransfer.effectAllowed = "move";
+        setIsDragging(true);
+      }}
+      onDragEnd={() => setIsDragging(false)}
+    >
+      <Link href={href} className="lead-card" draggable={false}>
         <div className="lead-card-top">
-          <span className="lead-card-name">{nome ?? "Sem nome"}</span>
+          <div className="lead-card-identity">
+            <span className="lead-card-avatar" data-priority={priority}>{initial}</span>
+            <span className="lead-card-name">{nome ?? "Sem nome"}</span>
+          </div>
           <span className={`score-badge ${sc}`}>{score}</span>
         </div>
 
@@ -79,11 +94,12 @@ export function LeadCard({
 
         <div className="lead-card-phone">{phone_normalized}</div>
 
-        <div className={`priority-badge ${priority}`}>{priority_label}</div>
-
-        {urgency && (
-          <div className={`urgency-badge ${urgency}`}>{URGENCY_LABEL[urgency]}</div>
-        )}
+        <div className="lead-card-badges">
+          <span className={`priority-badge ${priority}`}>{priority_label}</span>
+          {urgency && (
+            <span className={`urgency-badge ${urgency}`}>{URGENCY_LABEL[urgency]}</span>
+          )}
+        </div>
 
         <div className="lead-card-footer">
           <span className="lead-card-time">{relativeTime(ultima_atividade)}</span>
@@ -93,25 +109,15 @@ export function LeadCard({
         </div>
       </Link>
 
-      {transitions.length > 0 && (
-        <form action={moveLeadStatus.bind(null, id)} className="lead-card-move">
-          <select name="lead_status" defaultValue="">
-            <option value="" disabled>Mover para…</option>
-            {transitions.map((s) => (
-              <option key={s} value={s}>{STATUS_LABELS[s]}</option>
-            ))}
-          </select>
-          <button type="submit" aria-label="Mover lead">→</button>
-        </form>
-      )}
-
       {vendedores && (
-        <LeadAssignmentSelect
-          leadId={id}
-          assignedTo={assignedTo ?? null}
-          vendedores={vendedores}
-          canReassign={canReassign}
-        />
+        <div className="lead-card-tray">
+          <LeadAssignmentSelect
+            leadId={id}
+            assignedTo={assignedTo ?? null}
+            vendedores={vendedores}
+            canReassign={canReassign}
+          />
+        </div>
       )}
     </div>
   );

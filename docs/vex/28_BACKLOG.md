@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Product & Engineering
 
-Last Updated: 2026-07-31
+Last Updated: 2026-08-17
 
 ---
 
@@ -2616,7 +2616,7 @@ P1 — motivado por necessidade de material de marketing. Fase 1 cobre só as te
 
 Status
 
-READY — paleta/tipografia já fechada (`DESIGN.md`), decisão de tema escuro aceita (DL-0015), mapeamento de telas do fluxo em andamento.
+IN PROGRESS — sidebar (nav vertical, largura, esquema de cor), `/inicio` (ops-strip + consolidação com Analytics, dado real), `/login` e `/agenda` (calendário mensal) redesenhados. Conversa/dossiê/handoff (`/conversations`) validado visualmente pelo founder em sessão anterior. `/leads` ganhou uma segunda rodada de trabalho (2026-08-17): filtro por vendedor default-próprio, kanban com drag-and-drop nativo (substitui dropdown "Mover para..."), filtro "Todos/Sem responsável/Atrasados/Vendedores", gráfico "Leads por Status" (`BarChart` reaproveitado de `/inicio`) e badge flutuante "Lead Atrasado" — ver `27_PROJECT_STATUS.md` (2026-08-17) para detalhe completo. Tudo na branch `claude/vex-redesign-visual-fase1-sqkmmf`, **6 commits desta rodada commitados e pushados pra `origin`**, branch como um todo não mergeada em main / não em produção — aguardando validação visual final antes do merge.
 
 Owner
 
@@ -2653,6 +2653,138 @@ Screenshots das telas redesenhadas usáveis na seção "como funciona" da landin
 Notes
 
 Regras de design: paleta preto/branco/azul canônico (`DESIGN.md`) + Bebas Neue só em título (nunca em KPI/preço/parágrafo) + Inter pro resto. Fundo escuro aceito (DL-0015). Dado fictício/demo obrigatório em qualquer print futuro dessas telas (nomes, telefones e veículos inventados). Fase 1 = telas do fluxo "cliente manda oi no WhatsApp → IA responde/qualifica → lead aparece no kanban → vendedor abre dossiê → handoff se necessário → fechamento". Fases seguintes (dashboard, admin, equipe, estoque, agenda, etc.) ficam como continuação sem escopo fechado.
+
+---
+
+BL-0038
+
+Title
+
+Alerta "conversa aguardando vendedor há mais de 40min" em /inicio — falta decisão de arquitetura pra fonte do timestamp
+
+Problem
+
+Consolidação de Início+Analytics (2026-08-13) tornou reais os outros 2 alertas que antes eram mock (`sem resposta >24h`, `margem <5% no estoque`), mas este terceiro alerta do mock original ficou de fora por decisão consciente: não existe hoje um timestamp exato de "quando a conversa entrou em handoff" persistido de forma barata de consultar. `conversations.handoff_to='HUMANO'` marca o estado atual, mas não quando a transição aconteceu. O único registro do momento exato é `audit_logs` (ação `conversation.handoff_to_human`, roadmap 0.5) — tabela pensada pra auditoria/rastreamento, não pra alimentar leitura de dashboard em todo carregamento de página.
+
+Business Value
+
+Fecha o conjunto original de 3 alertas operacionais do painel — hoje só 2 de 3 são reais. Alerta de handoff parado é sinal direto de lead esfriando por falta de atendimento humano, mesma classe de problema que motivou `BL-0009`/`BL-0010`/`BL-0011`.
+
+Customer Value
+
+Vendedor/dono da loja vê no painel principal quando uma conversa está esperando atendimento humano há muito tempo, sem precisar abrir `/conversations` pra descobrir.
+
+Priority
+
+P3 — não bloqueia a consolidação (os outros 2 alertas já cobrem a maior parte do valor). Vira P2 se o painel `/inicio` passar a ser o principal ponto de operação diária.
+
+Status
+
+IDEA — não implementado, decisão de arquitetura pendente.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixa a Média, dependendo do caminho escolhido — duas opções, nenhuma implementada:
+
+(a) Consultar `audit_logs` filtrando `action='conversation.handoff_to_human'`, pegar o evento mais recente por `conversation_id` ainda em `handoff_to='HUMANO'`. Zero schema novo, mas usa uma tabela de auditoria (write-once, sem índice pensado pra essa leitura) como fonte de dado operacional recorrente — pode não escalar bem e mistura responsabilidade (auditoria vira dependência funcional).
+
+(b) Coluna nova `conversations.handoff_at` (timestamp, nullable), setada em `assignConversationToHuman`/toda transição pra `HUMANO`. Leitura trivial e rápida, mas mexe em schema — exige migration + backfill (linhas já em `HUMANO` sem esse campo) + decisão de qual timestamp usar no backfill (aproximação, não exata).
+
+Dependencies
+
+Nenhuma técnica bloqueante. Reaproveita `countStaleLeads` (`lib/lead-priority.ts`, já genérica por threshold) se o dado de "há quanto tempo" virar um array simples de timestamps — mesmo padrão dos outros 2 alertas.
+
+Related ADR
+
+None yet
+
+Related RFC
+
+None yet
+
+Related Issue
+
+Consolidação Início+Analytics (2026-08-13) — os outros 2 alertas do mesmo conjunto original já viraram reais nessa sessão.
+
+Target Version
+
+Sem agendamento
+
+Success Metrics
+
+Não definido — depende de qual caminho (a/b) for escolhido.
+
+Notes
+
+Registrado no mesmo escopo de decisão que descartou a Fase 2/3 original desta sessão (integração Meta Marketing API, cancelada — DL-0011 permanece válida, não revertida).
+
+---
+
+BL-0039
+
+Title
+
+Sugestão inteligente de modelo/veículo em `/inicio` — dado interno + pesquisa de mercado externa
+
+Problem
+
+Founder quer que a Central de Operações (`/inicio`) sugira ao lojista qual modelo de veículo reforçar no estoque — combinando o que já performou bem dentro do sistema (leads/conversões por modelo) com o que está "girando" no mercado fora do VEX (tendência externa, não só dado interno).
+
+Business Value
+
+Ajuda o lojista a decidir compra de estoque com dado real em vez de intuição — liga diretamente a faturamento/margem (mesmo teste de "Princípio de Execução" do `CLAUDE.md`: aumenta conversão ao garantir que o estoque tenha o que o mercado quer).
+
+Customer Value
+
+Lojista abre `/inicio` e vê uma recomendação acionável ("Honda CG 160 está performando bem aqui E em alta no mercado — considere repor estoque"), sem precisar cruzar dado manualmente.
+
+Priority
+
+Não definida — pedido explícito do founder nesta sessão (2026-08-17), mas classificado como **arquitetural** (não bounded) na sessão de brainstorming: não existe hoje nenhuma integração de dado de mercado automotivo externo no projeto (`FIPE`/`Portais de veículos` seguem "Planejado" no `CLAUDE.md`, nunca implementados). Decomposição proposta na sessão: (A) parte interna (ranking de modelo por performance de lead/venda, 100% dado já existente em `leads`/`vehicles`) é bounded e pode sair primeiro; (B) parte externa (pesquisa de mercado/tendência) precisa de uma fonte de dado ainda não escolhida — brainstorming arquitetural próprio, não iniciado.
+
+Status
+
+IDEA — não implementado. Brainstorming arquitetural (fonte de dado externo, custo, frequência de atualização, guardrails de "IA nunca decide compra sozinha") ainda não rodado. Aguardando o founder pra essa sessão.
+
+Owner
+
+Engineering / Founder (direção de produto + escolha de fonte externa)
+
+Estimated Complexity
+
+Alta — parte interna é baixa (agregação pura sobre dado já existente), parte externa é incerta até a fonte ser escolhida (API paga de mercado automotivo? scraping de portal? LLM com web search via Anthropic?). Cada opção tem custo/manutenção/confiabilidade muito diferentes.
+
+Dependencies
+
+Nenhuma técnica bloqueante pra parte interna. Parte externa depende de decisão de fonte de dado (não escolhida).
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Pedido direto do founder em sessão de 2026-08-17, mesma conversa que produziu as mudanças de `/leads` registradas em `27_PROJECT_STATUS.md`.
+
+Target Version
+
+Sem agendamento — depende de sessão de brainstorming arquitetural própria.
+
+Success Metrics
+
+Não definido — depende da fonte de dado externa escolhida e do formato final da recomendação.
+
+Notes
+
+Guardrail a preservar desde já (mesmo antes do desenho): IA sugere, nunca decide compra sozinha — mesma filosofia de "Human in the Loop" do `CLAUDE.md` (aprovação humana em decisões financeiras). Nunca modelar como ação automática de compra/pedido.
 
 ---
 

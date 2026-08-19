@@ -68,6 +68,7 @@ export function calculateTeamPageData(
       total_leads: 0,
       hot_leads: 0,
       closed_leads: 0,
+      revenue: 0,
     };
 
     const userLeads = leads.filter((l) => l.assigned_to === user.id);

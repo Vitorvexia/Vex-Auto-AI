@@ -23,6 +23,11 @@ export function formatDateTime(iso: string): string {
   });
 }
 
+/** Valor em BRL, sem centavos ("R$ 15.000"). */
+export function formatCurrency(value: number): string {
+  return value.toLocaleString("pt-BR", { style: "currency", currency: "BRL", maximumFractionDigits: 0 });
+}
+
 /** Retorna a classe de badge para o score (0-100). */
 export function scoreClass(score: number): string {
   if (score >= 70) return "s-hot";

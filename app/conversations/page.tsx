@@ -17,6 +17,10 @@ function isUrgent(ts: string | null): boolean {
   return Date.now() - new Date(ts).getTime() > 30 * 60 * 1000;
 }
 
+function initialOf(nome: string | null | undefined): string {
+  return (nome ?? "?").trim().charAt(0).toUpperCase() || "?";
+}
+
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 
@@ -61,7 +65,7 @@ export default async function ConversationsPage() {
           <div className="subtitle">
             {items.length} {items.length === 1 ? "conversa ativa" : "conversas ativas"}
             {waiting > 0 && (
-              <span style={{ color: "#C2410C", fontWeight: 700, marginLeft: "10px" }}>
+              <span className="inbox-waiting-count">
                 · {waiting} aguardando vendedor
               </span>
             )}
@@ -90,13 +94,16 @@ export default async function ConversationsPage() {
           const handoffClass = c.handoff_to === "HUMANO" ? "humano" : "ia";
           return (
             <Link key={c.id} href={`/conversations/${c.id}`} className={`conv-row${urgent ? " urgent" : ""}`}>
-              <div style={{ display: "flex", alignItems: "center", gap: "10px", flex: 1, minWidth: 0 }}>
-                <span className={`conv-handoff-tag ${handoffClass}`}>
-                  <span className="dot" />
-                  {HANDOFF_LABELS[c.handoff_to] ?? c.handoff_to}
-                </span>
+              <div className="conv-row-identity">
+                <span className={`conv-row-avatar ${handoffClass}`}>{initialOf(lead?.nome)}</span>
                 <div className="conv-row-main">
-                  <span className="conv-lead-name">{lead?.nome ?? "Sem nome"}</span>
+                  <div className="conv-row-name-line">
+                    <span className="conv-lead-name">{lead?.nome ?? "Sem nome"}</span>
+                    <span className={`conv-handoff-tag ${handoffClass}`}>
+                      <span className="dot" />
+                      {HANDOFF_LABELS[c.handoff_to] ?? c.handoff_to}
+                    </span>
+                  </div>
                   <span className="conv-lead-phone">{lead?.phone_normalized}</span>
                   {(c as any).summary && (
                     <span className="conv-preview">{(c as any).summary}</span>

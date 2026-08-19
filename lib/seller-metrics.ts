@@ -9,6 +9,7 @@ export type SellerMetrics = {
   total_leads: number;
   hot_leads: number;    // same rule as KPI bar: score >= 80 OR handoff (AGUARDANDO_HUMANO)
   closed_leads: number;
+  revenue: number;
 };
 
 export type StoreAssignmentSummary = {
@@ -36,6 +37,9 @@ export function calculateSellerMetrics(
           }).priority === "hot"
         ).length,
         closed_leads: userLeads.filter((l) => l.lead_status === "FECHADO").length,
+        revenue: userLeads
+          .filter((l) => l.lead_status === "FECHADO")
+          .reduce((sum, l) => sum + (l.valor_final ?? 0), 0),
       };
     })
     .filter((m): m is SellerMetrics => m !== null);
