@@ -6,15 +6,7 @@ import { relativeTime, scoreClass } from "@/lib/format";
 import type { LeadStatus } from "@/types/domain";
 import type { PriorityTier } from "@/lib/lead-priority";
 import { LeadAssignmentSelect } from "./LeadAssignmentSelect";
-
-export const DRAG_MIME = "application/x-vex-lead";
-
-// dataTransfer.getData() só é legível em dragstart/drop (bloqueado em
-// dragover/dragenter por segurança do browser) — o status de origem
-// precisa viajar no próprio tipo MIME, que .types expõe durante o drag.
-export const dragFromMime = (status: LeadStatus) => `${DRAG_MIME}/from-${status.toLowerCase()}`;
-
-export type DragPayload = { id: string; from: LeadStatus };
+import { useKanbanDrag } from "@/lib/kanban-drag";
 
 type Props = {
   id: string;
@@ -47,6 +39,8 @@ function urgencyLevel(ts: string): UrgencyLevel | null {
   return "stale";
 }
 
+const DRAG_START_THRESHOLD = 6;
+
 export function LeadCard({
   id,
   nome,
@@ -67,42 +61,68 @@ export function LeadCard({
   const urgency   = urgencyLevel(ultima_atividade);
   const initial   = (nome ?? "?").trim().charAt(0).toUpperCase() || "?";
   const [isDragging, setIsDragging] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const drag = useKanbanDrag();
+
+  // Distingue clique (abre a conversa) de arraste (move de coluna) sem
+  // depender do drag nativo HTML5 — cujo ghost translúcido é o problema
+  // que esse componente veio resolver. Threshold em px evita que um
+  // tremor de mouse no clique já dispare modo arraste.
+  const pressRef = useRef<{ startX: number; startY: number; dragging: boolean } | null>(null);
+  const draggedRef = useRef(false);
+
+  function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
+    if ((e.target as HTMLElement).closest(".lead-card-tray")) return;
+    pressRef.current = { startX: e.clientX, startY: e.clientY, dragging: false };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+
+  function onPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    const press = pressRef.current;
+    if (!press) return;
+    const dx = e.clientX - press.startX;
+    const dy = e.clientY - press.startY;
+    if (!press.dragging) {
+      if (Math.hypot(dx, dy) < DRAG_START_THRESHOLD) return;
+      press.dragging = true;
+      setIsDragging(true);
+      drag.beginDrag({ id, from: lead_status }, press.startX, press.startY);
+    }
+    drag.updateDrag(e.clientX, e.clientY);
+  }
+
+  function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    const press = pressRef.current;
+    pressRef.current = null;
+    if (press?.dragging) {
+      draggedRef.current = true;
+      drag.endDrag();
+      setIsDragging(false);
+    }
+    e.currentTarget.releasePointerCapture(e.pointerId);
+  }
+
+  function onClickCapture(e: React.MouseEvent<HTMLDivElement>) {
+    if (draggedRef.current) {
+      e.preventDefault();
+      e.stopPropagation();
+      draggedRef.current = false;
+    }
+  }
+
+  const style = isDragging
+    ? { transform: `translate3d(${drag.delta.dx}px, ${drag.delta.dy}px, 0) scale(1.045) rotate(-1.5deg)` }
+    : undefined;
 
   return (
     <div
-      ref={wrapRef}
       className={`lead-card-wrap${vendedores ? " has-move" : ""}${isDragging ? " is-dragging" : ""}`}
-      draggable
-      onDragStart={(e) => {
-        const payload: DragPayload = { id, from: lead_status };
-        e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
-        e.dataTransfer.setData(dragFromMime(lead_status), "");
-        e.dataTransfer.effectAllowed = "move";
-
-        // Ghost nativo do browser é translúcido e some junto com o card
-        // original ainda visível — dá efeito de "clone fantasma parado".
-        // Clone opaco fora da tela como drag image resolve os dois:
-        // imagem sólida seguindo o cursor + card real escondido via CSS.
-        const node = wrapRef.current;
-        if (node) {
-          const rect = node.getBoundingClientRect();
-          const clone = node.cloneNode(true) as HTMLDivElement;
-          clone.style.position = "fixed";
-          clone.style.top = "-9999px";
-          clone.style.left = "-9999px";
-          clone.style.width = `${rect.width}px`;
-          clone.style.opacity = "1";
-          clone.style.transform = "none";
-          clone.style.pointerEvents = "none";
-          document.body.appendChild(clone);
-          e.dataTransfer.setDragImage(clone, e.clientX - rect.left, e.clientY - rect.top);
-          setTimeout(() => document.body.removeChild(clone), 0);
-        }
-
-        setIsDragging(true);
-      }}
-      onDragEnd={() => setIsDragging(false)}
+      style={style}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerUp}
+      onClickCapture={onClickCapture}
     >
       <Link href={href} className="lead-card" draggable={false}>
         <div className="lead-card-top">
