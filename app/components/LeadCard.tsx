@@ -86,6 +86,10 @@ export function LeadCard({
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest(".lead-card-tray")) return;
+    // Sem isso o browser corre a seleção de texto nativa em paralelo ao
+    // drag (mousedown+move seleciona texto por padrão) — fica tudo grifado
+    // de azul enquanto arrasta.
+    e.preventDefault();
     pressRef.current = { startX: e.clientX, startY: e.clientY, dragging: false };
     e.currentTarget.setPointerCapture(e.pointerId);
   }

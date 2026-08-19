@@ -358,6 +358,7 @@ a { color: inherit; text-decoration: none; }
   display: flex; flex-direction: column; cursor: grab;
   transform-origin: center;
   touch-action: none; /* pointer drag próprio — sem isso o browser rouba o gesto pra scroll em touch */
+  user-select: none; -webkit-user-select: none; /* sem isso mousedown+move seleciona texto do card */
   transition: transform .18s cubic-bezier(.16,1,.3,1), box-shadow .18s cubic-bezier(.16,1,.3,1);
   animation: lead-card-in .22s cubic-bezier(.16,1,.3,1) both;
 }
