@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import Link from "next/link";
 import { relativeTime, scoreClass } from "@/lib/format";
 import type { LeadStatus } from "@/types/domain";
@@ -67,9 +67,11 @@ export function LeadCard({
   const urgency   = urgencyLevel(ultima_atividade);
   const initial   = (nome ?? "?").trim().charAt(0).toUpperCase() || "?";
   const [isDragging, setIsDragging] = useState(false);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   return (
     <div
+      ref={wrapRef}
       className={`lead-card-wrap${vendedores ? " has-move" : ""}${isDragging ? " is-dragging" : ""}`}
       draggable
       onDragStart={(e) => {
@@ -77,6 +79,27 @@ export function LeadCard({
         e.dataTransfer.setData(DRAG_MIME, JSON.stringify(payload));
         e.dataTransfer.setData(dragFromMime(lead_status), "");
         e.dataTransfer.effectAllowed = "move";
+
+        // Ghost nativo do browser é translúcido e some junto com o card
+        // original ainda visível — dá efeito de "clone fantasma parado".
+        // Clone opaco fora da tela como drag image resolve os dois:
+        // imagem sólida seguindo o cursor + card real escondido via CSS.
+        const node = wrapRef.current;
+        if (node) {
+          const rect = node.getBoundingClientRect();
+          const clone = node.cloneNode(true) as HTMLDivElement;
+          clone.style.position = "fixed";
+          clone.style.top = "-9999px";
+          clone.style.left = "-9999px";
+          clone.style.width = `${rect.width}px`;
+          clone.style.opacity = "1";
+          clone.style.transform = "none";
+          clone.style.pointerEvents = "none";
+          document.body.appendChild(clone);
+          e.dataTransfer.setDragImage(clone, e.clientX - rect.left, e.clientY - rect.top);
+          setTimeout(() => document.body.removeChild(clone), 0);
+        }
+
         setIsDragging(true);
       }}
       onDragEnd={() => setIsDragging(false)}
