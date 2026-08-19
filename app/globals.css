@@ -995,11 +995,11 @@ a { color: inherit; text-decoration: none; }
   pointer-events: none;
 }
 .leads-funnel-stage-label {
-  font-size: 11.5px; font-weight: 700; color: #0A0E14;
+  font-size: 11.5px; font-weight: 700; color: var(--navy-dark);
   text-shadow: 0 1px 1px rgba(255,255,255,.35);
 }
 .leads-funnel-stage-value {
-  font-size: 15px; font-weight: 800; color: #0A0E14;
+  font-size: 15px; font-weight: 800; color: var(--navy-dark);
   text-shadow: 0 1px 1px rgba(255,255,255,.35);
 }
 .leads-funnel-conversion {
