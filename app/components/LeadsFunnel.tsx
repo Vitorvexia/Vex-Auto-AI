@@ -45,7 +45,7 @@ export function LeadsFunnel({ filtered, total }: Props) {
       <div className="leads-funnel-bars">
         {STAGES.map(({ key, label, color }) => {
           const value = counts[key];
-          const widthPct = value === 0 ? 0 : Math.max(14, (value / max) * 100);
+          const scale = value === 0 ? 0 : Math.max(0.14, value / max);
           return (
             <div key={key} className="leads-funnel-stage">
               <div className="leads-funnel-stage-head">
@@ -55,7 +55,7 @@ export function LeadsFunnel({ filtered, total }: Props) {
               <div className="leads-funnel-track">
                 <div
                   className="leads-funnel-fill"
-                  style={{ width: `${widthPct}%`, background: color }}
+                  style={{ transform: `scaleX(${scale})`, background: color }}
                 />
               </div>
             </div>
