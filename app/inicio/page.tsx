@@ -267,24 +267,22 @@ export default async function InicioPage() {
         </div>
       </div>
 
-      <div className="chart-grid">
-        <div className="section-card">
-          <LeadsFunnel
-            filtered={funnelFiltered}
-            total={funnelTotal}
-            filteredLabel={`${WINDOW_DAYS} dias`}
-            totalLabel="Total"
-          />
-        </div>
+      <div className="section-card">
+        <LeadsFunnel
+          filtered={funnelFiltered}
+          total={funnelTotal}
+          filteredLabel={`${WINDOW_DAYS} dias`}
+          totalLabel="Total"
+        />
+      </div>
 
-        <div className="section-card">
-          <div className="section-card-head">
-            <span className="section-card-title">IA vs Humano</span>
-            <span className="kpi-delta">últimos {WINDOW_DAYS} dias</span>
-          </div>
-          <div className="section-card-body">
-            <BarChart bars={aiVsHumanBars} />
-          </div>
+      <div className="section-card">
+        <div className="section-card-head">
+          <span className="section-card-title">IA vs Humano</span>
+          <span className="kpi-delta">últimos {WINDOW_DAYS} dias</span>
+        </div>
+        <div className="section-card-body">
+          <BarChart bars={aiVsHumanBars} />
         </div>
       </div>
 

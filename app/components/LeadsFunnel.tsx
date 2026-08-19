@@ -5,7 +5,10 @@ import { calculateFunnelConversion, type FunnelCounts, type FunnelStage } from "
 import { useState } from "react";
 
 const STAGES: { key: FunnelStage; label: string; color: string }[] = [
-  { key: "frio",   label: "Frio",   color: "var(--funnel-frio)" },
+  // Frio reaproveita o azul canônico do projeto (--accent, #005BFE) — não
+  // é um tom de "frio" novo, é literalmente a cor de marca. Morno/Quente
+  // não têm equivalente semântico entre os tokens existentes (ver DL-0018).
+  { key: "frio",   label: "Frio",   color: "var(--accent)" },
   { key: "morno",  label: "Morno",  color: "var(--funnel-morno)" },
   { key: "quente", label: "Quente", color: "var(--funnel-quente)" },
 ];
@@ -21,7 +24,13 @@ const STAGE_H = 58;
 const MIN_TOP_W = 74;
 const MAX_TOP_W = 264;
 const ELLIPSE_RY = 9;
-const BULGE = -12;
+// Pinça suave no meio de cada lateral (curva côncava, "cone contínuo") —
+// aplicado como offset num único ponto de controle QUADRÁTICO exatamente
+// no ponto médio (x e y) entre topo e base. Isso garante monotonicidade
+// (a lateral só estreita, nunca alarga de novo no meio): diferente de uma
+// curva cúbica com 2 pontos de controle deslocados de forma independente
+// (versão anterior), que criava overshoot e um efeito "vaso/ampulheta".
+const SIDE_CURVE = 10;
 
 const STAGE_Y: Record<FunnelStage, { y0: number; y1: number }> = {
   frio:   { y0: 8,   y1: 8 + STAGE_H },
@@ -38,14 +47,18 @@ function topWidth(count: number, max: number): number {
 function frustumPath(y0: number, y1: number, tw: number, bw: number): string {
   const txL = CX - tw / 2, txR = CX + tw / 2;
   const bxL = CX - bw / 2, bxR = CX + bw / 2;
-  const midY1 = y0 + (y1 - y0) * 0.35;
-  const midY2 = y0 + (y1 - y0) * 0.65;
+  const midY = (y0 + y1) / 2;
+  // Ponto médio da reta topo→base, puxado SIDE_CURVE px em direção ao
+  // centro — nunca ultrapassa nem o topo nem a base, então a lateral só
+  // estreita (cone contínuo), nunca alarga de novo no meio.
+  const rMidX = (txR + bxR) / 2 - SIDE_CURVE;
+  const lMidX = (txL + bxL) / 2 + SIDE_CURVE;
   return [
     `M ${txL} ${y0}`,
     `A ${tw / 2} ${ELLIPSE_RY} 0 0 1 ${txR} ${y0}`,
-    `C ${txR + BULGE} ${midY1}, ${bxR + BULGE} ${midY2}, ${bxR} ${y1}`,
+    `Q ${rMidX} ${midY}, ${bxR} ${y1}`,
     `A ${bw / 2} ${ELLIPSE_RY} 0 0 1 ${bxL} ${y1}`,
-    `C ${bxL - BULGE} ${midY2}, ${txL - BULGE} ${midY1}, ${txL} ${y0}`,
+    `Q ${lMidX} ${midY}, ${txL} ${y0}`,
     "Z",
   ].join(" ");
 }

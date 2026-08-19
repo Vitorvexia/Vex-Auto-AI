@@ -263,7 +263,7 @@ DL-0018
 
 Title
 
-Novos tokens `--funnel-frio/--funnel-morno/--funnel-quente` — sem equivalente semântico nas 7 cores de status do funil
+Cores do Funil de Temperatura: Frio reaproveita `--accent`, Morno/Quente ganham tokens novos (`--funnel-morno`/`--funnel-quente`)
 
 Category
 
@@ -271,15 +271,15 @@ Engineering / Design System
 
 Context
 
-Funil de Temperatura (`app/components/LeadsFunnel.tsx`, `/leads` e `/inicio`) agrupa `lead_status` em 3 camadas (Frio = Novo+Engajado, Morno = Interessado, Quente = Quente+Negociação) e pede degradê termal explícito azul→âmbar→vermelho entre elas. As 7 cores de status já documentadas em DESIGN.md (`--status-novo` `#94A3B8`, `--status-engajado` `#0EA5E9`, `--status-interessado` `#8B5CF6`, `--status-quente` `#F97316`, `--status-negociacao` `#22C55E`, `--status-fechado` `#10B981`, `--status-perdido` `#EF4444`) são sinalização funcional por status individual, não formam um degradê termal coerente — `--status-interessado` é roxo (não âmbar), `--status-quente` é laranja (não vermelho).
+Funil de Temperatura (`app/components/LeadsFunnel.tsx`, `/leads` e `/inicio`) agrupa `lead_status` em 3 camadas (Frio = Novo+Engajado, Morno = Interessado, Quente = Quente+Negociação) e pede degradê termal explícito azul→âmbar→vermelho entre elas. Primeira versão usou um azul sky (`#38BDF8`) novo pra Frio — Vitor corrigiu: a camada fria devia usar o azul canônico do projeto (`#005BFE`, já é `--accent`/`--sky`), não inventar um tom "frio" à parte. Pra Morno/Quente, as 7 cores de status já documentadas em DESIGN.md (`--status-novo` `#94A3B8`, `--status-engajado` `#0EA5E9`, `--status-interessado` `#8B5CF6`, `--status-quente` `#F97316`, `--status-negociacao` `#22C55E`, `--status-fechado` `#10B981`, `--status-perdido` `#EF4444`) continuam sem equivalente semântico pro degradê pedido — `--status-interessado` é roxo (não âmbar), `--status-quente` é laranja (não vermelho).
 
 Decision
 
-3 tokens novos em `:root` (`app/globals.css`): `--funnel-frio: #38BDF8`, `--funnel-morno: #FBBF24`, `--funnel-quente: #F43F5E`. `--funnel-quente` deliberadamente diferente de `--status-perdido` (`#EF4444`, também vermelho) pra não colidir visualmente o mesmo hex em dois conceitos diferentes (lead perdido vs. lead quente) mesmo que nunca apareçam lado a lado no mesmo componente.
+Frio usa `var(--accent)` direto (sem token novo — é literalmente a cor de marca). 2 tokens novos em `:root` (`app/globals.css`): `--funnel-morno: #FBBF24`, `--funnel-quente: #F43F5E`. `--funnel-quente` deliberadamente diferente de `--status-perdido` (`#EF4444`, também vermelho) pra não colidir visualmente o mesmo hex em dois conceitos diferentes (lead perdido vs. lead quente) mesmo que nunca apareçam lado a lado no mesmo componente.
 
 Reasoning
 
-DESIGN.md pede reaproveitar token existente quando houver equivalente semântico; aqui não há — mapear Morno pra `--status-interessado` (roxo) contradiria o requisito explícito de "morno = âmbar/laranja" no pedido original.
+DESIGN.md pede reaproveitar token existente quando houver equivalente semântico — pra Frio havia (o azul de marca é literalmente "frio" na percepção de cor), pra Morno/Quente não há (mapear Morno pra `--status-interessado`, roxo, contradiria o requisito explícito de "morno = âmbar/laranja").
 
 Alternatives Considered
 
@@ -291,7 +291,7 @@ Funil de Temperatura com degradê visualmente coerente, sem herdar acidentalment
 
 Potential Risks
 
-Mais 3 tokens de cor no design system pra manter. Baixo risco — escopo restrito a um único componente (`LeadsFunnel.tsx`), documentado aqui pra não virar "de onde veio isso" numa auditoria futura.
+Mais 2 tokens de cor no design system pra manter (Frio não soma token novo — reaproveita `--accent`). Baixo risco — escopo restrito a um único componente (`LeadsFunnel.tsx`), documentado aqui pra não virar "de onde veio isso" numa auditoria futura.
 
 Owner
 
