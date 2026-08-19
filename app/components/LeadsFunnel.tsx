@@ -164,8 +164,11 @@ export function LeadsFunnel({
             const isActive = activeStage === key;
             const tw = widths[key];
             const breakdown = calculateStageBreakdown(key, statusCounts);
+            // Linha reta na horizontal: origem e destino usam o MESMO y
+            // (a origem, no meio da altura do funil pra essa camada, não
+            // no topo — senão a linha sai em diagonal até a linha de
+            // breakdown de cada etapa).
             const originX = SHAPE_CX + tw / 2;
-            const originY = y0 + 7;
 
             return (
               <g key={key}>
@@ -181,7 +184,7 @@ export function LeadsFunnel({
                   const rowY = y0 + 14 + i * 18;
                   return (
                     <g key={entry.status} aria-hidden="true">
-                      <line x1={originX} y1={originY} x2={300} y2={rowY} stroke={color} strokeWidth={1.2} />
+                      <line x1={originX} y1={rowY} x2={300} y2={rowY} stroke={color} strokeWidth={1.2} />
                       <text x={310} y={rowY + 4} className="leads-funnel-etapa-label" fill="var(--muted)">
                         {LEAD_STATUS_LABELS[entry.status]}
                       </text>

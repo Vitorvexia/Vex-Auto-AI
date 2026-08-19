@@ -206,7 +206,7 @@ export default async function InicioPage() {
   }
 
   return (
-    <main className="container" style={{ paddingRight: "76px" }}>
+    <main className="container">
       <div className="page-header">
         <div>
           <h1 className="page-title">Central de Operações</h1>
