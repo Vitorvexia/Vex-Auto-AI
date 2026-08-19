@@ -70,6 +70,19 @@ export function LeadCard({
   const pressRef = useRef<{ startX: number; startY: number; dragging: boolean } | null>(null);
   const draggedRef = useRef(false);
 
+  // pointermove dispara a cada pixel — atualizar estado do Context (delta +
+  // hover column via elementFromPoint) em cada evento saturava a main thread
+  // (INP disparou "blocked UI updates" >11s no teste). rAF capa em 1 update
+  // por frame, igual todo drag-and-drop custom feito com JS puro.
+  const rafRef = useRef<number | null>(null);
+  const pendingPointRef = useRef<{ x: number; y: number } | null>(null);
+
+  function flushDrag() {
+    rafRef.current = null;
+    const p = pendingPointRef.current;
+    if (p) drag.updateDrag(p.x, p.y);
+  }
+
   function onPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     if (e.button !== 0) return;
     if ((e.target as HTMLElement).closest(".lead-card-tray")) return;
@@ -88,17 +101,28 @@ export function LeadCard({
       setIsDragging(true);
       drag.beginDrag({ id, from: lead_status }, press.startX, press.startY);
     }
-    drag.updateDrag(e.clientX, e.clientY);
+    pendingPointRef.current = { x: e.clientX, y: e.clientY };
+    if (rafRef.current == null) {
+      rafRef.current = requestAnimationFrame(flushDrag);
+    }
   }
 
   function onPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     const press = pressRef.current;
     pressRef.current = null;
+    if (rafRef.current != null) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
     if (press?.dragging) {
+      // último ponto pode não ter sido flushado ainda — garante hover final
+      // correto antes do endDrag decidir se aceita o drop.
+      if (pendingPointRef.current) drag.updateDrag(pendingPointRef.current.x, pendingPointRef.current.y);
       draggedRef.current = true;
       drag.endDrag();
       setIsDragging(false);
     }
+    pendingPointRef.current = null;
     e.currentTarget.releasePointerCapture(e.pointerId);
   }
 
