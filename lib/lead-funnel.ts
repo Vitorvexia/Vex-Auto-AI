@@ -43,3 +43,18 @@ export function calculateFunnelCounts(statuses: LeadStatus[]): FunnelCounts {
   }
   return counts;
 }
+
+// Taxa de conversão entre camadas — fração da camada anterior que avançou
+// pra atual (morno/frio, quente/morno). null quando a camada anterior tem
+// zero leads (divisão indefinida, não é 0%: não há base pra medir taxa).
+export type FunnelConversion = {
+  frioToMorno: number | null;
+  mornoToQuente: number | null;
+};
+
+export function calculateFunnelConversion(counts: FunnelCounts): FunnelConversion {
+  return {
+    frioToMorno: counts.frio > 0 ? counts.morno / counts.frio : null,
+    mornoToQuente: counts.morno > 0 ? counts.quente / counts.morno : null,
+  };
+}

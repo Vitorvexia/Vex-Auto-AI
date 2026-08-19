@@ -28,7 +28,7 @@
 
   --funnel-frio:  #38BDF8;
   --funnel-morno: #FBBF24;
-  --funnel-quente:#F97316;
+  --funnel-quente:#F43F5E;
 
   --bubble-lead:   #1E2836;
   --bubble-ia:     #0A1628;
@@ -975,23 +975,38 @@ a { color: inherit; text-decoration: none; }
   background: var(--panel-2); cursor: pointer; transition: background .15s, color .15s;
 }
 .leads-funnel-toggle button.active { background: var(--accent); color: #fff; }
-.leads-funnel-bars { display: flex; flex-direction: column; gap: 12px; }
-.leads-funnel-stage-head {
-  display: flex; align-items: baseline; justify-content: center; gap: 6px;
-  margin-bottom: 4px;
+.leads-funnel-svg-wrap {
+  position: relative; width: 100%; max-width: 320px; margin: 0 auto;
+  aspect-ratio: 320 / 232;
 }
-.leads-funnel-stage-label { font-size: 11.5px; color: var(--muted); font-weight: 600; }
-.leads-funnel-stage-value { font-size: 13px; color: var(--text-strong); font-weight: 700; }
-.leads-funnel-track {
-  position: relative; height: 22px; background: var(--panel-2);
-  border-radius: 6px; overflow: hidden;
+.leads-funnel-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.leads-funnel-shape {
+  transition: filter .15s, opacity .15s;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,.25));
 }
-.leads-funnel-fill {
-  position: absolute; inset: 0;
-  transform-origin: center;
-  border-radius: 6px;
-  /* scaleX em vez de width — anima transform (composited), não layout */
-  transition: transform .3s cubic-bezier(.16,1,.3,1);
+.leads-funnel-shape-group.clickable { cursor: pointer; }
+.leads-funnel-shape-group.clickable:hover .leads-funnel-shape { filter: brightness(1.12) drop-shadow(0 3px 6px rgba(0,0,0,.25)); }
+.leads-funnel-shape-group.active .leads-funnel-shape {
+  filter: brightness(1.15) drop-shadow(0 0 0 2px var(--text-strong)) drop-shadow(0 3px 6px rgba(0,0,0,.3));
+}
+.leads-funnel-stage-overlay {
+  position: absolute; left: 50%; transform: translate(-50%, -50%);
+  display: flex; align-items: baseline; gap: 6px;
+  pointer-events: none;
+}
+.leads-funnel-stage-label {
+  font-size: 11.5px; font-weight: 700; color: #0A0E14;
+  text-shadow: 0 1px 1px rgba(255,255,255,.35);
+}
+.leads-funnel-stage-value {
+  font-size: 15px; font-weight: 800; color: #0A0E14;
+  text-shadow: 0 1px 1px rgba(255,255,255,.35);
+}
+.leads-funnel-conversion {
+  position: absolute; left: 50%; transform: translate(-50%, -50%);
+  font-size: 10.5px; font-weight: 700; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+  padding: 1px 7px; pointer-events: none;
 }
 .leads-funnel-closed-chip {
   margin: 14px 0 0; font-size: 11.5px; color: var(--muted); text-align: center;

@@ -7,9 +7,10 @@ import { LeadCard } from "@/app/components/LeadCard";
 import { LeadImportCard } from "@/app/components/LeadImportCard";
 import { getStoreAssignmentSummary } from "@/lib/seller-metrics";
 import { resolveAssignedToFilter, isStaleLead } from "@/lib/lead-filter";
-import { BarChart } from "@/app/components/BarChart";
 import { DelayedLeadsBadge } from "@/app/components/DelayedLeadsBadge";
 import { KanbanDragProvider } from "@/lib/kanban-drag";
+import { LeadsFunnel } from "@/app/components/LeadsFunnel";
+import { calculateFunnelCounts, getFunnelStage, type FunnelStage } from "@/lib/lead-funnel";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -40,10 +41,12 @@ type Enriched = {
   interesse: string | null;
 };
 
+const FUNNEL_STAGES: FunnelStage[] = ["frio", "morno", "quente"];
+
 export default async function LeadsPage({
   searchParams,
 }: {
-  searchParams?: { assignedTo?: string; atrasado?: string };
+  searchParams?: { assignedTo?: string; atrasado?: string; stage?: string };
 }) {
   const supabase = await createSupabaseServerClient();
   const { data: { user } } = await supabase.auth.getUser();
@@ -52,6 +55,9 @@ export default async function LeadsPage({
   const rawParam = searchParams?.assignedTo;
   const assignedToParam = resolveAssignedToFilter(rawParam, user.id);
   const atrasadoActive = searchParams?.atrasado === "1";
+  const stageParam = FUNNEL_STAGES.includes(searchParams?.stage as FunnelStage)
+    ? (searchParams?.stage as FunnelStage)
+    : null;
 
   // Build leads query
   let leadsQuery = supabase
@@ -136,10 +142,14 @@ export default async function LeadsPage({
   const sorted = sortLeads(enriched);
 
   // staleLeads é sempre calculado sobre o escopo de vendedor (sorted), não
-  // sobre o resultado já filtrado por "atrasado" — é o contador do badge,
-  // precisa refletir o total disponível pra clicar, não o que já tá visível.
+  // sobre o resultado já filtrado por "atrasado"/"stage" — é o contador do
+  // badge, precisa refletir o total disponível pra clicar, não o que já
+  // tá visível.
   const staleLeads = sorted.filter((l) => isStaleLead(l.ultima_atividade)).length;
-  const visible = atrasadoActive ? sorted.filter((l) => isStaleLead(l.ultima_atividade)) : sorted;
+  let visible = atrasadoActive ? sorted.filter((l) => isStaleLead(l.ultima_atividade)) : sorted;
+  if (stageParam) {
+    visible = visible.filter((l) => getFunnelStage(l.lead_status) === stageParam);
+  }
 
   const byStatus: Record<LeadStatus, Enriched[]> = {
     NOVO: [],
@@ -170,21 +180,25 @@ export default async function LeadsPage({
 
   const assignmentSummary = getStoreAssignmentSummary(leadsForMetrics);
 
-  const statusBars = [
-    { label: "Novo", value: byStatus.NOVO.length, color: "var(--status-novo)" },
-    { label: "Engajado", value: byStatus.ENGAJADO.length, color: "var(--status-engajado)" },
-    { label: "Interessado", value: byStatus.INTERESSADO.length, color: "var(--status-interessado)" },
-    { label: "Quente", value: byStatus.QUENTE.length, color: "var(--status-quente)" },
-    { label: "Negociação", value: byStatus.NEGOCIACAO.length, color: "var(--status-negociacao)" },
-    { label: "Fechado", value: byStatus.FECHADO.length, color: "var(--status-fechado)" },
-    { label: "Perdido", value: byStatus.PERDIDO.length, color: "var(--status-perdido)" },
-  ];
+  // "Filtrado" = mesmo escopo de vendedor já aplicado em `sorted` (pill
+  // Todos/Sem responsável/Vendedor) — não inclui "atrasado"/"stage", que
+  // são recortes de exibição do kanban, ortogonais ao funil em si (senão
+  // clicar numa camada esvaziaria as outras barras do próprio funil).
+  // "Total" = leadsForMetrics, já buscado sem filtro de vendedor.
+  const funnelFiltered = calculateFunnelCounts(sorted.map((l) => l.lead_status));
+  const funnelTotal = calculateFunnelCounts(leadsForMetrics.map((l) => l.lead_status));
 
   const activeVendedor = vendedores.find((v) => v.id === assignedToParam);
   // Preserva o filtro de vendedor ao ligar/desligar "atrasado" na URL.
   const vendedorQuery = rawParam ? `assignedTo=${rawParam}` : "";
   const atrasadoHref = [vendedorQuery, "atrasado=1"].filter(Boolean).join("&");
   const clearAtrasadoHref = rawParam ? `/leads?assignedTo=${rawParam}` : "/leads";
+
+  // Params atuais (sem "stage") pro funil preservar assignedTo/atrasado ao
+  // clicar numa camada — o próprio componente adiciona/remove "stage".
+  const funnelCurrentParams: Record<string, string> = {};
+  if (rawParam) funnelCurrentParams.assignedTo = rawParam;
+  if (atrasadoActive) funnelCurrentParams.atrasado = "1";
 
   return (
     <main className="container">
@@ -259,12 +273,13 @@ export default async function LeadsPage({
       </KanbanDragProvider>
 
       <div className="section-card leads-status-chart">
-        <div className="section-card-head">
-          <span className="section-card-title">Leads por Status</span>
-        </div>
-        <div className="section-card-body">
-          <BarChart bars={statusBars} />
-        </div>
+        <LeadsFunnel
+          filtered={funnelFiltered}
+          total={funnelTotal}
+          enableStageFilter
+          activeStage={stageParam}
+          currentParams={funnelCurrentParams}
+        />
       </div>
 
       <DelayedLeadsBadge count={staleLeads} href={`/leads?${atrasadoHref}`} />
