@@ -59,6 +59,16 @@ export function calculateFunnelConversion(counts: FunnelCounts): FunnelConversio
   };
 }
 
+// Taxa de conversão geral do funil (camada Conversão/Fechado) — fechados
+// sobre TODO o volume do período (frio+morno+quente+fechado+perdido),
+// incluindo perdidos no denominador de propósito: é a taxa real de
+// conversão de quem entrou no funil, não só de quem "sobreviveu" até
+// virar quente. null quando não há nenhum lead no período (sem base).
+export function calculateConversionRate(counts: FunnelCounts): number | null {
+  const totalPeriodo = counts.frio + counts.morno + counts.quente + counts.fechado + counts.perdido;
+  return totalPeriodo > 0 ? counts.fechado / totalPeriodo : null;
+}
+
 // Statuses que compõem cada camada, na ordem de exibição do breakdown.
 const STAGE_STATUSES: Record<FunnelStage, LeadStatus[]> = {
   frio: ["NOVO", "ENGAJADO"],
@@ -66,14 +76,14 @@ const STAGE_STATUSES: Record<FunnelStage, LeadStatus[]> = {
   quente: ["QUENTE", "NEGOCIACAO"],
 };
 
-export type StageBreakdownEntry = { status: LeadStatus; percent: number };
+export type StageBreakdownEntry = { status: LeadStatus; count: number; percent: number };
 
-// % de cada status DENTRO da própria camada (não do funil inteiro) — os
-// percentuais de uma mesma camada sempre somam exatamente 100 quando há
-// pelo menos 1 lead (método do maior resto/Hamilton: arredonda pra baixo
-// e distribui as sobras pros maiores restos, evita 99%/101% por
-// arredondamento ingênuo). Camada sem leads retorna 0% pra cada status —
-// não há base pra calcular proporção.
+// Quantidade + % de cada status DENTRO da própria camada (não do funil
+// inteiro) — os percentuais de uma mesma camada sempre somam exatamente
+// 100 quando há pelo menos 1 lead (método do maior resto/Hamilton:
+// arredonda pra baixo e distribui as sobras pros maiores restos, evita
+// 99%/101% por arredondamento ingênuo). Camada sem leads retorna 0% pra
+// cada status — não há base pra calcular proporção.
 export function calculateStageBreakdown(
   stage: FunnelStage,
   statusCounts: Partial<Record<LeadStatus, number>>
@@ -83,7 +93,7 @@ export function calculateStageBreakdown(
   const total = counts.reduce((a, b) => a + b, 0);
 
   if (total === 0) {
-    return statuses.map((status) => ({ status, percent: 0 }));
+    return statuses.map((status) => ({ status, count: 0, percent: 0 }));
   }
 
   const exact = counts.map((c) => (c / total) * 100);
@@ -99,5 +109,5 @@ export function calculateStageBreakdown(
     percents[byRemainder[k % byRemainder.length].i] += 1;
   }
 
-  return statuses.map((status, i) => ({ status, percent: percents[i] }));
+  return statuses.map((status, i) => ({ status, count: counts[i], percent: percents[i] }));
 }

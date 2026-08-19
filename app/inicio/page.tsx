@@ -4,7 +4,7 @@ import { calculateOperationalMetrics, countLeadsToday, buildDailyTrend, calculat
 import { calculateSellerMetrics } from "@/lib/seller-metrics";
 import { TrendChart } from "@/app/components/TrendChart";
 import { BarChart } from "@/app/components/BarChart";
-import { LeadsFunnel } from "@/app/components/LeadsFunnel";
+import { LeadsFunnel, type FunnelPeriod } from "@/app/components/LeadsFunnel";
 import { calculateFunnelCounts } from "@/lib/lead-funnel";
 import { SetupWidget } from "@/app/components/SetupWidget";
 import { AlertsWidget } from "@/app/components/AlertsWidget";
@@ -23,6 +23,34 @@ function windowStart(): string {
   const d = new Date();
   d.setDate(d.getDate() - WINDOW_DAYS);
   return d.toISOString();
+}
+
+function daysAgoISO(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - days);
+  return d.toISOString();
+}
+
+// Períodos do Funil de Temperatura — independente da janela fixa de
+// WINDOW_DAYS usada no resto do dashboard (Métricas Operacionais,
+// Tendência Diária etc, que seguem 30 dias sempre). "leads" já é a base
+// inteira (query sem filtro de data), então cada período é só um filtro
+// client-side sobre esse mesmo array — sem query nova no banco.
+function buildFunnelPeriods(leads: { lead_status: string; created_at: string | null }[]): FunnelPeriod[] {
+  const windows: { label: string; days: number | null }[] = [
+    { label: "7 dias", days: 7 },
+    { label: "30 dias", days: 30 },
+    { label: "90 dias", days: 90 },
+    { label: "Todo período", days: null },
+  ];
+  return windows.map(({ label, days }) => {
+    const subset = days === null ? leads : leads.filter((l) => (l.created_at ?? "") >= daysAgoISO(days));
+    return {
+      label,
+      counts: calculateFunnelCounts(subset.map((l) => l.lead_status as LeadStatus)),
+      statusCounts: countLeadsByStatus(subset),
+    };
+  });
 }
 
 function pct(rate: number): string {
@@ -59,15 +87,7 @@ async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
   const followUpLogs = followRes.data ?? [];
   const reactivationLogs = reactRes.data ?? [];
 
-  // Funil de Temperatura: "leads" já é a base inteira (sem filtro de
-  // período na query) — reaproveita pra "Total" e filtra client-side por
-  // created_at pra "últimos WINDOW_DAYS dias", mesma janela usada no
-  // resto do dashboard (evita nova query só pra isso).
-  const leadsInWindow = leads.filter((l) => (l.created_at ?? "") >= since);
-  const funnelTotal = calculateFunnelCounts(leads.map((l) => l.lead_status as LeadStatus));
-  const funnelFiltered = calculateFunnelCounts(leadsInWindow.map((l) => l.lead_status as LeadStatus));
-  const funnelTotalStatusCounts = countLeadsByStatus(leads);
-  const funnelFilteredStatusCounts = countLeadsByStatus(leadsInWindow);
+  const funnelPeriods = buildFunnelPeriods(leads);
 
   return {
     metrics: calculateOperationalMetrics({
@@ -79,10 +99,7 @@ async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
     }),
     leadsToday: countLeadsToday(leads),
     trend: buildDailyTrend(leads, followUpLogs, reactivationLogs, WINDOW_DAYS),
-    funnelFiltered,
-    funnelTotal,
-    funnelFilteredStatusCounts,
-    funnelTotalStatusCounts,
+    funnelPeriods,
     reactivationRevenue: calculateReactivationRevenue(leads, reactivationLogs),
   };
 }
@@ -154,7 +171,7 @@ export default async function InicioPage() {
   if (!user) throw new AuthError();
 
   const [
-    { metrics: m, leadsToday, trend, funnelFiltered, funnelTotal, funnelFilteredStatusCounts, funnelTotalStatusCounts, reactivationRevenue },
+    { metrics: m, leadsToday, trend, funnelPeriods, reactivationRevenue },
     staleCount,
     lowMarginCount,
     sellerRanking,
@@ -271,14 +288,7 @@ export default async function InicioPage() {
       </div>
 
       <div className="section-card">
-        <LeadsFunnel
-          filtered={funnelFiltered}
-          total={funnelTotal}
-          filteredStatusCounts={funnelFilteredStatusCounts}
-          totalStatusCounts={funnelTotalStatusCounts}
-          filteredLabel={`${WINDOW_DAYS} dias`}
-          totalLabel="Total"
-        />
+        <LeadsFunnel periods={funnelPeriods} defaultLabel={`${WINDOW_DAYS} dias`} />
       </div>
 
       <div className="section-card">

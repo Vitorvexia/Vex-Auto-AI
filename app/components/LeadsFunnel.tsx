@@ -4,6 +4,7 @@ import { useRouter, usePathname } from "next/navigation";
 import { useState } from "react";
 import {
   calculateFunnelConversion,
+  calculateConversionRate,
   calculateStageBreakdown,
   type FunnelCounts,
   type FunnelStage,
@@ -18,18 +19,19 @@ const STAGES: { key: FunnelStage; color: string }[] = [
   { key: "morno",  color: "var(--funnel-morno)" },
   { key: "quente", color: "var(--funnel-quente)" },
 ];
+// Conversão (Fechado) reaproveita --status-fechado — é literalmente a cor
+// já usada pra leads FECHADO em todo o resto do app (kanban, ops-strip),
+// equivalente semântico exato, não precisou de token novo.
+const CONVERSAO_COLOR = "var(--status-fechado)";
 
 // Geometria fixa do funil 3D em coordenadas de viewBox — largo o
 // suficiente (VB_W) pra caber a coluna de breakdown por etapa à direita
-// das formas. O overlay HTML do número total usa os mesmos números em %
-// (SHAPE_CX/VB_W), então aspect-ratio do wrapper fica travado em VB_W/VB_H.
+// das formas. O overlay HTML usa os mesmos números em % (SHAPE_CX/VB_W,
+// .../VB_H), então aspect-ratio do wrapper fica travado em VB_W/VB_H.
 const VB_W = 640;
-const VB_H = 232;
+const VB_H = 310;
 // Centro exato do viewBox — o wrapper CSS já centraliza a caixa toda
-// (margin:0 auto), então a forma cai no centro real da página, não só
-// da própria caixa (era o bug: SHAPE_CX bem menor que VB_W/2 deixava a
-// forma visivelmente puxada pra esquerda, com os rótulos "pesando"
-// à direita).
+// (margin:0 auto), então a forma cai no centro real da página.
 const SHAPE_CX = VB_W / 2;
 const STAGE_H = 58;
 const MIN_TOP_W = 74;
@@ -51,6 +53,10 @@ const STAGE_Y: Record<FunnelStage, { y0: number; y1: number }> = {
   quente: { y0: 164, y1: 164 + STAGE_H },
 };
 const GAP_Y = { frioToMorno: 77, mornoToQuente: 155 };
+
+// Conversão vem depois de Quente, mesmo espaçamento de 20px entre camadas
+// já usado no resto do funil (164-144, 86-66).
+const CONVERSAO_Y = { y0: 242, y1: 242 + STAGE_H };
 
 function topWidth(count: number, max: number): number {
   if (max <= 0) return MIN_TOP_W;
@@ -81,13 +87,20 @@ function formatConversion(rate: number | null): string {
   return rate === null ? "—" : `${Math.round(rate * 100)}%`;
 }
 
+export type FunnelPeriod = {
+  label: string;
+  counts: FunnelCounts;
+  statusCounts: Partial<Record<LeadStatus, number>>;
+};
+
 type Props = {
-  filtered: FunnelCounts;
-  total: FunnelCounts;
-  filteredStatusCounts: Partial<Record<LeadStatus, number>>;
-  totalStatusCounts: Partial<Record<LeadStatus, number>>;
-  filteredLabel?: string;
-  totalLabel?: string;
+  /** Opções de período (ex: 7 dias / 30 dias / 90 dias / Todo período).
+   *  Cada uma já vem com counts/statusCounts pré-calculados pelo caller —
+   *  o componente só troca qual delas está ativa, não recalcula nada. */
+  periods: FunnelPeriod[];
+  /** Label do período selecionado por padrão — cai pro primeiro item de
+   *  `periods` se não bater com nenhum label. */
+  defaultLabel?: string;
   /** Habilita clique-pra-filtrar o kanban abaixo via ?stage=. Default false
    *  (usado por /inicio, que não tem kanban pra filtrar). */
   enableStageFilter?: boolean;
@@ -101,25 +114,23 @@ type Props = {
 };
 
 export function LeadsFunnel({
-  filtered,
-  total,
-  filteredStatusCounts,
-  totalStatusCounts,
-  filteredLabel = "Filtrado",
-  totalLabel = "Total",
+  periods,
+  defaultLabel,
   enableStageFilter = false,
   activeStage = null,
   currentParams,
 }: Props) {
-  const [showTotal, setShowTotal] = useState(false);
+  const initial = periods.find((p) => p.label === defaultLabel) ?? periods[0];
+  const [selectedLabel, setSelectedLabel] = useState(initial?.label);
   const router = useRouter();
   const pathname = usePathname();
 
-  const counts = showTotal ? total : filtered;
-  const statusCounts = showTotal ? totalStatusCounts : filteredStatusCounts;
+  const active = periods.find((p) => p.label === selectedLabel) ?? periods[0];
+  const counts = active.counts;
+  const statusCounts = active.statusCounts;
   const max = Math.max(counts.frio, counts.morno, counts.quente);
-  const closedOrLost = counts.fechado + counts.perdido;
   const conversion = calculateFunnelConversion(counts);
+  const conversionRate = calculateConversionRate(counts);
 
   const widths: Record<FunnelStage, number> = {
     frio: topWidth(counts.frio, max),
@@ -129,8 +140,13 @@ export function LeadsFunnel({
   const bottomWidths: Record<FunnelStage, number> = {
     frio: widths.morno,
     morno: widths.quente,
-    quente: widths.quente * 0.55,
+    quente: widths.quente * 0.6,
   };
+  // Conversão não é proporcional à contagem de Fechados — é sempre mais
+  // estreita que Quente por design (camada "final", tapering fixo), a
+  // quantidade/% já comunicam a magnitude via texto, não via largura.
+  const conversaoTopWidth = bottomWidths.quente;
+  const conversaoBottomWidth = conversaoTopWidth * 0.55;
 
   function stageHref(stage: FunnelStage): string {
     const params = new URLSearchParams(currentParams);
@@ -152,13 +168,17 @@ export function LeadsFunnel({
     <div className="leads-funnel">
       <div className="leads-funnel-head">
         <span className="section-card-title">Funil de Temperatura</span>
-        <div className="leads-funnel-toggle" role="group" aria-label="Escopo do funil">
-          <button type="button" className={!showTotal ? "active" : ""} onClick={() => setShowTotal(false)}>
-            {filteredLabel}
-          </button>
-          <button type="button" className={showTotal ? "active" : ""} onClick={() => setShowTotal(true)}>
-            {totalLabel}
-          </button>
+        <div className="leads-funnel-toggle" role="group" aria-label="Período do funil">
+          {periods.map((p) => (
+            <button
+              key={p.label}
+              type="button"
+              className={selectedLabel === p.label ? "active" : ""}
+              onClick={() => setSelectedLabel(p.label)}
+            >
+              {p.label}
+            </button>
+          ))}
         </div>
       </div>
 
@@ -169,14 +189,10 @@ export function LeadsFunnel({
             const isActive = activeStage === key;
             const tw = widths[key];
             const breakdown = calculateStageBreakdown(key, statusCounts);
-            // Linha reta na horizontal: origem e destino usam o MESMO y
-            // (a origem, no meio da altura do funil pra essa camada, não
-            // no topo — senão a linha sai em diagonal até a linha de
-            // breakdown de cada etapa).
+            // Linha reta na horizontal: origem e destino usam o MESMO y.
             const originX = SHAPE_CX + tw / 2;
             // Bloco de linhas (1 ou 2) centralizado verticalmente dentro da
-            // altura da própria camada — antes ficava ancorado perto do
-            // topo, descentralizado em relação à forma.
+            // altura da própria camada.
             const rowSpacing = 18;
             const blockHeight = (breakdown.length - 1) * rowSpacing;
             const firstRowY = y0 + STAGE_H / 2 - blockHeight / 2;
@@ -199,6 +215,9 @@ export function LeadsFunnel({
                       <text x={470} y={rowY + 4} className="leads-funnel-etapa-label" fill="var(--muted)">
                         {LEAD_STATUS_LABELS[entry.status]}
                       </text>
+                      <text x={585} y={rowY + 4} textAnchor="end" className="leads-funnel-etapa-count" fill="var(--muted)">
+                        {entry.count}
+                      </text>
                       <text x={628} y={rowY + 4} textAnchor="end" className="leads-funnel-etapa-percent" fill={color}>
                         {entry.percent}%
                       </text>
@@ -208,6 +227,13 @@ export function LeadsFunnel({
               </g>
             );
           })}
+
+          <path
+            d={frustumPath(CONVERSAO_Y.y0, CONVERSAO_Y.y1, conversaoTopWidth, conversaoBottomWidth)}
+            fill={CONVERSAO_COLOR}
+            className="leads-funnel-shape"
+          />
+          <ellipse cx={SHAPE_CX} cy={CONVERSAO_Y.y0} rx={conversaoTopWidth / 2} ry={ELLIPSE_RY} fill="rgba(255,255,255,.32)" />
         </svg>
 
         {STAGES.map(({ key }) => {
@@ -224,6 +250,14 @@ export function LeadsFunnel({
           );
         })}
 
+        <div
+          className="leads-funnel-stage-overlay leads-funnel-conversao-overlay"
+          style={{ left: pctX(SHAPE_CX), top: pctY(CONVERSAO_Y.y0 + (CONVERSAO_Y.y1 - CONVERSAO_Y.y0) / 2) }}
+        >
+          <span className="leads-funnel-conversao-count">{counts.fechado}</span>
+          <span className="leads-funnel-conversao-rate">{formatConversion(conversionRate)} de conversão</span>
+        </div>
+
         <div className="leads-funnel-conversion" style={{ left: pctX(SHAPE_CX), top: pctY(GAP_Y.frioToMorno) }}>
           {formatConversion(conversion.frioToMorno)}
         </div>
@@ -233,7 +267,7 @@ export function LeadsFunnel({
       </div>
 
       <p className="leads-funnel-closed-chip">
-        {closedOrLost} {closedOrLost === 1 ? "lead fechado/perdido" : "leads fechados/perdidos"} · fora do funil
+        {counts.perdido} {counts.perdido === 1 ? "lead perdido" : "leads perdidos"} · fora do funil
       </p>
     </div>
   );
