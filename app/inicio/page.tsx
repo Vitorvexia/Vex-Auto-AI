@@ -1,6 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase-server";
 import { AuthError } from "@/lib/auth";
-import { calculateOperationalMetrics, countLeadsToday, buildDailyTrend, calculateReactivationRevenue } from "@/lib/metrics";
+import { calculateOperationalMetrics, countLeadsToday, buildDailyTrend, calculateReactivationRevenue, countLeadsByStatus } from "@/lib/metrics";
 import { calculateSellerMetrics } from "@/lib/seller-metrics";
 import { TrendChart } from "@/app/components/TrendChart";
 import { BarChart } from "@/app/components/BarChart";
@@ -63,10 +63,11 @@ async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
   // período na query) — reaproveita pra "Total" e filtra client-side por
   // created_at pra "últimos WINDOW_DAYS dias", mesma janela usada no
   // resto do dashboard (evita nova query só pra isso).
+  const leadsInWindow = leads.filter((l) => (l.created_at ?? "") >= since);
   const funnelTotal = calculateFunnelCounts(leads.map((l) => l.lead_status as LeadStatus));
-  const funnelFiltered = calculateFunnelCounts(
-    leads.filter((l) => (l.created_at ?? "") >= since).map((l) => l.lead_status as LeadStatus)
-  );
+  const funnelFiltered = calculateFunnelCounts(leadsInWindow.map((l) => l.lead_status as LeadStatus));
+  const funnelTotalStatusCounts = countLeadsByStatus(leads);
+  const funnelFilteredStatusCounts = countLeadsByStatus(leadsInWindow);
 
   return {
     metrics: calculateOperationalMetrics({
@@ -80,6 +81,8 @@ async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
     trend: buildDailyTrend(leads, followUpLogs, reactivationLogs, WINDOW_DAYS),
     funnelFiltered,
     funnelTotal,
+    funnelFilteredStatusCounts,
+    funnelTotalStatusCounts,
     reactivationRevenue: calculateReactivationRevenue(leads, reactivationLogs),
   };
 }
@@ -151,7 +154,7 @@ export default async function InicioPage() {
   if (!user) throw new AuthError();
 
   const [
-    { metrics: m, leadsToday, trend, funnelFiltered, funnelTotal, reactivationRevenue },
+    { metrics: m, leadsToday, trend, funnelFiltered, funnelTotal, funnelFilteredStatusCounts, funnelTotalStatusCounts, reactivationRevenue },
     staleCount,
     lowMarginCount,
     sellerRanking,
@@ -271,6 +274,8 @@ export default async function InicioPage() {
         <LeadsFunnel
           filtered={funnelFiltered}
           total={funnelTotal}
+          filteredStatusCounts={funnelFilteredStatusCounts}
+          totalStatusCounts={funnelTotalStatusCounts}
           filteredLabel={`${WINDOW_DAYS} dias`}
           totalLabel="Total"
         />

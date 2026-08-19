@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { getFunnelStage, calculateFunnelCounts, calculateFunnelConversion } from "@/lib/lead-funnel";
+import { getFunnelStage, calculateFunnelCounts, calculateFunnelConversion, calculateStageBreakdown } from "@/lib/lead-funnel";
 
 describe("getFunnelStage", () => {
   it("NOVO e ENGAJADO mapeiam pra frio", () => {
@@ -63,5 +63,49 @@ describe("calculateFunnelConversion", () => {
     const conversion = calculateFunnelConversion({ frio: 5, morno: 5, quente: 5, fechado: 0, perdido: 0 });
     expect(conversion.frioToMorno).toBe(1);
     expect(conversion.mornoToQuente).toBe(1);
+  });
+});
+
+describe("calculateStageBreakdown", () => {
+  it("frio: Novo 30 / Engajado 40 → 43%/57% (soma 100, maior resto arredonda pra cima)", () => {
+    const breakdown = calculateStageBreakdown("frio", { NOVO: 30, ENGAJADO: 40 });
+    expect(breakdown).toEqual([
+      { status: "NOVO", percent: 43 },
+      { status: "ENGAJADO", percent: 57 },
+    ]);
+    expect(breakdown.reduce((sum, b) => sum + b.percent, 0)).toBe(100);
+  });
+
+  it("quente: Quente 8 / Negociação 3 → 73%/27%", () => {
+    const breakdown = calculateStageBreakdown("quente", { QUENTE: 8, NEGOCIACAO: 3 });
+    expect(breakdown).toEqual([
+      { status: "QUENTE", percent: 73 },
+      { status: "NEGOCIACAO", percent: 27 },
+    ]);
+    expect(breakdown.reduce((sum, b) => sum + b.percent, 0)).toBe(100);
+  });
+
+  it("morno: único status da camada — sempre 100% quando há pelo menos 1 lead", () => {
+    expect(calculateStageBreakdown("morno", { INTERESSADO: 12 })).toEqual([
+      { status: "INTERESSADO", percent: 100 },
+    ]);
+  });
+
+  it("camada sem leads retorna 0% pra cada status (não divide por zero)", () => {
+    expect(calculateStageBreakdown("frio", {})).toEqual([
+      { status: "NOVO", percent: 0 },
+      { status: "ENGAJADO", percent: 0 },
+    ]);
+    expect(calculateStageBreakdown("morno", { INTERESSADO: 0 })).toEqual([
+      { status: "INTERESSADO", percent: 0 },
+    ]);
+  });
+
+  it("empate exato sem resto — não sobra nem falta ponto percentual", () => {
+    const breakdown = calculateStageBreakdown("frio", { NOVO: 5, ENGAJADO: 5 });
+    expect(breakdown).toEqual([
+      { status: "NOVO", percent: 50 },
+      { status: "ENGAJADO", percent: 50 },
+    ]);
   });
 });

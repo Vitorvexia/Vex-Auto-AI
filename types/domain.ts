@@ -7,6 +7,16 @@ export type LeadStatus =
   | "FECHADO"
   | "PERDIDO";
 
+export const LEAD_STATUS_LABELS: Record<LeadStatus, string> = {
+  NOVO: "Novo",
+  ENGAJADO: "Engajado",
+  INTERESSADO: "Interessado",
+  QUENTE: "Quente",
+  NEGOCIACAO: "Negociação",
+  FECHADO: "Fechado",
+  PERDIDO: "Perdido",
+};
+
 export type ConversationStatus =
   | "ATIVA"
   | "AGUARDANDO_HUMANO"

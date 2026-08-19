@@ -11,6 +11,7 @@ import { DelayedLeadsBadge } from "@/app/components/DelayedLeadsBadge";
 import { KanbanDragProvider } from "@/lib/kanban-drag";
 import { LeadsFunnel } from "@/app/components/LeadsFunnel";
 import { calculateFunnelCounts, getFunnelStage, type FunnelStage } from "@/lib/lead-funnel";
+import { countLeadsByStatus } from "@/lib/metrics";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -187,6 +188,8 @@ export default async function LeadsPage({
   // "Total" = leadsForMetrics, já buscado sem filtro de vendedor.
   const funnelFiltered = calculateFunnelCounts(sorted.map((l) => l.lead_status));
   const funnelTotal = calculateFunnelCounts(leadsForMetrics.map((l) => l.lead_status));
+  const funnelFilteredStatusCounts = countLeadsByStatus(sorted);
+  const funnelTotalStatusCounts = countLeadsByStatus(leadsForMetrics);
 
   const activeVendedor = vendedores.find((v) => v.id === assignedToParam);
   // Preserva o filtro de vendedor ao ligar/desligar "atrasado" na URL.
@@ -276,6 +279,8 @@ export default async function LeadsPage({
         <LeadsFunnel
           filtered={funnelFiltered}
           total={funnelTotal}
+          filteredStatusCounts={funnelFilteredStatusCounts}
+          totalStatusCounts={funnelTotalStatusCounts}
           enableStageFilter
           activeStage={stageParam}
           currentParams={funnelCurrentParams}
