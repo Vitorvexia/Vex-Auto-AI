@@ -23,9 +23,14 @@ const STAGES: { key: FunnelStage; color: string }[] = [
 // suficiente (VB_W) pra caber a coluna de breakdown por etapa à direita
 // das formas. O overlay HTML do número total usa os mesmos números em %
 // (SHAPE_CX/VB_W), então aspect-ratio do wrapper fica travado em VB_W/VB_H.
-const VB_W = 480;
+const VB_W = 640;
 const VB_H = 232;
-const SHAPE_CX = 150;
+// Centro exato do viewBox — o wrapper CSS já centraliza a caixa toda
+// (margin:0 auto), então a forma cai no centro real da página, não só
+// da própria caixa (era o bug: SHAPE_CX bem menor que VB_W/2 deixava a
+// forma visivelmente puxada pra esquerda, com os rótulos "pesando"
+// à direita).
+const SHAPE_CX = VB_W / 2;
 const STAGE_H = 58;
 const MIN_TOP_W = 74;
 const MAX_TOP_W = 220;
@@ -169,6 +174,12 @@ export function LeadsFunnel({
             // no topo — senão a linha sai em diagonal até a linha de
             // breakdown de cada etapa).
             const originX = SHAPE_CX + tw / 2;
+            // Bloco de linhas (1 ou 2) centralizado verticalmente dentro da
+            // altura da própria camada — antes ficava ancorado perto do
+            // topo, descentralizado em relação à forma.
+            const rowSpacing = 18;
+            const blockHeight = (breakdown.length - 1) * rowSpacing;
+            const firstRowY = y0 + STAGE_H / 2 - blockHeight / 2;
 
             return (
               <g key={key}>
@@ -181,14 +192,14 @@ export function LeadsFunnel({
                 </g>
 
                 {breakdown.map((entry, i) => {
-                  const rowY = y0 + 14 + i * 18;
+                  const rowY = firstRowY + i * rowSpacing;
                   return (
                     <g key={entry.status} aria-hidden="true">
-                      <line x1={originX} y1={rowY} x2={300} y2={rowY} stroke={color} strokeWidth={1.2} />
-                      <text x={310} y={rowY + 4} className="leads-funnel-etapa-label" fill="var(--muted)">
+                      <line x1={originX} y1={rowY} x2={460} y2={rowY} stroke={color} strokeWidth={1.2} />
+                      <text x={470} y={rowY + 4} className="leads-funnel-etapa-label" fill="var(--muted)">
                         {LEAD_STATUS_LABELS[entry.status]}
                       </text>
-                      <text x={468} y={rowY + 4} textAnchor="end" className="leads-funnel-etapa-percent" fill={color}>
+                      <text x={628} y={rowY + 4} textAnchor="end" className="leads-funnel-etapa-percent" fill={color}>
                         {entry.percent}%
                       </text>
                     </g>

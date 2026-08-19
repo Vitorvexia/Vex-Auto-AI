@@ -970,8 +970,8 @@ a { color: inherit; text-decoration: none; }
 }
 .leads-funnel-toggle button.active { background: var(--accent); color: #fff; }
 .leads-funnel-svg-wrap {
-  position: relative; width: 100%; max-width: 680px; margin: 0 auto;
-  aspect-ratio: 480 / 232;
+  position: relative; width: 100%; max-width: 900px; margin: 0 auto;
+  aspect-ratio: 640 / 232;
 }
 .leads-funnel-svg { width: 100%; height: 100%; display: block; overflow: visible; }
 .leads-funnel-svg text { font-family: var(--font-exo2), "Exo 2", system-ui, sans-serif; }
