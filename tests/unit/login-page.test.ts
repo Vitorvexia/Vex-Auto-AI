@@ -32,41 +32,43 @@ describe("LoginPage — botão não trava em 'Entrando...' após signInWithPassw
     let resolveSignIn!: (v: { error: null }) => void;
     mockSignIn.mockReturnValue(new Promise((r) => { resolveSignIn = r; }));
 
-    const { container, getByRole } = render(createElement(LoginPage));
+    const { container } = render(createElement(LoginPage));
     const inputs = container.querySelectorAll("input");
+    const submitButton = () => container.querySelector('button[type="submit"]') as HTMLButtonElement;
 
     fireEvent.change(inputs[0], { target: { value: "a@b.com" } });
     fireEvent.change(inputs[1], { target: { value: "secret" } });
-    fireEvent.click(getByRole("button"));
+    fireEvent.click(submitButton());
 
-    expect(getByRole("button").textContent).toBe("Entrando...");
-    expect((getByRole("button") as HTMLButtonElement).disabled).toBe(true);
+    expect(submitButton().textContent).toBe("Entrando...");
+    expect(submitButton().disabled).toBe(true);
 
     await act(async () => {
       resolveSignIn({ error: null });
       await Promise.resolve();
     });
 
-    expect(getByRole("button").textContent).toBe("Entrar");
-    expect((getByRole("button") as HTMLButtonElement).disabled).toBe(false);
+    expect(submitButton().textContent).toBe("Entrar");
+    expect(submitButton().disabled).toBe(false);
     expect(mockPush).toHaveBeenCalledWith("/inicio");
   });
 
   it("erro de credenciais: loading volta a false (comportamento já existente, não regride)", async () => {
     mockSignIn.mockResolvedValue({ error: { message: "invalid" } });
 
-    const { container, getByRole } = render(createElement(LoginPage));
+    const { container } = render(createElement(LoginPage));
     const inputs = container.querySelectorAll("input");
+    const submitButton = () => container.querySelector('button[type="submit"]') as HTMLButtonElement;
 
     fireEvent.change(inputs[0], { target: { value: "a@b.com" } });
     fireEvent.change(inputs[1], { target: { value: "wrong" } });
 
     await act(async () => {
-      fireEvent.click(getByRole("button"));
+      fireEvent.click(submitButton());
       await Promise.resolve();
     });
 
-    expect(getByRole("button").textContent).toBe("Entrar");
-    expect((getByRole("button") as HTMLButtonElement).disabled).toBe(false);
+    expect(submitButton().textContent).toBe("Entrar");
+    expect(submitButton().disabled).toBe(false);
   });
 });
