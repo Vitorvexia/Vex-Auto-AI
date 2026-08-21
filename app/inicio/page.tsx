@@ -8,7 +8,7 @@ import { LeadsFunnel, type FunnelPeriod } from "@/app/components/LeadsFunnel";
 import { calculateFunnelCounts } from "@/lib/lead-funnel";
 import { SetupWidget } from "@/app/components/SetupWidget";
 import { AlertsWidget } from "@/app/components/AlertsWidget";
-import { countStaleLeads } from "@/lib/lead-priority";
+import { countStaleLeads, pickConversationActivity } from "@/lib/lead-priority";
 import { marginPercent } from "@/lib/vehicle-margin";
 import { formatCurrency } from "@/lib/format";
 import type { LeadStatus, Lead } from "@/types/domain";
@@ -139,8 +139,7 @@ async function fetchStaleCount(supabase: SupabaseServerClient) {
 
   const ultimaAtividades = data.map((l) => {
     const convs = Array.isArray(l.conversations) ? l.conversations : l.conversations ? [l.conversations] : [];
-    const openConv = convs.find((c) => c.conversation_status && c.conversation_status !== "ENCERRADA") ?? convs[0];
-    return { ultima_atividade: openConv?.ultima_mensagem_em ?? l.updated_at ?? new Date(0).toISOString() };
+    return { ultima_atividade: pickConversationActivity(convs) ?? l.updated_at ?? new Date(0).toISOString() };
   });
 
   return countStaleLeads(ultimaAtividades, STALE_THRESHOLD_MS);

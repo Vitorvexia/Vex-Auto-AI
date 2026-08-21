@@ -97,6 +97,24 @@ export function countStaleLeads(
   ).length;
 }
 
+// Escolhe qual ultima_mensagem_em usar pro cálculo de staleness quando um
+// lead tem múltiplas conversas (ex: reengajado após reativação). Prioriza
+// conversa aberta (status !== ENCERRADA); entre candidatas empatadas (todas
+// abertas, ou nenhuma aberta), pega a mais recente por ultima_mensagem_em —
+// nunca depende da ordem de retorno da query no banco.
+export function pickConversationActivity(
+  convs: Array<{ conversation_status: string | null; ultima_mensagem_em: string | null }>
+): string | null {
+  if (convs.length === 0) return null;
+  const open = convs.filter((c) => c.conversation_status && c.conversation_status !== "ENCERRADA");
+  const pool = open.length > 0 ? open : convs;
+  return pool.reduce<string | null>((latest, c) => {
+    if (!c.ultima_mensagem_em) return latest;
+    if (!latest || c.ultima_mensagem_em > latest) return c.ultima_mensagem_em;
+    return latest;
+  }, null);
+}
+
 export function sortLeads<
   T extends {
     priority: PriorityTier;
