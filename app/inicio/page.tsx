@@ -65,7 +65,7 @@ function mins(avg: number | null): string {
 async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
   const since = windowStart();
 
-  const [allLeadsRes, convsRes, msgsRes, followRes, reactRes] = await Promise.all([
+  const [allLeadsRes, convsRes, msgsRes, followRes, reactRes, reactConvertedRes] = await Promise.all([
     supabase.from("leads").select("id, lead_status, created_at, valor_final"),
     supabase.from("conversations").select("id, handoff_to, lead_id").limit(500),
     supabase
@@ -81,9 +81,23 @@ async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
       .from("reactivation_logs")
       .select("lead_id, status, logged_at, conversation_id, converted_at")
       .gte("logged_at", since),
+    // Janela por converted_at (não logged_at) — reativação enviada há mais de
+    // 30 dias mas convertida agora deve contar no ROI do período. Query
+    // separada da acima porque "enviadas no período" e "convertidas no
+    // período" são janelas diferentes sobre o mesmo período de referência.
+    supabase
+      .from("reactivation_logs")
+      .select("lead_id, converted_at")
+      .not("converted_at", "is", null)
+      .gte("converted_at", since),
   ]);
 
+  // leads não tem filtro de created_at de propósito: buildFunnelPeriods
+  // precisa da base inteira pros períodos 90d/Todo período do Funil de
+  // Temperatura (ver comentário na função). windowedLeads é só pras métricas
+  // rotuladas "últimos 30 dias" (Total de Leads, Faturamento Gerado etc).
   const leads = allLeadsRes.data ?? [];
+  const windowedLeads = leads.filter((l) => (l.created_at ?? "") >= since);
   const followUpLogs = followRes.data ?? [];
   const reactivationLogs = reactRes.data ?? [];
 
@@ -91,7 +105,7 @@ async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
 
   return {
     metrics: calculateOperationalMetrics({
-      leads,
+      leads: windowedLeads,
       conversations: convsRes.data ?? [],
       messages: msgsRes.data ?? [],
       followUpLogs,
@@ -100,7 +114,7 @@ async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
     leadsToday: countLeadsToday(leads),
     trend: buildDailyTrend(leads, followUpLogs, reactivationLogs, WINDOW_DAYS),
     funnelPeriods,
-    reactivationRevenue: calculateReactivationRevenue(leads, reactivationLogs),
+    reactivationRevenue: calculateReactivationRevenue(leads, reactConvertedRes.data ?? []),
   };
 }
 
