@@ -18,6 +18,11 @@ export function KanbanColumn({ status, count, children }: Props) {
     ? (acceptsDropStatus(drag.payload!.from, status) ? "valid" : "invalid")
     : null;
 
+  // Só a coluna de origem e a de destino do move em voo ficam pending —
+  // não o board inteiro (drag.pendingMove é escopado por transição, ver lib/kanban-drag.tsx)
+  const isColumnPending =
+    drag.pendingMove !== null && (drag.pendingMove.from === status || drag.pendingMove.to === status);
+
   return (
     <div className="kanban-col" data-status={status}>
       <div className="kanban-col-header">
@@ -30,7 +35,7 @@ export function KanbanColumn({ status, count, children }: Props) {
       <div
         className="kanban-col-body"
         data-drag-over={dragOver ?? undefined}
-        data-pending={drag.isPending || undefined}
+        data-pending={isColumnPending || undefined}
       >
         {children}
       </div>
