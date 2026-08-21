@@ -7,7 +7,6 @@ import { LeadCard } from "@/app/components/LeadCard";
 import { LeadImportCard } from "@/app/components/LeadImportCard";
 import { getStoreAssignmentSummary } from "@/lib/seller-metrics";
 import { resolveAssignedToFilter, isStaleLead } from "@/lib/lead-filter";
-import { BarChart } from "@/app/components/BarChart";
 import { DelayedLeadsBadge } from "@/app/components/DelayedLeadsBadge";
 import { KanbanDragProvider } from "@/lib/kanban-drag";
 
@@ -170,16 +169,6 @@ export default async function LeadsPage({
 
   const assignmentSummary = getStoreAssignmentSummary(leadsForMetrics);
 
-  const statusBars = [
-    { label: "Novo", value: byStatus.NOVO.length, color: "var(--status-novo)" },
-    { label: "Engajado", value: byStatus.ENGAJADO.length, color: "var(--status-engajado)" },
-    { label: "Interessado", value: byStatus.INTERESSADO.length, color: "var(--status-interessado)" },
-    { label: "Quente", value: byStatus.QUENTE.length, color: "var(--status-quente)" },
-    { label: "Negociação", value: byStatus.NEGOCIACAO.length, color: "var(--status-negociacao)" },
-    { label: "Fechado", value: byStatus.FECHADO.length, color: "var(--status-fechado)" },
-    { label: "Perdido", value: byStatus.PERDIDO.length, color: "var(--status-perdido)" },
-  ];
-
   const activeVendedor = vendedores.find((v) => v.id === assignedToParam);
   // Preserva o filtro de vendedor ao ligar/desligar "atrasado" na URL.
   const vendedorQuery = rawParam ? `assignedTo=${rawParam}` : "";
@@ -257,15 +246,6 @@ export default async function LeadsPage({
           })}
         </div>
       </KanbanDragProvider>
-
-      <div className="section-card leads-status-chart">
-        <div className="section-card-head">
-          <span className="section-card-title">Leads por Status</span>
-        </div>
-        <div className="section-card-body">
-          <BarChart bars={statusBars} />
-        </div>
-      </div>
 
       <DelayedLeadsBadge count={staleLeads} href={`/leads?${atrasadoHref}`} />
     </main>

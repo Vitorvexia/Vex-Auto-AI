@@ -175,6 +175,9 @@ export function LeadCard({
         <div className="lead-card-footer">
           <span className="lead-card-time">{relativeTime(ultima_atividade)}</span>
           {conversation_id && (
+            // <span>, não <button>: o Link inteiro do card já é o alvo do
+            // clique/navegação — isso é só o reforço visual do CTA, um
+            // <button> aninhado num <a> seria HTML inválido.
             <span className="lead-card-chat">Abrir conversa &rarr;</span>
           )}
         </div>

@@ -368,7 +368,17 @@ a { color: inherit; text-decoration: none; }
 .lead-card-phone { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
 .lead-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--border); }
 .lead-card-time  { font-size: 11px; color: var(--muted); }
-.lead-card-chat  { font-size: 11px; color: var(--accent); font-weight: 600; }
+/* Botão visual (secundário/outline) — mesma família do .lead-create-trigger
+   (accent sólido, topo da página), só que outline e menor pro contexto do
+   card. Continua <span>: o Link do card inteiro já é o alvo do clique. */
+.lead-card-chat {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 9px; border-radius: 6px;
+  background: rgba(0,91,254,.08); border: 1px solid rgba(0,91,254,.3);
+  color: var(--accent); font-size: 11px; font-weight: 700;
+  transition: background-color .15s, border-color .15s;
+}
+.lead-card:hover .lead-card-chat { background: rgba(0,91,254,.16); border-color: var(--accent); }
 
 /* ─── Lead card wrapper + tray (mover status / atribuir vendedor) ───── */
 .lead-card-wrap {
@@ -1006,8 +1016,6 @@ a { color: inherit; text-decoration: none; }
 .vendor-filter-dropdown-list a:hover { background: var(--panel-2); }
 .vendor-filter-dropdown-list a.active { color: var(--accent); background: rgba(0,91,254,.08); }
 .vendor-filter-clear { border-color: rgba(239,68,68,.45) !important; background: rgba(239,68,68,.1) !important; color: #F87171 !important; }
-
-.leads-status-chart { margin-top: 18px; }
 
 /* ─── Funil de Temperatura (leads page) ──────────── */
 .leads-funnel { padding: 14px 16px; }

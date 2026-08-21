@@ -184,11 +184,16 @@ export function LeadStatusMenu({ leadId, status }: Props) {
   );
 }
 
+// Duas setas opostas — mesma leitura visual do "arrow-left-right" (lucide) —
+// mais clara de intenção "trocar/mover etapa" que o chevron duplo anterior,
+// que lia como cadeado/seta única.
 function MoveIcon() {
   return (
-    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M6 4l6 8-6 8" />
-      <path d="M14 4l6 8-6 8" />
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M8 3 4 7l4 4" />
+      <path d="M4 7h16" />
+      <path d="m16 21 4-4-4-4" />
+      <path d="M20 17H4" />
     </svg>
   );
 }
