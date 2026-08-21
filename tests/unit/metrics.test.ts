@@ -18,6 +18,12 @@ describe("calculateOperationalMetrics", () => {
   it("T1: input vazio → todas as métricas zero, sem NaN nem Infinity", () => {
     const m = calculateOperationalMetrics(emptyInput());
     for (const [key, val] of Object.entries(m)) {
+      // avg_first_response_minutes é null (sem dado) com input vazio, não 0 —
+      // ver T10b/T10c: 0 é resposta real, null é ausência de dado
+      if (key === "avg_first_response_minutes") {
+        expect(val, `${key} deve ser null (sem dado)`).toBeNull();
+        continue;
+      }
       expect(Number.isFinite(val), `${key} deve ser finito`).toBe(true);
       expect(val, `${key} deve ser 0`).toBe(0);
     }
@@ -161,6 +167,23 @@ describe("calculateOperationalMetrics", () => {
     ];
     // média = (3 + 7) / 2 = 5.0
     expect(calculateOperationalMetrics(input).avg_first_response_minutes).toBe(5);
+  });
+
+  it("T10b: sem nenhum par entrada+resposta IA → null (sem dado), não 0", () => {
+    const input = emptyInput();
+    expect(calculateOperationalMetrics(input).avg_first_response_minutes).toBeNull();
+  });
+
+  it("T10c: resposta muito rápida arredonda pra 0 e continua sendo 0 (não null) — 0 é dado real, não ausência", () => {
+    const base = new Date("2024-01-01T10:00:00Z");
+    const t = (ms: number) => new Date(base.getTime() + ms).toISOString();
+
+    const input = emptyInput();
+    input.messages = [
+      { conversation_id: "c1", direcao: "entrada", autor: "lead", received_at: t(0) },
+      { conversation_id: "c1", direcao: "saida",   autor: "ia",   received_at: t(2000) }, // 2s
+    ];
+    expect(calculateOperationalMetrics(input).avg_first_response_minutes).toBe(0);
   });
 
   // -------------------------------------------------------------------------
