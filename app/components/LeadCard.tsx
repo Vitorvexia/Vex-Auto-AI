@@ -7,6 +7,7 @@ import { relativeTime, scoreClass } from "@/lib/format";
 import type { LeadStatus } from "@/types/domain";
 import type { PriorityTier } from "@/lib/lead-priority";
 import { LeadAssignmentSelect } from "./LeadAssignmentSelect";
+import { LeadStatusMenu } from "./LeadStatusMenu";
 import { useKanbanDrag } from "@/lib/kanban-drag";
 
 type Props = {
@@ -204,6 +205,11 @@ export function LeadCard({
         onClickCapture={onClickCapture}
       >
         {cardBody}
+        {/* Fora do cardBody de propósito: cardBody também é reusado no ghost
+            do portal (drag), e duplicar um menu ARIA interativo lá dentro
+            criaria dois controles focáveis com o mesmo papel simultâneos no
+            DOM. Fallback acessível ao drag — ver LeadStatusMenu.tsx. */}
+        <LeadStatusMenu leadId={id} status={lead_status} />
       </div>
 
       {isDragging && typeof document !== "undefined" && createPortal(
