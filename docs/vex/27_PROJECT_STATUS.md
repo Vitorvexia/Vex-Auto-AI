@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-08-19
+Last Updated: 2026-08-24
 
 ---
 
@@ -330,6 +330,16 @@ Resolved (2026-08-01)
 # RECENT COMPLETED WORK
 
 Most recent accomplishments (source: git log, most recent first).
+
+🟡 BL-0037 (Fase 1, continuação) — Code review da PR #33 (drag-and-drop + Funil de Temperatura, sessão 2026-08-19) corrigido: 4 findings de correção + 3 ajustes visuais pedidos direto pelo founder no preview da PR (2026-08-21, mesma branch `claude/vex-redesign-visual-fase1-sqkmmf`, **5 commits, commitados e pushados pra `origin`** — branch ainda não mergeada em main).
+
+- **Kanban — try/catch no drag + pending escopado por coluna** (`0e9fbbe`, finding #1/#7): `endDrag()` chamava `moveLeadStatus` dentro de `startTransition` sem tratamento de erro — rejeição do servidor (status mudou entre render e drop, transição concorrente) virava unhandled promise rejection, card sumia sem feedback. Agora captura o erro e mostra toast fixo/dispensável. `pendingMove` (`lib/kanban-drag.tsx`) passa a guardar `from`/`to` da transição específica — antes um único `useTransition` compartilhado travava clique em **todas** as colunas do board enquanto qualquer card estava em voo; agora só a coluna de origem/destino daquele move fica pending.
+- **`/inicio` — resposta média da IA: null ≠ 0** (`87bdb23`, finding #6): card "Resposta Média da IA" mostrava "—" mesmo quando a IA respondia rápido de verdade (ex: ~2s arredondava pra 0.0min, indistinguível de "sem dado"). `calculateOperationalMetrics` retorna `null` só quando não há par entrada+resposta no período; `0` real é preservado.
+- **`/inicio` — janela real de 30 dias + ROI de reativação por `converted_at`** (`5c64e51`, findings #2/#4): `fetchOperationalMetrics` buscava leads sem filtro de `created_at` — cards "Total de Leads"/"Faturamento Gerado" rotulados "últimos 30 dias" mostravam número all-time. `windowedLeads` filtra só pro cálculo de métricas (Funil de Temperatura continua usando a base inteira, precisa de 90d/Todo período). `calculateReactivationRevenue` também estava descasado: janelava `reactivation_logs` por `logged_at` (envio) contra leads sem janela via `converted_at` (conversão) — reativação enviada há 45 dias e convertida há 3 sumia do card "Reativações Convertidas", subestimando o ROI da Mina de Ouro. Query nova filtra por `converted_at >= since`.
+- **`LeadCard` — botão + menu ARIA, fallback acessível ao drag** (`91a9672`, finding #2/a11y): drag por pointer events virou o único jeito de mudar `lead_status` — sem teclado/toque, tela principal do funil ficava inoperável pra quem não usa mouse. `LeadStatusMenu.tsx` ganha botão sempre visível no canto do card + menu `role="menu"`/`"menuitem"` (seta cima/baixo navega, Enter confirma, Esc fecha e devolve foco). `validLeadTargets` (`lib/lead-transitions.ts`, nova função pura testada) aplica a mesma exclusão de `FECHADO` que o guardrail de margem já impõe no drag/servidor. Renderizado como irmão do `Link` do card (não filho — evita aninhar interativo dentro de `<a>`).
+- **3 ajustes visuais pedidos pelo founder no preview** (`02e5c86`): BarChart "Leads por Status" removido de `/leads` (import + `statusBars` + card — já virara redundante desde que o Funil de Temperatura ficou só em `/inicio`; `BarChart.tsx` intocado, segue em uso lá). Ícone do botão "mover status" trocado de chevron duplo (lia como cadeado) pra duas setas opostas — leitura mais clara de "trocar/mover etapa". `.lead-card-chat` ("Abrir conversa →") ganha fundo+borda outline accent (mesma família do `.lead-create-trigger`, versão menor/secundária) — continua `<span>` de propósito, não `<button>`: o `Link` do card inteiro já é o alvo do clique, `<button>` aninhado em `<a>` seria HTML inválido.
+
+Intocado em toda a rodada: `moveLeadStatus`, `canTransitionLeadStatus`/`validLeadTargets` (guardrail de margem), layout das colunas do kanban. 1204 testes unitários verdes, lint/typecheck confirmados limpos nesta sessão de documentação (2026-08-24). **Validação visual no preview da PR feita pelo founder em 2026-08-21** (motivou os 3 ajustes acima); dev server local não ficou de pé nesta sessão de 2026-08-24 (processo derrubado externamente 2x) — revisão desta sessão foi só leitura de diff/testes, sem nova rodada de validação ao vivo no browser.
 
 🟡 BL-0037 (Fase 1, continuação) — `/leads` kanban ganha drag-and-drop custom (troca do nativo HTML5) + `/inicio` ganha Funil de Temperatura (SVG, 4 camadas incluindo Conversão) + `/login` ganha toggle mostrar/ocultar senha (2026-08-19, mesma branch `claude/vex-redesign-visual-fase1-sqkmmf`, **22 commits desta sessão, commitados e pushados pra `origin`** — branch como um todo ainda não mergeada em main / não em produção, PR aberta pra review). PR #32 (rodada anterior, 2026-08-17) foi mergeada no início desta sessão — o trabalho abaixo é tudo posterior a esse merge, na mesma branch.
 
