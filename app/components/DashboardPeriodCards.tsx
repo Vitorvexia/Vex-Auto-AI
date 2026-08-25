@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { DashboardPeriodSelector } from "@/app/components/DashboardPeriodSelector";
-import { resolveRange, periodLabel, countLeadsInRange, type PeriodSelection } from "@/lib/dashboard-period";
+import { resolveRange, periodLabel, countLeadsInRange, countVisitasAgendadasInRange, type PeriodSelection } from "@/lib/dashboard-period";
 import type { Origem } from "@/types/domain";
 
 export type DashboardLead = {
@@ -24,6 +24,7 @@ export function DashboardPeriodCards({
   const range = useMemo(() => resolveRange(selection), [selection]);
   const label = periodLabel(selection);
   const leadsCount = useMemo(() => countLeadsInRange(leads, range), [leads, range]);
+  const visitasCount = useMemo(() => countVisitasAgendadasInRange(leads, range), [leads, range]);
 
   return (
     <div className="section-card">
@@ -39,6 +40,10 @@ export function DashboardPeriodCards({
         <div className="metric-card">
           <div className="metric-label">Leads {label}</div>
           <div className="metric-value">{leadsCount}</div>
+        </div>
+        <div className="metric-card">
+          <div className="metric-label">Visitas agendadas {label}</div>
+          <div className="metric-value">{visitasCount}</div>
         </div>
       </div>
     </div>

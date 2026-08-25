@@ -136,15 +136,27 @@ async function fetchSellerRanking(supabase: SupabaseServerClient) {
     .slice(0, 5);
 }
 
+// migration 022 (agendamento_data/agendamento_horario em leads) documentada
+// como aplicada mas nunca rodou nesta instância Supabase — se a coluna não
+// existir, o select abaixo volta com "data" vazio/nulo; o fallback (Map
+// vazio) faz o card "Visitas agendadas" mostrar 0 em vez de quebrar a
+// página. Rodar a migration em produção é decisão do Vitor, não automática.
+async function fetchAgendamentoMap(supabase: SupabaseServerClient): Promise<Map<string, string | null>> {
+  const { data } = await supabase.from("leads").select("id, agendamento_data");
+  return new Map((data ?? []).map((l) => [l.id, l.agendamento_data as string | null]));
+}
+
 async function fetchDashboardPeriodData(supabase: SupabaseServerClient): Promise<{ leads: DashboardLead[]; sellers: { id: string; nome: string }[] }> {
-  const [leadsRes, sellersRes] = await Promise.all([
+  const [leadsRes, sellersRes, agendamentoMap] = await Promise.all([
     supabase.from("leads").select("id, created_at, origem, assigned_to"),
     supabase.from("users").select("id, nome").eq("role", "vendedor"),
+    fetchAgendamentoMap(supabase),
   ]);
-  return {
-    leads: leadsRes.data ?? [],
-    sellers: sellersRes.data ?? [],
-  };
+  const leads: DashboardLead[] = (leadsRes.data ?? []).map((l) => ({
+    ...l,
+    agendamento_data: agendamentoMap.get(l.id) ?? null,
+  }));
+  return { leads, sellers: sellersRes.data ?? [] };
 }
 
 async function fetchStaleCount(supabase: SupabaseServerClient) {
