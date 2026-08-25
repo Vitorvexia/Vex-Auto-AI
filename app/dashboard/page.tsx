@@ -3,7 +3,6 @@ import { AuthError } from "@/lib/auth";
 import { calculateOperationalMetrics, countLeadsToday, buildDailyTrend, calculateReactivationRevenue, countLeadsByStatus } from "@/lib/metrics";
 import { calculateSellerMetrics } from "@/lib/seller-metrics";
 import { TrendChart } from "@/app/components/TrendChart";
-import { BarChart } from "@/app/components/BarChart";
 import { LeadsFunnel, type FunnelPeriod } from "@/app/components/LeadsFunnel";
 import { calculateFunnelCounts } from "@/lib/lead-funnel";
 import { SetupWidget } from "@/app/components/SetupWidget";
@@ -55,11 +54,6 @@ function buildFunnelPeriods(leads: { lead_status: string; created_at: string | n
 
 function pct(rate: number): string {
   return `${Math.round(rate * 100)}%`;
-}
-
-function mins(avg: number | null): string {
-  if (avg === null) return "—";
-  return avg < 1 ? `${Math.round(avg * 60)}s` : `${avg.toFixed(1)} min`;
 }
 
 async function fetchOperationalMetrics(supabase: SupabaseServerClient) {
@@ -197,11 +191,6 @@ export default async function DashboardPage() {
 
   const convRate = m.total_leads > 0 ? pct(m.closed_leads / m.total_leads) : "—";
 
-  const aiVsHumanBars = [
-    { label: "Atendidos pela IA", value: m.ai_handled_leads, color: "var(--accent)" },
-    { label: "Intervenção Humana", value: m.human_handoff_count, color: "var(--muted)" },
-  ];
-
   const operationalCards: MetricCard[] = [
     { label: "Atendidos pela IA", value: String(m.ai_handled_leads), sub: "sem intervenção humana", tier: "ok" },
     { label: "Intervenções Humanas", value: String(m.human_handoff_count), sub: "handoffs no período" },
@@ -214,7 +203,6 @@ export default async function DashboardPage() {
       tier: reactivationRevenue.converted_leads > 0 ? "ok" : undefined,
     },
     { label: "Perdidos", value: String(m.lost_leads), sub: "estado atual" },
-    { label: "Resposta Média da IA", value: mins(m.avg_first_response_minutes), sub: "1ª resposta após contato", tier: "info" },
     { label: "Taxa Resposta Follow-up", value: pct(m.followup_response_rate), sub: "leads que responderam", tier: m.followup_response_rate > 0.3 ? "ok" : undefined },
     { label: "Taxa Resposta Reativação", value: pct(m.reactivation_response_rate), sub: "leads que responderam", tier: m.reactivation_response_rate > 0.2 ? "ok" : undefined },
   ];
@@ -302,16 +290,6 @@ export default async function DashboardPage() {
 
       <div className="section-card">
         <LeadsFunnel periods={funnelPeriods} defaultLabel={`${WINDOW_DAYS} dias`} />
-      </div>
-
-      <div className="section-card">
-        <div className="section-card-head">
-          <span className="section-card-title">IA vs Humano</span>
-          <span className="kpi-delta">últimos {WINDOW_DAYS} dias</span>
-        </div>
-        <div className="section-card-body">
-          <BarChart bars={aiVsHumanBars} />
-        </div>
       </div>
 
       <div className="section-card">
