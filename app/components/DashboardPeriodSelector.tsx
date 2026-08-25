@@ -66,7 +66,7 @@ export function DashboardPeriodSelector({
         </button>
 
         {pickerOpen && (
-          <div className="dashboard-period-popover" role="dialog" aria-label="Período personalizado">
+          <div className="dashboard-period-popover" aria-label="Período personalizado">
             <label>
               De
               <input type="date" value={draftSince} onChange={(e) => setDraftSince(e.target.value)} />
@@ -75,7 +75,12 @@ export function DashboardPeriodSelector({
               Até
               <input type="date" value={draftUntil} onChange={(e) => setDraftUntil(e.target.value)} />
             </label>
-            <button type="button" className="dashboard-period-popover-apply" onClick={applyCustomRange}>
+            <button
+              type="button"
+              className="dashboard-period-popover-apply"
+              onClick={applyCustomRange}
+              disabled={!draftSince || !draftUntil}
+            >
               Aplicar
             </button>
           </div>

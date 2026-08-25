@@ -1,8 +1,10 @@
 import { describe, it, expect } from "vitest";
 import {
   presetRange,
+  presetRangeForward,
   customRange,
   resolveRange,
+  resolveVisitasRange,
   inRange,
   periodLabel,
   countLeadsInRange,
@@ -29,6 +31,32 @@ describe("presetRange", () => {
 
   it("todo: sem limite inferior", () => {
     expect(presetRange("todo", NOW)).toEqual({ since: null, until: "2026-08-25" });
+  });
+});
+
+describe("presetRangeForward", () => {
+  it("hoje: since === until === hoje", () => {
+    expect(presetRangeForward("hoje", NOW)).toEqual({ since: "2026-08-25", until: "2026-08-25" });
+  });
+
+  it("7d: janela de 7 dias a partir de hoje (pra frente)", () => {
+    expect(presetRangeForward("7d", NOW)).toEqual({ since: "2026-08-25", until: "2026-08-31" });
+  });
+
+  it("todo: hoje em diante, sem teto (sentinela de data distante)", () => {
+    expect(presetRangeForward("todo", NOW)).toEqual({ since: "2026-08-25", until: "9999-12-31" });
+  });
+});
+
+describe("resolveVisitasRange", () => {
+  it("preset delega pra presetRangeForward", () => {
+    const sel: PeriodSelection = { kind: "preset", preset: "hoje" };
+    expect(resolveVisitasRange(sel, NOW)).toEqual({ since: "2026-08-25", until: "2026-08-25" });
+  });
+
+  it("custom delega pra customRange, inalterado pela lógica forward-only", () => {
+    const sel: PeriodSelection = { kind: "custom", since: "2026-08-01", until: "2026-08-10" };
+    expect(resolveVisitasRange(sel, NOW)).toEqual({ since: "2026-08-01", until: "2026-08-10" });
   });
 });
 

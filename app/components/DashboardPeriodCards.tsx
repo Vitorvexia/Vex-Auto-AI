@@ -5,6 +5,7 @@ import { DashboardPeriodSelector } from "@/app/components/DashboardPeriodSelecto
 import { DonutChart } from "@/app/components/DonutChart";
 import {
   resolveRange,
+  resolveVisitasRange,
   periodLabel,
   countLeadsInRange,
   countVisitasAgendadasInRange,
@@ -41,9 +42,10 @@ export function DashboardPeriodCards({
 }) {
   const [selection, setSelection] = useState<PeriodSelection>({ kind: "preset", preset: "hoje" });
   const range = useMemo(() => resolveRange(selection), [selection]);
+  const visitasRange = useMemo(() => resolveVisitasRange(selection), [selection]);
   const label = periodLabel(selection);
   const leadsCount = useMemo(() => countLeadsInRange(leads, range), [leads, range]);
-  const visitasCount = useMemo(() => countVisitasAgendadasInRange(leads, range), [leads, range]);
+  const visitasCount = useMemo(() => countVisitasAgendadasInRange(leads, visitasRange), [leads, visitasRange]);
   const origemBreakdown = useMemo(() => breakdownByOrigem(leads, range), [leads, range]);
   const vendedorBreakdown = useMemo(() => breakdownByVendedor(leads, sellers, range), [leads, sellers, range]);
 
@@ -73,8 +75,10 @@ export function DashboardPeriodCards({
           <span className="donut-card-title">Leads por Origem</span>
           <DonutChart
             segments={origemBreakdown.map((e) => ({
+              id: e.key,
               label: e.label,
               value: e.count,
+              percent: e.percent,
               color: ORIGEM_COLORS[e.key] ?? "#94A3B8",
             }))}
           />
@@ -83,8 +87,10 @@ export function DashboardPeriodCards({
           <span className="donut-card-title">Leads por Vendedor</span>
           <DonutChart
             segments={vendedorBreakdown.map((e, i) => ({
+              id: e.key,
               label: e.label,
               value: e.count,
+              percent: e.percent,
               color: VENDEDOR_PALETTE[i % VENDEDOR_PALETTE.length],
             }))}
           />

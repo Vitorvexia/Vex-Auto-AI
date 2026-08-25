@@ -173,8 +173,9 @@ export function calculateOperationalMetrics(input: MetricsInput): OperationalMet
     }
   }
   // null = sem dado (nenhuma conversa com par entrada+resposta IA no período);
-  // distinto de 0, que é resposta real arredondada pra ~0min — conflar os dois
-  // fazia o card de /dashboard mostrar "—" (sem dado) pra uma IA respondendo rápido
+  // distinto de 0, que é resposta real arredondada pra ~0min — distinção usada
+  // por quem consome avg_first_response_minutes (hoje nenhuma UI renderiza
+  // este campo; card que o exibia foi removido do dashboard)
   const avg_first_response_minutes =
     responseTimes.length > 0
       ? Math.round((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length) * 10) / 10

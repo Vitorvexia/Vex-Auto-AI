@@ -102,7 +102,7 @@ type Props = {
    *  `periods` se não bater com nenhum label. */
   defaultLabel?: string;
   /** Habilita clique-pra-filtrar o kanban abaixo via ?stage=. Default false
-   *  (usado por /inicio, que não tem kanban pra filtrar). */
+   *  (usado por /dashboard, que não tem kanban pra filtrar). */
   enableStageFilter?: boolean;
   /** Camada ativa como filtro no momento (lida da URL pelo caller). */
   activeStage?: FunnelStage | null;

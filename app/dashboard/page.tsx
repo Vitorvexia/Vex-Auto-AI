@@ -142,13 +142,14 @@ async function fetchSellerRanking(supabase: SupabaseServerClient) {
 // vazio) faz o card "Visitas agendadas" mostrar 0 em vez de quebrar a
 // página. Rodar a migration em produção é decisão do Vitor, não automática.
 async function fetchAgendamentoMap(supabase: SupabaseServerClient): Promise<Map<string, string | null>> {
-  const { data } = await supabase.from("leads").select("id, agendamento_data");
+  const { data, error } = await supabase.from("leads").select("id, agendamento_data").order("id");
+  if (error) console.warn("[dashboard] fetchAgendamentoMap falhou (coluna agendamento_data pode não existir ainda — migration 022):", error.message);
   return new Map((data ?? []).map((l) => [l.id, l.agendamento_data as string | null]));
 }
 
 async function fetchDashboardPeriodData(supabase: SupabaseServerClient): Promise<{ leads: DashboardLead[]; sellers: { id: string; nome: string }[] }> {
   const [leadsRes, sellersRes, agendamentoMap] = await Promise.all([
-    supabase.from("leads").select("id, created_at, origem, assigned_to"),
+    supabase.from("leads").select("id, created_at, origem, assigned_to").order("id"),
     supabase.from("users").select("id, nome").eq("role", "vendedor"),
     fetchAgendamentoMap(supabase),
   ]);

@@ -29,6 +29,21 @@ export function presetRange(preset: PeriodPreset, now: Date = new Date()): DateR
   return { since: d.toISOString().slice(0, 10), until: untilKey };
 }
 
+// Janela pra frente (hoje..hoje+N) — usada só por "Visitas agendadas".
+// agendamento_data é uma data de compromisso FUTURO, não um evento passado
+// como created_at; presetRange (pra trás) faria uma visita marcada pra
+// amanhã não aparecer em nenhum preset, nem em "Todo período" (since:null,
+// until:hoje). "todo" aqui vira "hoje em diante, sem teto" via sentinela de
+// data distante — DateRange.until é sempre string, não aceita null.
+export function presetRangeForward(preset: PeriodPreset, now: Date = new Date()): DateRange {
+  const sinceKey = now.toISOString().slice(0, 10);
+  if (preset === "todo") return { since: sinceKey, until: "9999-12-31" };
+  const daysForward = preset === "hoje" ? 0 : preset === "7d" ? 6 : 29;
+  const d = new Date(now);
+  d.setUTCDate(d.getUTCDate() + daysForward);
+  return { since: sinceKey, until: d.toISOString().slice(0, 10) };
+}
+
 // since/until vêm como YYYY-MM-DD de <input type="date">, sem ordem garantida
 // (usuário pode digitar a data final antes da inicial) — normaliza.
 export function customRange(since: string, until: string): DateRange {
@@ -38,6 +53,12 @@ export function customRange(since: string, until: string): DateRange {
 export function resolveRange(selection: PeriodSelection, now: Date = new Date()): DateRange {
   return selection.kind === "preset"
     ? presetRange(selection.preset, now)
+    : customRange(selection.since, selection.until);
+}
+
+export function resolveVisitasRange(selection: PeriodSelection, now: Date = new Date()): DateRange {
+  return selection.kind === "preset"
+    ? presetRangeForward(selection.preset, now)
     : customRange(selection.since, selection.until);
 }
 
