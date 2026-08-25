@@ -9,6 +9,7 @@ import {
   countLeadsInRange,
   countVisitasAgendadasInRange,
   breakdownByOrigem,
+  breakdownByVendedor,
   type PeriodSelection,
 } from "@/lib/dashboard-period";
 import type { Origem } from "@/types/domain";
@@ -20,6 +21,8 @@ const ORIGEM_COLORS: Record<string, string> = {
   manual: "#8B5CF6",
   site: "#06B6D4",
 };
+
+const VENDEDOR_PALETTE = ["#005BFE", "#10B981", "#F59E0B", "#8B5CF6", "#EC4899", "#06B6D4", "#94A3B8"];
 
 export type DashboardLead = {
   id: string;
@@ -42,6 +45,7 @@ export function DashboardPeriodCards({
   const leadsCount = useMemo(() => countLeadsInRange(leads, range), [leads, range]);
   const visitasCount = useMemo(() => countVisitasAgendadasInRange(leads, range), [leads, range]);
   const origemBreakdown = useMemo(() => breakdownByOrigem(leads, range), [leads, range]);
+  const vendedorBreakdown = useMemo(() => breakdownByVendedor(leads, sellers, range), [leads, sellers, range]);
 
   return (
     <div className="section-card">
@@ -72,6 +76,16 @@ export function DashboardPeriodCards({
               label: e.label,
               value: e.count,
               color: ORIGEM_COLORS[e.key] ?? "#94A3B8",
+            }))}
+          />
+        </div>
+        <div className="donut-card">
+          <span className="donut-card-title">Leads por Vendedor</span>
+          <DonutChart
+            segments={vendedorBreakdown.map((e, i) => ({
+              label: e.label,
+              value: e.count,
+              color: VENDEDOR_PALETTE[i % VENDEDOR_PALETTE.length],
             }))}
           />
         </div>
