@@ -263,7 +263,7 @@ DL-0020
 
 Title
 
-Auditoria de `schema_migrations` (020-043) — 2 migrations nunca aplicadas em produção (029, 031), repair PAUSADO até decisão do Vitor
+Auditoria de `schema_migrations` (020-043) + resolução de 2 gaps de produção (029 audit_logs, 031 RENAVE) — incidente encontrado e corrigido na mesma sessão
 
 Category
 
@@ -284,7 +284,15 @@ Auditoria completa executada, só leitura. Resultado: **21 de 23 migrations bate
 
 Achado adicional (fora do escopo de 020-043, mas descoberto durante a auditoria): `stores` tem DUAS constraints de validação de cor primária — `stores_cor_primaria_hex_check` (a da migration 039, regex `^#[0-9A-Fa-f]{6}$`) e `stores_cor_primaria_format` (nome e regex diferentes, `^#[0-9a-fA-F]{6}$`, funcionalmente equivalente mas não rastreada em NENHUM arquivo de migration do repo). Provável artefato de teste manual no SQL Editor que nunca foi limpo — redundante, não conflitante (mesma regra, duas vezes).
 
-Por instrução explícita do Vitor: **NÃO fazer repair da tabela de controle enquanto houver migration divergente** (029/031 contam como divergência — schema não bate com o arquivo, mesmo que a causa seja "nunca rodou" em vez de "rodou diferente"). `supabase migration repair` marcando 020-043 como applied fica pausado até decisão sobre como tratar 029 e 031 especificamente (aplicar agora / descartar a feature / adiar).
+Por instrução explícita do Vitor: **NÃO fazer repair da tabela de controle enquanto houver migration divergente** (029/031 contam como divergência — schema não bate com o arquivo, mesmo que a causa seja "nunca rodou" em vez de "rodou diferente"). `supabase migration repair` marcando 020-043 como applied ficou pausado até decisão sobre como tratar 029 e 031 especificamente.
+
+**Outcome (mesmo dia, após aprovação do Vitor) — incidente de produção real, não só limpeza de schema:**
+
+- **029 aplicada.** Antes da aplicação, confirmado em código (`lib/audit.ts:31-49`, `logAudit`) que a trilha de auditoria falhava 100% silenciosa: `try/catch` engole qualquer erro de insert e manda pro Sentry (`tags: { pipeline_stage: "audit_log" }`), nunca lança — toda ação sensível (reatribuição de lead, handoff, fechamento, criação de usuário, avanço de RENAVE) estava sem registro de auditoria, sem qualquer sinal visível pro usuário ou operador, só possivelmente visível no Sentry. `CREATE TABLE audit_logs` rodado via `supabase db query --linked --file`, validado estruturalmente (colunas/tipos/índices/RLS idênticos ao arquivo) e funcionalmente (insert de teste com o mesmo shape exato de `logAudit`, dentro de `BEGIN`/`ROLLBACK` — sucesso confirmado, zero linha deixada em produção).
+- **031 aplicada.** Antes da aplicação, confirmado em código (`app/renave/page.tsx:32-38`) que a tela `/renave` estava **realmente quebrada em produção**: o SELECT falhava por coluna inexistente, a página capturava o erro sem crashar mas renderizava um banner vermelho com a mensagem crua do Postgres pro usuário final ("Erro ao carregar pendências de RENAVE: column vehicles.renave_stage does not exist"), e a tabela de pendências nunca aparecia — `advanceRenaveStage` (`lib/renave-actions.ts`) nunca ficava alcançável pela UI (zero linha renderizada com botão de ação). 4 colunas + CHECK constraint + FK + índice parcial rodados via `db query --file`, validados estruturalmente e funcionalmente (SELECT idêntico ao da página + UPDATE idêntico ao de `advanceRenaveStage`, mesmo padrão `BEGIN`/`ROLLBACK`, sucesso confirmado sem persistir nada).
+- **Constraint duplicada removida.** `stores_cor_primaria_format` (não rastreada em nenhum arquivo de migration, regex funcionalmente idêntica à `stores_cor_primaria_hex_check` da migration 039 — confirmado antes de remover) dropada via `ALTER TABLE ... DROP CONSTRAINT`. Só a constraint oficial (039) permanece.
+- **Root cause do gap de tracking, descoberto durante a auditoria**: `supabase_migrations.schema_migrations` já tinha um registro da migration 020 — mas sob `version = '20260615193022'` (timestamp, `created_by = vexautoai@gmail.com`, `name = '020_lead_sale_fields'`, `statements` idêntico ao arquivo), não sob `version = '020'` como o CLI local espera. Ou seja: aplicar via SQL Editor do Supabase Studio grava no histórico, só que com um identificador de versão diferente do que o CLI usa pra arquivos numerados simples — os dois nunca batem, por isso o CLI via `migration list` sempre viu 020+ como "nunca aplicada" mesmo quando estava. Esse registro antigo (`20260615193022`) continua no histórico, agora duplicado com o `020` que o repair de hoje registrou — inofensivo (nenhum dos dois nunca vai re-rodar DDL, `migration list`/`up` só checam presença), não removido, só documentado aqui pra não confundir uma auditoria futura.
+- **`supabase migration repair --status applied --linked 020 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043` executado.** `supabase migration list` confirmado: `001` a `043` todos com `local == remote`, sem gap algum (único item residual é o `20260615193022` explicado acima, que não tem arquivo local correspondente — histórico, não um problema ativo).
 
 Reasoning
 
@@ -296,15 +304,15 @@ Rodar `supabase migration repair` pra todas as 24 de uma vez, assumindo que "doc
 
 Expected Impact
 
-Nenhuma mudança de schema até aqui (além da 022, já aplicada e fora do escopo desta auditoria). Trabalho futuro que dependa de `audit_logs` (trilha de auditoria) ou das colunas RENAVE em `vehicles` vai falhar em produção até 029/031 serem de fato aplicadas — isso não é novo, só ficou visível agora.
+Resolvido: `/renave` volta a funcionar (colunas existem, tela deve parar de mostrar o banner de erro), trilha de auditoria (`audit_logs`) volta a gravar a partir de agora (ações anteriores à aplicação nunca tiveram registro — não é retroativo, não dá pra reconstruir). `schema_migrations` agora reflete o schema real sem gap.
 
 Potential Risks
 
-Enquanto 029/031 continuarem pendentes, qualquer código que assuma essas colunas/tabela existem (se houver) quebra em produção sem aviso — mesmo padrão de risco que motivou o comportamento defensivo já implementado pra 022 (BL-0037, `fetchAgendamentoMap`). Baixo risco de dado (nenhuma migration pendente teria causado perda — são todas aditivas), risco é de funcionalidade ausente/quebrada, não de integridade.
+Baixo — todas as mudanças foram aditivas (`ADD COLUMN`/`CREATE TABLE`/`CREATE INDEX`), sem perda de dado possível. Validação funcional rodou dentro de `BEGIN`/`ROLLBACK`, sem persistir nenhuma linha de teste em produção. Único residual: o registro órfão `20260615193022` no histórico de migrations (ver Outcome acima) — puramente informativo, não bloqueia nada.
 
 Owner
 
-Engineering (auditoria) / Founder (decisão sobre 029/031 e sobre a constraint duplicada em `stores`)
+Engineering (auditoria + aplicação) / Founder (aprovação de cada passo)
 
 Related ADR
 
@@ -320,11 +328,11 @@ Related Runbook
 
 Review Date
 
-Após decisão do Vitor sobre 029/031
+N/A — resolvido
 
 Status
 
-Active — repair pausado, aguardando decisão
+Resolved — 029/031 aplicadas e validadas, constraint duplicada removida, repair concluído, `schema_migrations` sem gap
 
 ---
 
