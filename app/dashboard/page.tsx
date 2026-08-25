@@ -7,6 +7,7 @@ import { LeadsFunnel, type FunnelPeriod } from "@/app/components/LeadsFunnel";
 import { calculateFunnelCounts } from "@/lib/lead-funnel";
 import { SetupWidget } from "@/app/components/SetupWidget";
 import { AlertsWidget } from "@/app/components/AlertsWidget";
+import { DashboardPeriodCards, type DashboardLead } from "@/app/components/DashboardPeriodCards";
 import { countStaleLeads, pickConversationActivity } from "@/lib/lead-priority";
 import { marginPercent } from "@/lib/vehicle-margin";
 import { formatCurrency } from "@/lib/format";
@@ -135,6 +136,17 @@ async function fetchSellerRanking(supabase: SupabaseServerClient) {
     .slice(0, 5);
 }
 
+async function fetchDashboardPeriodData(supabase: SupabaseServerClient): Promise<{ leads: DashboardLead[]; sellers: { id: string; nome: string }[] }> {
+  const [leadsRes, sellersRes] = await Promise.all([
+    supabase.from("leads").select("id, created_at, origem, assigned_to"),
+    supabase.from("users").select("id, nome").eq("role", "vendedor"),
+  ]);
+  return {
+    leads: leadsRes.data ?? [],
+    sellers: sellersRes.data ?? [],
+  };
+}
+
 async function fetchStaleCount(supabase: SupabaseServerClient) {
   const { data, error } = await supabase
     .from("leads")
@@ -182,11 +194,13 @@ export default async function DashboardPage() {
     staleCount,
     lowMarginCount,
     sellerRanking,
+    dashboardPeriodData,
   ] = await Promise.all([
     fetchOperationalMetrics(supabase),
     fetchStaleCount(supabase),
     fetchLowMarginVehicleCount(supabase),
     fetchSellerRanking(supabase),
+    fetchDashboardPeriodData(supabase),
   ]);
 
   const convRate = m.total_leads > 0 ? pct(m.closed_leads / m.total_leads) : "—";
@@ -287,6 +301,8 @@ export default async function DashboardPage() {
           <TrendChart data={trend} />
         </div>
       </div>
+
+      <DashboardPeriodCards leads={dashboardPeriodData.leads} sellers={dashboardPeriodData.sellers} />
 
       <div className="section-card">
         <LeadsFunnel periods={funnelPeriods} defaultLabel={`${WINDOW_DAYS} dias`} />
