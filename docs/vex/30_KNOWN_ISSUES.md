@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-07-21
+Last Updated: 2026-08-25
 
 ---
 
@@ -963,6 +963,94 @@ None
 Notes
 
 Esta limpeza é paliativo, não solução. Ausência de Supabase de staging pra testes de integração é dívida estrutural conhecida — cada novo teste de integração que grava em produção repete o mesmo risco até essa dívida ser paga.
+
+---
+
+Issue ID
+
+KI-0009
+
+Title
+
+`schema_migrations` desatualizada — migrations 020-043 nunca registradas no CLI, 2 delas (029 audit_logs, 031 RENAVE) nunca de fato aplicadas em produção apesar de documentadas como "fechadas"
+
+Category
+
+Database
+
+Severity
+
+High
+
+Status
+
+Resolved (2026-08-25) — ver `29_DECISIONS_LOG.md` DL-0020
+
+Environment
+
+Produção (Supabase, projeto `nrwnlhnmsmlyaueylsci`, "VEX AUTO AI").
+
+Date Discovered
+
+2026-08-25, ao aplicar a migration 022 manualmente via `supabase db query --linked` (BL-0037, card "Visitas agendadas") — `supabase migration list` revelou que `supabase_migrations.schema_migrations` só reconhecia migrations até a 019.
+
+Reported By
+
+Achado pelo Claude durante a sessão de redesign do dashboard, ao verificar o estado da migration 022; investigação completa pedida pelo Vitor em seguida.
+
+Owner
+
+Engineering
+
+Description
+
+Migrations 020-043 (24 arquivos) existiam no repo, mas nenhuma tinha registro na tabela de controle do Supabase CLI. Causa: pelo menos parte delas foi aplicada historicamente colando o SQL direto no SQL Editor do Supabase Studio em vez de via CLI — isso grava um registro em `schema_migrations`, só que sob uma `version` timestamp (ex: `20260615193022` pra migration 020, `created_by: vexautoai@gmail.com`), não sob o número simples (`020`) que o CLI local usa — os dois nunca batiam, então `migration list` sempre via 020+ como "nunca aplicada", mesmo quando o schema real já tinha a mudança.
+
+Symptoms
+
+`supabase migration list --linked` mostrava `local: 020..043` / `remote: ""` pra todas — qualquer `supabase migration up`/`db push` às cegas nesse estado tentaria reaplicar 24 migrations do zero e quebraria em "column/constraint already exists" pras que já estavam aplicadas.
+
+Root Cause
+
+Auditoria read-only completa (comparando cada arquivo 020-043 contra o schema real via `information_schema`/`pg_constraint`/`pg_indexes`/`pg_policy`/`pg_views`/`pg_proc`/`storage.buckets`/`pg_publication_tables`/`pg_extension`) encontrou:
+
+1. **21 de 23 migrations batiam 100%** com produção (só nunca tinham sido *registradas* — o schema já estava certo).
+2. **2 migrations NUNCA tinham sido aplicadas de verdade**, apesar de `27_PROJECT_STATUS.md` as descrever como "fechadas": `029` (tabela `audit_logs` não existia) e `031` (colunas RENAVE em `vehicles` não existiam).
+3. **Achado extra**: `stores` tinha 2 constraints de validação de cor primária — `stores_cor_primaria_hex_check` (migration 039, fonte de verdade) e `stores_cor_primaria_format` (mesma regra, não rastreada em nenhum arquivo — artefato de teste manual esquecido no SQL Editor).
+
+Impact
+
+- **`audit_logs` ausente**: toda chamada a `logAudit()` (`lib/audit.ts`) falhava no insert — capturado por `try/catch`, nunca lançava, erro só ia pro Sentry (`tags: pipeline_stage=audit_log`). **Toda trilha de auditoria esteve 100% silenciosa desde 2026-07-30** (~4 semanas) — nenhuma ação sensível (reatribuição de lead, handoff, fechamento, criação de usuário, avanço de RENAVE) ficou registrada.
+- **RENAVE ausente**: `/renave` (`app/renave/page.tsx`) fazia SELECT incluindo `renave_stage`/`renave_nfe_key`/`renave_stage_updated_at` — coluna inexistente, PostgREST retornava erro, página renderizava banner vermelho com a mensagem crua do Postgres pro usuário final em vez da tabela de pendências. **Tela efetivamente inutilizável em produção desde 2026-08-01** (~3 semanas), sem alarme automático porque o erro era só visual, não um crash monitorado.
+- Nenhum risco de integridade/perda de dado em nenhum dos dois casos — ausência de escrita, não escrita incorreta.
+
+Workaround
+
+Nenhum aplicado durante o período — os dois problemas ficaram sem mitigação até serem encontrados.
+
+Permanent Fix
+
+Migrations 029 e 031 aplicadas via `supabase db query --linked --file <arquivo>` (SQL exato do repo, sem edição). Validadas estrutural (colunas/tipos/constraints/índices idênticos ao arquivo) e funcionalmente (`BEGIN`/insert ou update mimetizando exatamente `logAudit`/`advanceRenaveStage`/o SELECT de `/renave`/`ROLLBACK`, zero dado de teste persistido em produção). Constraint duplicada `stores_cor_primaria_format` removida. `supabase migration repair --status applied --linked 020 022 023 ... 043` rodado — `schema_migrations` sincronizada, `migration list` confirma `001`-`043` todos com `local == remote`, sem gap.
+
+Validation Steps
+
+`npx supabase migration list --linked` deve mostrar todas as migrations locais com `remote` preenchido (mesmo valor), sem `remote: ""`. Pra qualquer migration nova daqui pra frente: aplicar via `supabase migration up`/`db push` sempre que possível; quando não for viável no ambiente, usar `supabase db query --linked --file <arquivo>` (mesmo SQL, sem colar solto no SQL Editor) e rodar `supabase migration repair` logo em seguida pra manter a tabela de controle sincronizada — nunca deixar uma migration aplicada sem registro.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+Nenhum incidente formal aberto — tratado como achado de auditoria de rotina, corrigido na mesma sessão em que foi encontrado.
+
+Notes
+
+`29_DECISIONS_LOG.md` (`DL-0019`, `DL-0020`) tem o relato completo passo a passo, incluindo os comandos exatos rodados e o resultado de cada validação. `27_PROJECT_STATUS.md` teve 2 entradas históricas corrigidas (as que diziam "029/031 fechado" sem qualificar que era só código, não deploy real) — ver notas de correção datadas 2026-08-25 nessas entradas.
 
 ---
 

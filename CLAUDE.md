@@ -382,7 +382,7 @@ IA coleta dados de financiamento e troca de moto por texto (nunca calcula taxas 
 - `financiamento` — coletado single-shot (nome completo, CPF, renda aproximada, entrada disposta)
 - `troca_draft` — coleta incremental (campo por vez); `troca` — populado só quando os 5 campos obrigatórios (`modelo`, `ano`, `km`, `servico_recente`, `agendamento_horario`) estão completos (`lib/collection.ts`, `trocaComplete`)
 
-**Migration 022 (`supabase/migrations/022_troca_agendamento.sql`):** `leads.agendamento_data` (date, nullable) + `leads.agendamento_horario` (text, nullable) + índice parcial `leads_store_agendamento_idx` por `store_id, agendamento_data`. Únicos dados deste fluxo que viram coluna própria — são os únicos filtrados/indexados (consulta da página `/agenda` por dia); financiamento e troca completos ficam em `contexto` jsonb (só exibidos, nunca filtrados).
+**Migration 022 (`supabase/migrations/022_troca_agendamento.sql`):** `leads.agendamento_data` (date, nullable) + `leads.agendamento_horario` (text, nullable) + índice parcial `leads_store_agendamento_idx` por `store_id, agendamento_data`. Únicos dados deste fluxo que viram coluna própria — são os únicos filtrados/indexados (consulta da página `/agenda` por dia); financiamento e troca completos ficam em `contexto` jsonb (só exibidos, nunca filtrados). ✔ **Confirmada em produção em 2026-08-25** (estava documentada como aplicada desde muito antes, mas nunca tinha rodado de fato nesta instância Supabase — achado e corrigido na sessão do BL-0037/dashboard, ver `docs/vex/29_DECISIONS_LOG.md` DL-0020).
 
 **Guardrail (`lib/guardrails.ts`):** `GuardrailResult.collection: { ask, collect, missingTrocaFields } | null` — computado sempre que `mode !== "human_handoff"` (sinal ortogonal, não interfere nos modos existentes). `ask` = sinais novos detectados na mensagem atual ainda não pendentes nem já coletados; `collect` = tópicos já em `pending_topics`. `missingTrocaFields` lista os campos que faltam a partir do `troca_draft`, injetados no prompt pra IA saber exatamente o que perguntar em seguida.
 
@@ -521,7 +521,7 @@ npm install   # prepare script roda `husky` automaticamente
 
 ## Estado Atual do Sistema (Produção)
 
-> Última atualização: 2026-06-12 (PR #26)
+> Última atualização: 2026-06-12 (PR #26) — ⚠️ **esta seção ficou parada em PR #26 enquanto semanas de trabalho seguiram documentadas em `docs/vex/27_PROJECT_STATUS.md`** (fonte real de estado atual desde então — RBAC, RENAVE, auditoria, onboarding wizard, landing page, redesign visual, entre outros). Só a linha de migrations abaixo foi corrigida em 2026-08-25 (achado real de auditoria, não cosmético); o resto desta seção segue como estava em junho e não deve ser tratado como estado atual sem cruzar com `27_PROJECT_STATUS.md`.
 
 ### Infraestrutura
 
@@ -529,7 +529,7 @@ npm install   # prepare script roda `husky` automaticamente
 - Domínio configurado e operacional
 - Variáveis de ambiente configuradas: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL`, `WHATSAPP_ACCESS_TOKEN`, `WHATSAPP_APP_SECRET`, `WHATSAPP_VERIFY_TOKEN`, `WHATSAPP_PHONE_NUMBER_ID`, `INTERNAL_API_KEY`, `ADMIN_EMAILS`
 - ~~`DEFAULT_STORE_ID`~~ removido — substituído por `getServerStoreId()` (multi-tenant B1)
-- Banco Supabase com migrations 001–020 aplicadas em produção. ✔ Migration 020 (`leads.vehicle_id` + `leads.valor_final`) confirmada em produção (verificado 2026-07-21 via query direta — colunas presentes)
+- **Banco Supabase com migrations 001–043 aplicadas em produção** (atualizado 2026-08-25, `docs/vex/29_DECISIONS_LOG.md` DL-0020) — auditoria de rotina encontrou que `schema_migrations` só reconhecia até a 019 (migrations 020+ aplicadas historicamente via SQL Editor do Supabase Studio, sem passar pelo CLI). 21 de 23 já batiam com o schema real; **029 (`audit_logs`) e 031 (RENAVE) nunca tinham sido de fato aplicadas** apesar de documentadas como fechadas — corrigido no mesmo dia, `supabase migration repair` sincronizou a tabela de controle. Ver `docs/vex/30_KNOWN_ISSUES.md` KI-0009 pro relato completo.
 - ✔ `CRON_SECRET` configurado na Vercel (produção + preview, verificado 2026-07-21)
 
 ### WhatsApp
