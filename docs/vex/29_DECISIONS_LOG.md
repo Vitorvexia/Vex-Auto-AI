@@ -259,6 +259,81 @@ Date
 
 Decision ID
 
+DL-0020
+
+Title
+
+Auditoria de `schema_migrations` (020-043) — 2 migrations nunca aplicadas em produção (029, 031), repair PAUSADO até decisão do Vitor
+
+Category
+
+Engineering / Infra
+
+Context
+
+Ao aplicar a migration 022 (agendamento_data/agendamento_horario) manualmente em produção via `supabase db query --linked` (mesmo SQL do arquivo, direto — ver contexto de BL-0037), `supabase migration list` revelou que a tabela de controle do CLI (`supabase_migrations.schema_migrations`) só reconhece migrations até a 019. As migrations 020-043 (24 arquivos) nunca foram registradas nela, mesmo que boa parte já estivesse de fato aplicada no schema real — indício de que foram rodadas manualmente via SQL Editor do Supabase Studio (migration 026 já documentava isso explicitamente no próprio arquivo, para essa migration específica). Rodar `supabase migration up`/`db push` às cegas nesse estado tentaria reaplicar as 24 do zero e quebraria em "column/constraint already exists".
+
+Vitor pediu auditoria completa (Passo 1) antes de qualquer repair (Passo 2): comparar cada arquivo 020-043 contra o schema real de produção via consultas read-only (information_schema, pg_constraint, pg_indexes, pg_policy, pg_views, pg_proc, storage.buckets, pg_publication_tables, pg_extension), sem executar nenhum DDL.
+
+Decision
+
+Auditoria completa executada, só leitura. Resultado: **21 de 23 migrations batem 100%** com o schema real (colunas, tipos, nullability, defaults, constraints, índices, funções — comparadas byte-a-byte onde aplicável, ex: `assign_lead_to_least_loaded_vendedor`/`webhook_ingest_message`/`claim_conversation_pipeline_lock` idênticas ao arquivo). **2 migrations NUNCA foram aplicadas**, nem manualmente nem via CLI:
+
+- **029 (audit_logs)** — tabela `public.audit_logs` não existe em produção. Nenhuma trilha de auditoria está sendo gravada hoje, apesar do código/documentação tratarem isso como implementado.
+- **031 (RENAVE status)** — colunas `vehicles.renave_stage`/`renave_nfe_key`/`renave_stage_updated_by`/`renave_stage_updated_at` não existem em produção. Qualquer feature de controle de RENAVE que dependa dessas colunas falha silenciosamente ou quebra em produção.
+
+Achado adicional (fora do escopo de 020-043, mas descoberto durante a auditoria): `stores` tem DUAS constraints de validação de cor primária — `stores_cor_primaria_hex_check` (a da migration 039, regex `^#[0-9A-Fa-f]{6}$`) e `stores_cor_primaria_format` (nome e regex diferentes, `^#[0-9a-fA-F]{6}$`, funcionalmente equivalente mas não rastreada em NENHUM arquivo de migration do repo). Provável artefato de teste manual no SQL Editor que nunca foi limpo — redundante, não conflitante (mesma regra, duas vezes).
+
+Por instrução explícita do Vitor: **NÃO fazer repair da tabela de controle enquanto houver migration divergente** (029/031 contam como divergência — schema não bate com o arquivo, mesmo que a causa seja "nunca rodou" em vez de "rodou diferente"). `supabase migration repair` marcando 020-043 como applied fica pausado até decisão sobre como tratar 029 e 031 especificamente (aplicar agora / descartar a feature / adiar).
+
+Reasoning
+
+Reconciliar a tabela de controle antes de garantir que o schema real bate 100% com os arquivos locais marcaria como "applied" duas migrations que na verdade nunca rodaram — a tabela de controle mentiria sobre o estado real do banco, o oposto do que ela existe pra garantir. Auditoria evidence-based (query direta) em vez de confiar em `CLAUDE.md`/docs (que diziam migration 020 confirmada mas nada sobre 029/031 especificamente).
+
+Alternatives Considered
+
+Rodar `supabase migration repair` pra todas as 24 de uma vez, assumindo que "documentado como aplicado" bastava como evidência — descartado porque essa mesma suposição (aplicada a só migration 022) já tinha se provado falsa horas antes nesta mesma sessão.
+
+Expected Impact
+
+Nenhuma mudança de schema até aqui (além da 022, já aplicada e fora do escopo desta auditoria). Trabalho futuro que dependa de `audit_logs` (trilha de auditoria) ou das colunas RENAVE em `vehicles` vai falhar em produção até 029/031 serem de fato aplicadas — isso não é novo, só ficou visível agora.
+
+Potential Risks
+
+Enquanto 029/031 continuarem pendentes, qualquer código que assuma essas colunas/tabela existem (se houver) quebra em produção sem aviso — mesmo padrão de risco que motivou o comportamento defensivo já implementado pra 022 (BL-0037, `fetchAgendamentoMap`). Baixo risco de dado (nenhuma migration pendente teria causado perda — são todas aditivas), risco é de funcionalidade ausente/quebrada, não de integridade.
+
+Owner
+
+Engineering (auditoria) / Founder (decisão sobre 029/031 e sobre a constraint duplicada em `stores`)
+
+Related ADR
+
+None
+
+Related Issue
+
+Continuação de BL-0037 (migration 022 aplicada na mesma sessão)
+
+Related Runbook
+
+**Reforço de processo para sessões futuras**: aplicar migrations sempre via `supabase migration up`/`db push` (ou, quando isso não for viável no ambiente, via `supabase db query --linked --file <arquivo>` rodando o SQL exato do arquivo) — nunca colar SQL solto no SQL Editor do Supabase Studio sem depois rodar `supabase migration repair` pra manter a tabela de controle sincronizada. O gap desta auditoria (24 migrations invisíveis pro CLI) existe exatamente porque isso não foi seguido no passado.
+
+Review Date
+
+Após decisão do Vitor sobre 029/031
+
+Status
+
+Active — repair pausado, aguardando decisão
+
+---
+
+Date
+
+2026-08-25
+
+Decision ID
+
 DL-0019
 
 Title
