@@ -255,6 +255,72 @@ Active
 
 Date
 
+2026-08-25
+
+Decision ID
+
+DL-0019
+
+Title
+
+Rota `/inicio` renomeada pra `/dashboard`
+
+Category
+
+Engineering
+
+Context
+
+`/inicio` era o nome da rota do dashboard operacional desde a Fase 1 — nome herdado da primeira versão do produto, não reflete mais o que a página é (painel operacional central, não uma "página inicial" genérica). BL-0037 (redesign visual, continuação) pediu o rename direto do founder, junto com a remoção de 2 cards redundantes e a adição de um seletor de período global com 4 cards novos.
+
+Decision
+
+`app/inicio/` virou `app/dashboard/`. Redirect permanente `/inicio` → `/dashboard` adicionado em `next.config.mjs` (mesmo padrão já usado pelo redirect `/analytics` → dashboard, que teve o destino atualizado junto pra não encadear um redirect no outro). Todo link/redirect hardcoded pra `/inicio` no código (sidebar, pós-login, callback de OAuth, onboarding, alerta de estoque, middleware) atualizado pra `/dashboard`.
+
+Reasoning
+
+Bookmark e link salvo de quem já usa o sistema não pode virar 404 — o redirect permanente cobre isso sem exigir nenhuma ação do usuário. Atualizar os links internos (em vez de deixar todos dependerem do redirect) evita um hop de rede extra em todo o navegação principal do app.
+
+Alternatives Considered
+
+Manter `/inicio` como rota real e só mudar o label da sidebar pra "Dashboard" — descartado porque o pedido explícito era renomear a rota de verdade (BL-0037), não só o texto exibido; deixaria a URL e o label dessincronizados.
+
+Expected Impact
+
+Nenhuma mudança de comportamento pro usuário final (mesmo conteúdo, nova URL) além de quem tinha `/inicio` salvo como favorito — esse caso é coberto pelo redirect permanente, sem 404.
+
+Potential Risks
+
+Baixo — mudança de rota + redirect é um padrão já usado no projeto (`/analytics` → dashboard já funcionava assim). Risco residual: algum serviço externo (ex: link em campanha de WhatsApp) apontando pra `/inicio` continua funcionando via redirect, só com um hop a mais.
+
+Owner
+
+Engineering (implementação) / Founder (pedido)
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0037 (Fase 1, continuação)
+
+Related Runbook
+
+None
+
+Review Date
+
+N/A
+
+Status
+
+Active
+
+---
+
+Date
+
 2026-08-19
 
 Decision ID

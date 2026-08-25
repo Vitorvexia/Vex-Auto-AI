@@ -134,7 +134,7 @@ function IconPanelToggle() {
 }
 
 const NAV_ITEMS = [
-  { href: "/inicio", label: "Início", icon: IconHome, match: (p: string) => p === "/inicio" || p === "/" },
+  { href: "/dashboard", label: "Dashboard", icon: IconHome, match: (p: string) => p === "/dashboard" || p === "/" },
   { href: "/leads", label: "Leads", icon: IconFunnel, match: (p: string) => p.startsWith("/leads") },
   { href: "/conversations", label: "WhatsApp", icon: IconChat, match: (p: string) => p.startsWith("/conversations") },
   { href: "/estoque", label: "Estoque", icon: IconBox, match: (p: string) => p.startsWith("/estoque") },

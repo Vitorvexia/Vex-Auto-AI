@@ -65,10 +65,10 @@ beforeEach(() => {
 });
 
 describe("OnboardingPage — resolução consolidada de role/store_id + paralelização", () => {
-  it("super_admin: redireciona /inicio SEM consultar public.users (mesmo atalho por e-mail de antes)", async () => {
+  it("super_admin: redireciona /dashboard SEM consultar public.users (mesmo atalho por e-mail de antes)", async () => {
     mockGetUser.mockResolvedValue({ data: { user: { id: "u1", email: "vex@vexauto.com.br" } } });
 
-    await expect(OnboardingPage()).rejects.toThrow("REDIRECT:/inicio");
+    await expect(OnboardingPage()).rejects.toThrow("REDIRECT:/dashboard");
 
     expect(mockFrom).not.toHaveBeenCalled();
   });
@@ -103,12 +103,12 @@ describe("OnboardingPage — resolução consolidada de role/store_id + paraleli
     expect(combined.length).toBe(1);
   });
 
-  it("vendedor: redireciona /inicio (comportamento preservado)", async () => {
+  it("vendedor: redireciona /dashboard (comportamento preservado)", async () => {
     mockFrom.mockImplementation(() =>
       chainResolving({ data: { role: "vendedor", store_id: "store-1" }, error: null })
     );
 
-    await expect(OnboardingPage()).rejects.toThrow("REDIRECT:/inicio");
+    await expect(OnboardingPage()).rejects.toThrow("REDIRECT:/dashboard");
   });
 
   it("as 3 queries independentes (stores, vendedorCount, vehicleCount) rodam em paralelo, não em série", async () => {

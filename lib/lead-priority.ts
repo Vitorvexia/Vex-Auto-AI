@@ -86,7 +86,7 @@ export function calculateLeadPriority(input: PriorityInput): PriorityResult {
 
 // Generaliza o cálculo inline de app/leads/page.tsx (staleLeads) — threshold
 // configurável em ms pra caber tanto o chip de "/leads" (2h) quanto o alerta
-// de "/inicio" (24h) sem duplicar a comparação.
+// de "/dashboard" (24h) sem duplicar a comparação.
 export function countStaleLeads(
   leads: Array<{ ultima_atividade: string }>,
   thresholdMs: number,

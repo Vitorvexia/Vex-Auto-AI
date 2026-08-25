@@ -16,7 +16,7 @@ import type { LeadStatus, Lead } from "@/types/domain";
 type SupabaseServerClient = Awaited<ReturnType<typeof createSupabaseServerClient>>;
 
 const WINDOW_DAYS = 30;
-const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24h — alerta de /inicio (distinto do chip de 2h em /leads)
+const STALE_THRESHOLD_MS = 24 * 60 * 60 * 1000; // 24h — alerta de /dashboard (distinto do chip de 2h em /leads)
 const LOW_MARGIN_THRESHOLD = 5; // % — mesmo limiar do texto original do mock
 
 function windowStart(): string {
@@ -176,7 +176,7 @@ const CHECKLIST = [
 
 type MetricCard = { label: string; value: string; sub?: string; tier?: "ok" | "warn" | "info" };
 
-export default async function InicioPage() {
+export default async function DashboardPage() {
   const supabase = await createSupabaseServerClient();
   const {
     data: { user },

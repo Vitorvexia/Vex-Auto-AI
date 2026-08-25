@@ -30,7 +30,7 @@ export default async function OnboardingPage() {
   // necessariamente linha em public.users, então resolve por e-mail antes de
   // consultar o banco.
   if (isSuperAdmin(user.email)) {
-    redirect("/inicio");
+    redirect("/dashboard");
   }
 
   const { data: profile } = await supabase
@@ -42,7 +42,7 @@ export default async function OnboardingPage() {
   if (!profile?.store_id) throw new StoreNotFoundError(user.id);
 
   if (profile.role !== "dono_loja") {
-    redirect("/inicio");
+    redirect("/dashboard");
   }
 
   const storeId = profile.store_id;
@@ -65,7 +65,7 @@ export default async function OnboardingPage() {
   ]);
 
   if (store?.onboarding_completed_at) {
-    redirect("/inicio");
+    redirect("/dashboard");
   }
 
   const step = nextOnboardingStep({
@@ -77,7 +77,7 @@ export default async function OnboardingPage() {
   });
 
   if (step === "done") {
-    redirect("/inicio");
+    redirect("/dashboard");
   }
 
   return (

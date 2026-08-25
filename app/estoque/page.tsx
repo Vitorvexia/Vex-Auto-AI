@@ -231,7 +231,7 @@ export default async function EstoquePage({ searchParams }: PageProps) {
               <span>
                 <strong>{slowMovers.length} veículo{slowMovers.length > 1 ? "s" : ""} com giro lento</strong>
                 {" "}— acima de 20 dias no estoque. Considere ajuste de preço ou promoção.{" "}
-                <Link href="/inicio" style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}>
+                <Link href="/dashboard" style={{ color: "inherit", fontWeight: 700, textDecoration: "underline" }}>
                   Ver análise →
                 </Link>
               </span>

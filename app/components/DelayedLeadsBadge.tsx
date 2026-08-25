@@ -9,7 +9,7 @@ function AlertTriangleIcon() {
 }
 
 /**
- * Badge flutuante fixo (mesmo padrão visual de AlertsWidget em /inicio) —
+ * Badge flutuante fixo (mesmo padrão visual de AlertsWidget em /dashboard) —
  * aqui é link direto pro filtro "Atrasados", não painel colapsável.
  */
 export function DelayedLeadsBadge({ count, href }: { count: number; href: string }) {
