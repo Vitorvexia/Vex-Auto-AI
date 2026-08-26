@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-08-25
+Last Updated: 2026-08-26
 
 ---
 
@@ -330,6 +330,20 @@ Resolved (2026-08-01)
 # RECENT COMPLETED WORK
 
 Most recent accomplishments (source: git log, most recent first).
+
+🟡 BL-0040 — Motor único de mensagens business-initiated (follow-up + reativação), migration 044 + `lib/messaging-eligibility.ts` + `lib/opt-out.ts` (2026-08-26, branch própria `feature/bl-0040-messaging-engine`, baseada em `main` — **não** a branch de redesign visual. 2 commits de código+docs, pushados pra `origin`, PR ainda não aberta).
+
+- **Cadência unificada**: follow-up (20h/3d/7d, era 2h/24h/72h) e reativação (7d/15d/30d contados a partir de `leads.follow_up_completed_at`, era 14d/30d/30d contados independentemente) — pedido do founder de apertar cadência tornava real a colisão dos dois motores no mesmo lead no mesmo dia, que as cadências antigas (mais espaçadas) nunca batiam por acidente. Ver `DL-0021` pro desenho completo, incluindo os 2 achados durante a implementação (cron 1x/dia caía sempre fora do horário comercial default; âncora nova tornaria leads que nunca completam follow-up permanentemente inelegíveis pra reativação — corrigido com fallback na RPC).
+- **`lib/messaging-eligibility.ts`** (novo): `canSendMarketingMessage` — opt-out > trava de frequência de 48h (`leads.last_marketing_sent_at`, compartilhada entre os dois motores) > janela de horário comercial (`stores.business_hours_start/end`, migration 044, resolve parcialmente `BL-0016`). Única porta de saída de qualquer envio business-initiated — bloqueio aqui não consome tentativa (sem claim, RPC devolve o mesmo lead no próximo cron elegível).
+- **`lib/opt-out.ts`** (novo): detecção determinística (match exato de frase normalizada, nunca substring — evita falso-positivo tipo "para de vender essa moto") de pedido de opt-out, conectada no webhook logo após `ingestMessage`. `marketing_opt_out`/`marketing_opt_out_at` em `leads`, log em `audit_logs` (`lead.marketing_opt_out`, novo valor em `AuditAction`).
+- **M1 (janela de sessão)**: follow-up/reativação usam texto livre (`sendWhatsAppMessage`) quando a última mensagem do lead foi há menos de 24h, template fora disso — antes o código sempre usava texto livre quando `WHATSAPP_TEMPLATE_SEND_ENABLED=false`, o que na prática já violava a janela de sessão da Meta na maioria dos disparos reais (lead que não respondeu não abre sessão nova). Nota: em produção `WHATSAPP_TEMPLATE_SEND_ENABLED=true` já está ativo desde 0.2 (`53_ROADMAP.md`), então o caminho relevante em produção hoje é texto-livre-dentro-da-janela vs. template-fora-da-janela, não o skip por flag desligada (esse só importa fora de produção).
+- **M6**: `markFollowUpCompletedIfInterrupted` (`lib/follow-up.ts`), chamado do pipeline de IA (`lib/ai-pipeline.ts`) quando o lead responde no meio da sequência — marca `follow_up_completed_at` mesmo quando a sequência para antes da 3ª tentativa (sem isso a reativação nunca saberia que o follow-up "acabou").
+- **vercel.json**: cron `daily-run` movido de `"0 9 * * *"` (9h UTC = 6h BRT, sempre antes da abertura da janela comercial default) pra `"0 12 * * *"` (9h BRT, dentro de 08:00–20:00) — **confirmado no diff do commit `5abd387`**. Achado durante a implementação, não fix cosmético: sem isso o gate de horário bloquearia follow-up/reativação permanentemente (Vercel Hobby só roda cron 1x/dia, não haveria segunda tentativa no mesmo dia).
+- Migration 044 (`stores.business_hours_start/end`, `leads.marketing_opt_out(_at)`/`last_marketing_sent_at`/`follow_up_completed_at`) e as 2 RPCs de elegibilidade reescritas — **não aplicada em produção ainda**.
+
+92 testes unitários novos (11 arquivos: `messaging-eligibility`, `opt-out`, `follow-up-m1-m6`, `reactivation-m1-eligibility`, + fixtures atualizadas nos arquivos existentes de follow-up/reativação/ai-pipeline), 1218 testes unitários totais verdes, lint/typecheck limpos. **Pendente antes de fechar**: (1) aplicar migration 044 em produção, (2) validar em ambiente real que follow-up e reativação não colidem mais no mesmo lead, (3) abrir PR contra `main` (branch só commitada/pushada até agora, sem PR aberta) — mesma disciplina de sempre: código+testes não é "concluído", é "implementado".
+
+**Nota de processo (achado pelo founder na revisão, 2026-08-26):** os documentos desta entrada (DL-0021/BL-0040) foram commitados por engano na branch `claude/vex-redesign-visual-fase1-sqkmmf` (branch do PR #33, redesign visual, sem relação com mensageria) numa primeira passada — revertido lá (`git revert`, confirmado idêntico ao estado anterior) e reaplicado na branch correta (`feature/bl-0040-messaging-engine`), junto com um commit de sincronização dos 3 docs vivos (27/28/29) a partir do baseline correto, pra não perder DL-0018/19/20 e BL-0035-039 que só existiam na branch de redesign.
 
 🟢 BL-0037 (Fase 1, continuação) — `/inicio` renomeado pra `/dashboard` + Painel por Período novo + incidente de produção real encontrado e corrigido na mesma sessão (2026-08-25, mesma branch `claude/vex-redesign-visual-fase1-sqkmmf`, ~14 commits, pushados pra `origin` — PR #33 atualizada, branch ainda não mergeada).
 
