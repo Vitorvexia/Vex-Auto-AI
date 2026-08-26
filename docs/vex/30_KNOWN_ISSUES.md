@@ -1036,6 +1036,14 @@ Validation Steps
 
 `npx supabase migration list --linked` deve mostrar todas as migrations locais com `remote` preenchido (mesmo valor), sem `remote: ""`. Pra qualquer migration nova daqui pra frente: aplicar via `supabase migration up`/`db push` sempre que possível; quando não for viável no ambiente, usar `supabase db query --linked --file <arquivo>` (mesmo SQL, sem colar solto no SQL Editor) e rodar `supabase migration repair` logo em seguida pra manter a tabela de controle sincronizada — nunca deixar uma migration aplicada sem registro.
 
+**Atualização 2026-08-26 — resíduo órfão finalmente removido (não é incidente novo):**
+
+Ao aplicar a migration 044 (`BL-0040`/`DL-0021`) via `supabase db push --linked`, o comando bloqueou com `LegacyDbPushMissingLocalError` apontando exatamente o registro órfão já documentado acima (`version = '20260615193022'`) — o duplicado de migration 020 registrado sob timestamp em vez de `020`, que o DL-0020/esta entrada já tinham identificado e deliberadamente deixado como estava ("inofensivo — não removido, só documentado, pra não confundir uma auditoria futura"). Não é achado novo, é o mesmo item batendo na porta de novo, desta vez bloqueando um comando em vez de só aparecer numa auditoria read-only.
+
+Investigado antes de agir (mesma disciplina do DL-0020, não assumido por memória): `select version, name, statements[1], array_length(statements,1) from supabase_migrations.schema_migrations where version = '20260615193022'` confirmou os mesmos dados já registrados aqui (`name = '020_lead_sale_fields'`, conteúdo idêntico ao arquivo `020_lead_sale_fields.sql`) antes de qualquer ação.
+
+Removido via `supabase migration repair --status reverted 20260615193022` — comando sugerido pelo próprio CLI no erro. Importante: **`--status reverted` deleta a linha da tabela de controle**, não só marca um status (confirmado — reconsulta pós-repair pela mesma `version` retornou 0 linhas). Verificado depois, antes de prosseguir: `version = '020'` (a entrada oficial, correta) continua intacta (`name = 'lead_sale_fields'`, 2 statements) e as colunas reais que ela criou (`leads.valor_final`, `leads.vehicle_id`) seguem presentes — o repair removeu só o duplicado inofensivo, não tocou schema real nem a entrada de controle correta. `supabase db push --linked` rodado em seguida aplicou a 044 normalmente, `migration list` confirma `001`-`044` `local == remote` sem gap e **sem o resíduo órfão pela primeira vez desde o incidente original**.
+
 Related ADR
 
 None
@@ -1050,7 +1058,7 @@ Nenhum incidente formal aberto — tratado como achado de auditoria de rotina, c
 
 Notes
 
-`29_DECISIONS_LOG.md` (`DL-0019`, `DL-0020`) tem o relato completo passo a passo, incluindo os comandos exatos rodados e o resultado de cada validação. `27_PROJECT_STATUS.md` teve 2 entradas históricas corrigidas (as que diziam "029/031 fechado" sem qualificar que era só código, não deploy real) — ver notas de correção datadas 2026-08-25 nessas entradas.
+`29_DECISIONS_LOG.md` (`DL-0019`, `DL-0020`) tem o relato completo passo a passo, incluindo os comandos exatos rodados e o resultado de cada validação. `27_PROJECT_STATUS.md` teve 2 entradas históricas corrigidas (as que diziam "029/031 fechado" sem qualificar que era só código, não deploy real) — ver notas de correção datadas 2026-08-25 nessas entradas. Resíduo órfão (`20260615193022`) removido em 2026-08-26 durante a aplicação da migration 044 — ver atualização datada acima e `DL-0021`/`BL-0040`.
 
 ---
 

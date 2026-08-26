@@ -2984,6 +2984,70 @@ Nenhuma.
 
 ---
 
+BL-0043
+
+Title
+
+Base suja de lead de teste cruzando loja errada (`nome="wadaw"`, `phone_normalized="+1231333333"`) — limpeza de dado antes do cliente 2
+
+Problem
+
+Achado durante a validação em produção de BL-0040 (Camada 1, 2026-08-26): a RPC `get_followup_eligible_conversations` (real, contra produção) devolveu um lead genuinamente elegível sob a nova cadência de 20h — nome `"wadaw"`, telefone `+1231333333` (não é E.164 válido de nenhuma região real, claramente lixo de teste manual anterior), numa loja que **não** é a Speed Motos (store_id diferente). Não foi tocado — só descoberto de graça pela query read-only de validação.
+
+Business Value
+
+Dado de teste convivendo com dado real no mesmo schema de produção atrapalha qualquer teste futuro de isolamento multi-tenant de verdade (ex: confirmar que um lead de uma loja nunca aparece pra outra) — a diferença entre "isolamento funciona" e "só não vi contaminação ainda porque só testei com dado limpo" fica mais difícil de provar com lixo residual no meio.
+
+Customer Value
+
+Nenhum direto — dado invisível pro lojista, mas relevante pra confiabilidade de qualquer auditoria/teste que a engenharia rodar contra produção real dali pra frente.
+
+Priority
+
+Baixa — não bloqueia nada hoje (RPC já filtra corretamente por `store_id`, o lead só apareceu porque a query de validação rodou com `p_store_id = null`, todas as lojas). Vira relevante antes do cliente 2 existir, quando lixo cruzando loja passa a ser risco real de teste de isolamento dar falso-positivo.
+
+Status
+
+IDEA — não implementado, só registrado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixa — provavelmente é só `DELETE` de 1 (ou poucos) leads/conversas de teste manual antigo, depois de confirmar que não há mais nenhum residual do mesmo tipo (auditoria rápida: leads com telefone fora de padrão E.164 real, ou nome claramente placeholder).
+
+Dependencies
+
+Nenhuma técnica bloqueante.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Achado durante validação de produção de BL-0040/DL-0021.
+
+Target Version
+
+Antes do onboarding do cliente 2 (mesma dependência raiz de outros itens de multi-tenant real, ex: `BL-0016`).
+
+Success Metrics
+
+Zero lead com telefone/nome claramente placeholder em produção. Auditoria de dado residual antes do próximo onboarding real.
+
+Notes
+
+Não é o mesmo tipo de achado do `KI-0009` (aquele é gap de tracking de migration, este é lixo de dado de teste manual) — registrado em backlog, não em known issues, porque não é bug de sistema, é higiene de dado.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:

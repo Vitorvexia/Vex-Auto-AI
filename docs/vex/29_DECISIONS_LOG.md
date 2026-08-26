@@ -335,6 +335,8 @@ Status
 
 Implementado — aguardando validação em produção real (Speed Motos) antes de fechar
 
+**Atualização 2026-08-26 (Camada 1 de validação):** migration 044 aplicada em produção (`supabase db push --linked`). Efeito colateral necessário, não planejado: o comando bloqueou no resíduo órfão `20260615193022` (já documentado em `DL-0020`/`KI-0009` — duplicata inofensiva de migration 020, registrada via SQL Editor em 2026-06-15 sob timestamp em vez de `020`). Removido via `supabase migration repair --status reverted`, sugerido pelo próprio CLI. Investigado e verificado antes e depois de agir — **relato completo, não resumido, em `30_KNOWN_ISSUES.md` KI-0009** (não é incidente novo, é o mesmo item do DL-0020 finalmente resolvido). `canSendMarketingMessage` e M1 confirmados contra dado real (Speed Motos, RPCs reais); opt-out e cron (produção) seguem pendentes.
+
 ---
 
 Date
