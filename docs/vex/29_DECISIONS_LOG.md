@@ -333,7 +333,7 @@ Revisar se volume de leads tornar a trava de 48h uma barreira real pra conversã
 
 Status
 
-Implementado — aguardando validação em produção real (Speed Motos) antes de fechar
+Camada 1 de validação em produção **completa** (4/4 itens, com prova ao vivo contra a Speed Motos real — não só teste isolado). Camada 2 (validação por tempo decorrido) em andamento — ver datas de checkpoint no final desta entrada e em `27_PROJECT_STATUS.md`.
 
 **Atualização 2026-08-26 (Camada 1 de validação):** migration 044 aplicada em produção (`supabase db push --linked`). Efeito colateral necessário, não planejado: o comando bloqueou no resíduo órfão `20260615193022` (já documentado em `DL-0020`/`KI-0009` — duplicata inofensiva de migration 020, registrada via SQL Editor em 2026-06-15 sob timestamp em vez de `020`). Removido via `supabase migration repair --status reverted`, sugerido pelo próprio CLI. Investigado e verificado antes e depois de agir — **relato completo, não resumido, em `30_KNOWN_ISSUES.md` KI-0009** (não é incidente novo, é o mesmo item do DL-0020 finalmente resolvido). `canSendMarketingMessage` e M1 confirmados contra dado real (Speed Motos, RPCs reais); opt-out e cron (produção) seguem pendentes.
 
@@ -344,6 +344,16 @@ Implementado — aguardando validação em produção real (Speed Motos) antes d
 2. **Gap de design real, achado durante a mesma investigação**: a spec original (seção 5.4) nunca definiu o que a IA deveria responder quando opt-out dispara **dentro da conversa**. `applyOptOutIfDetected` só grava o flag — não influenciava em nada a geração de resposta da IA (caminhos desconectados). Sem correção, a IA responderia normal/simpática pra quem acabou de pedir pra parar de receber mensagem, mesmo depois do deploy. **Corrigido nesta mesma entrega**: `lib/ai-pipeline.ts` agora chama `applyOptOutIfDetected` como primeira coisa em `runAiPipeline` (prioridade sobre qualquer guardrail, inclusive handoff humano) — se detectado, suprime a chamada à LLM neste turno e envia `OPT_OUT_CONFIRMATION_TEXT` (`lib/opt-out.ts`, texto fixo: "Combinado, não vamos mais te enviar mensagens promocionais por aqui."), novo `agent_status = "skipped_opt_out"`. Mesma filosofia do guardrail de margem/idade: regra sensível nunca fica na mão do modelo probabilístico. Opt-out continua sendo só de marketing — turnos seguintes de atendimento normal não são bloqueados.
 
 Achado lateral, registrado como nota de processo (não bug de produto): consulta manual de debugging encontrou 2 leads com o mesmo telefone em stores diferentes — comportamento esperado (mesma pessoa pode ser lead em 2 revendas), mas a query inicial não filtrou por `store_id` e quase levou a uma conclusão errada. Ver `KI-0010`.
+
+**Atualização 2026-08-26 (merge, deploy e reteste — fechamento da Camada 1):**
+
+PR #34 aberta e squash-mergeada em `main` (`66f81a4`). Deploy automático confirmado por 2 fontes cruzadas, não assumido: GitHub API (`commits/66f81a4.../status`) mostra `context: "Vercel"`, `state: "success"`, apontando pro deployment `dpl_4UwaBtEba3GFipn44xtEjXAXkWqw` — o mesmo ID que `vercel inspect` mostra como `Ready`, aliasado nos domínios reais (`vexauto.com.br`, `speed-motos.vexauto.com.br`). Cron confirmado ativo (`vercel crons ls`: `/api/internal/daily-run` = `0 12 * * *`).
+
+Reteste real do "para" pós-deploy: ✔ confirmado, texto salvo em `messages` bate char a char com `OPT_OUT_CONFIRMATION_TEXT` (68 chars), `marketing_opt_out_at` com timestamp novo, 2ª linha em `audit_logs`. Camada 1 fechada.
+
+**Achado lateral #3 (arquitetural, durante preparo da Camada 2)**: `follow_up_logs`/`reactivation_logs` contam tentativas de forma vitalícia — sem reset por ciclo, um lead que completa 3 follow-ups nunca mais recebe follow-up, mesmo esfriando de novo meses depois. Descoberto ao tentar resetar o lead de teste do founder pra observação de Camada 2: zerar só `leads.follow_up_completed_at`/`last_marketing_sent_at`/`marketing_opt_out` não bastou — 3 `follow_up_logs`/1 `reactivation_logs` de ciclo já completo (ago/2026) continuavam bloqueando elegibilidade. Apagados (aprovado explicitamente antes de agir) pra simular reentrada limpa. Registrado como `BL-0044` (reset de cadência não tem rota própria no produto, só via script manual).
+
+**Camada 2 iniciada**: lead `68067c0a-da0a-452a-83c7-1e6bb38fbb53` (Speed Motos, founder) resetado, `ultima_saida_em` = 2026-08-26T20:09:29Z é o ponto zero. Checkpoints: **2026-09-02** (`follow_up_completed_at` deveria estar gravado), **2026-09-09** (reativação #1 deveria disparar sem colidir com follow-up e respeitando os 48h — teste decisivo que prova que a colisão do dia 7, motivo original desta entrega, foi eliminada). Script `scripts/check-messaging-cadence.ts` (novo, `main`) automatiza a checagem.
 
 ---
 
