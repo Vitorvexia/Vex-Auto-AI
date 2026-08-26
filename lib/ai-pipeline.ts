@@ -20,6 +20,7 @@ import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES, type Send
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
 import { markReactivationResponded } from "@/lib/reactivation";
+import { markFollowUpCompletedIfInterrupted } from "@/lib/follow-up";
 import { maskPhone } from "@/lib/pii";
 import { applyCollectionUpdate } from "@/lib/collection";
 import { sleep } from "@/lib/timing";
@@ -490,6 +491,12 @@ export async function runAiPipeline(params: {
     // Marcar reativação como respondida se aplicável — non-fatal
     markReactivationResponded(params.leadId).catch((e) =>
       Sentry.captureException(e, { tags: { pipeline_stage: "reactivation_mark_responded" } })
+    );
+
+    // M6 (BL-0040/DL-0021): lead respondeu — se havia follow-up em curso pra
+    // esta conversa, marca fim da sequência (gatilho da reativação). Non-fatal.
+    markFollowUpCompletedIfInterrupted(params.leadId, params.conversationId).catch((e) =>
+      Sentry.captureException(e, { tags: { pipeline_stage: "follow_up_mark_completed" } })
     );
 
     const finalStatus: AgentStatus = !sendFailed

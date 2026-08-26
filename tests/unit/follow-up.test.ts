@@ -89,6 +89,14 @@ const ELIGIBLE_CONV = {
   nome: "Carlos",
   phone_normalized: "+5511999990001",
   attempt_count: 0,
+  // Dentro da janela de sessão (texto livre) + fora de qualquer gate de
+  // elegibilidade — testes deste arquivo cobrem o caminho de envio em si,
+  // não canSendMarketingMessage (tests/unit/messaging-eligibility.test.ts)
+  // nem a janela de 24h (tests/unit/follow-up-m1-m6.test.ts).
+  last_inbound_at: new Date().toISOString(),
+  last_marketing_sent_at: null,
+  business_hours_start: "00:00",
+  business_hours_end: "23:59",
 };
 
 // ---------------------------------------------------------------------------

@@ -99,6 +99,10 @@ vi.mock("@/lib/reactivation", () => ({
   markReactivationResponded: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/follow-up", () => ({
+  markFollowUpCompletedIfInterrupted: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/timing", () => ({
   sleep: vi.fn().mockResolvedValue(undefined),
 }));

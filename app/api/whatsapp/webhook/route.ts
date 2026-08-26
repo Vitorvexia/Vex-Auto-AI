@@ -4,6 +4,7 @@ import { normalizePhone } from "@/lib/phone";
 import { verifyMetaSignature } from "@/lib/whatsapp-signature";
 import { ingestMessage } from "@/lib/ingest";
 import { dispatchAiPipeline } from "@/lib/pipeline-dispatch";
+import { applyOptOutIfDetected } from "@/lib/opt-out";
 import { isReplayedMessage } from "@/lib/replay-guard";
 import { maskPhone } from "@/lib/pii";
 import * as Sentry from "@sentry/nextjs";
@@ -209,6 +210,15 @@ export async function POST(req: NextRequest) {
           };
 
           if (!r.duplicate) {
+            // Opt-out determinístico (nunca pela LLM) — só afeta elegibilidade
+            // de follow-up/reativação (canSendMarketingMessage), não bloqueia
+            // a resposta normal da IA dentro da conversa. Não-fatal.
+            await applyOptOutIfDetected({
+              leadId: r.lead_id,
+              storeId: store.id,
+              text,
+            });
+
             // dispatchAiPipeline faz claim atômico por conversation_id antes de
             // rodar o pipeline — evita 2 runAiPipeline concorrentes pra mesma
             // conversa quando mensagens do mesmo lead chegam em requests

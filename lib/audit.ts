@@ -9,6 +9,7 @@ export type AuditAction =
   | "conversation.handoff_to_ai"
   | "message.manual_reply"
   | "lead.closed"
+  | "lead.marketing_opt_out"
   | "user.created"
   | "vehicle.renave_stage_advanced";
 
