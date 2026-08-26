@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering Leadership
 
-Last Updated: 2026-08-03
+Last Updated: 2026-08-26
 
 ---
 
@@ -252,6 +252,315 @@ Active
 ---
 
 # REAL DECISIONS
+
+Date
+
+2026-08-26
+
+Decision ID
+
+DL-0021
+
+Title
+
+Motor único de mensagens business-initiated — follow-up e reativação passam a compartilhar trava de frequência, janela de horário e opt-out (BL-0040)
+
+Category
+
+Product / Engineering
+
+Context
+
+Pedido do founder: apertar a cadência de follow-up (2h/24h/72h → 20h/3d/7d) e reativação (14d/30d/30d → 7d/15d/30d, contados a partir do fim do follow-up em vez de independentemente). Com as cadências antigas, mais espaçadas, os dois motores nunca colidiam por acidente de calendário — apertando as duas, a colisão do dia 7 deixa de ser hipotética: os dois mandam mensagem MARKETING pro mesmo lead no mesmo dia.
+
+Teste real de 2026-08-05 (`scripts/test-template-send.ts`, ver `27_PROJECT_STATUS.md`) confirmou que a Meta retém mensagens em rajada retornando HTTP 2xx (sucesso falso) — o sistema não tem como distinguir enviado de retido. Colisão de dois motores independentes não é só ineficaz, é silenciosamente ineficaz.
+
+Auditoria do contexto atual (2026-08-26) encontrou três gaps que a mudança de cadência torna obrigatórios em vez de opcionais: ausência de janela de horário de disparo (`BUSINESS_HOURS_START/END` só existia como env var global, usada só pelo guardrail de atendimento — BL-0016), ausência de opt-out de marketing, e ausência de trava de frequência entre motores. Nenhum dos três era viável de adiar quando a cadência aperta — sem eles, o motor mais agressivo aumenta risco de denúncia (LGPD + quality rating da Meta), que é o vetor real de perda de número (DL-0009).
+
+**Achado durante a implementação, não previsto no desenho original**: o cron `daily-run` roda no máximo 1x/dia (plano Vercel Hobby) e estava agendado para `0 9 * * *` (9h UTC = 6h BRT) — sempre antes da abertura da janela comercial default (08:00 BRT). Como não existe um segundo disparo no mesmo dia, o gate de horário bloquearia follow-up/reativação permanentemente, não apenas adiaria. Corrigido junto: cron movido para `0 12 * * *` (9h BRT, dentro de 08:00–20:00) — **confirmado no diff do commit `5abd387` (`vercel.json`, branch `feature/bl-0040-messaging-engine`)**.
+
+**Achado durante a implementação, também não previsto**: trocar a âncora de elegibilidade da reativação para `follow_up_completed_at` (só preenchido quando a sequência de follow-up termina) tornaria permanentemente inelegíveis leads que nunca completam essa sequência — handoff pro vendedor antes da 3ª tentativa, ou leads existentes no deploy (que ficam com o campo nulo pra sempre, já que não estão mais ativamente em follow-up). Isso regrediria o comportamento atual, em que a reativação pega base fria independente de follow-up. Corrigido com uma âncora de fallback na RPC (`get_reactivation_eligible_leads`, migration 044): usa `ultima_mensagem_em` da conversa quando `follow_up_completed_at` é nulo E o lead não está mais ativamente em follow-up (evita as duas cadências disputarem o mesmo lead ao mesmo tempo).
+
+Decision
+
+Follow-up e reativação viram um motor sequencial: follow-up dispara primeiro (20h → 3d → 7d, âncora inalterada), reativação só começa depois que o follow-up termina (7d → 15d → 30d, contados a partir de `leads.follow_up_completed_at` — ou do fallback acima, pra leads que nunca completam a sequência). Trava de frequência de 48h (`leads.last_marketing_sent_at`), janela de horário comercial por loja (`stores.business_hours_start/end`, substitui a env var global — resolve BL-0016) e opt-out de marketing (`leads.marketing_opt_out`, detectado deterministicamente por `lib/opt-out.ts`, nunca pela LLM) são compartilhados pelos dois motores via `canSendMarketingMessage` (`lib/messaging-eligibility.ts`) — única porta de saída de qualquer envio business-initiated.
+
+Reasoning
+
+Contar a reativação a partir do fim do follow-up (em vez de créated_at/última atividade isolada, como antes) torna a colisão estruturalmente impossível, em vez de depender de lógica de exclusão mútua ad-hoc que quebraria de novo assim que qualquer cadência mudasse (o mesmo risco que BL-0029 já tinha avisado). A trava de frequência de 48h é a rede de segurança que cobre o resto: reprocessamento manual do cron no mesmo dia, ou qualquer caso não previsto pela âncora sequencial.
+
+Cadência fixa em código (20h/3d/7d e 7d/15d/30d), não parametrizada por loja — nem founder nem IA sabem se esses valores são o ótimo, mas parametrizar por loja é decisão de produto separada, registrada como BL-0041 (IDEA), não bloqueante pra esta entrega.
+
+Alternatives Considered
+
+Manter motores independentes, só ajustar datas manualmente pra não colidir — rejeitada: frágil, reintroduz o mesmo risco assim que qualquer cadência mudar de novo.
+
+Reativação contando a partir de `created_at`/última mensagem (comportamento anterior) — rejeitada: exige lógica de exclusão mútua complexa pra não colidir com follow-up; contar a partir do fim do follow-up torna a colisão estruturalmente impossível.
+
+Cadência configurável por loja desde já — adiada pra BL-0041: nem founder nem IA sabem se 20h/3d/7d é o valor certo: shippar o fixo primeiro, parametrizar depois com dado real.
+
+Expected Impact
+
+Elimina a colisão estrutural entre follow-up e reativação no mesmo lead no mesmo dia. Resolve BL-0016 (horário comercial deixa de ser env var global). Adiciona opt-out de marketing, ausente até então — reduz risco de denúncia/perda de número (DL-0009). Requer validação em produção real (Speed Motos) antes de ser considerado concluído — código + testes não é "pronto", é "implementado" (mesma disciplina de sempre, `27_PROJECT_STATUS.md`).
+
+Potential Risks
+
+Cron não roda mais de 1x/dia (Hobby) — se `business_hours_start/end` de uma loja futura excluir o horário do cron (9h BRT), essa loja nunca recebe follow-up/reativação. Não bloqueia hoje (só Speed Motos, BRT, cron dentro da janela default), mas é um limite estrutural do plano Hobby que só desaparece migrando pra Vercel Pro (cron mais frequente) ou passando a rodar reativação de mensagens fora do modelo de cron único diário.
+
+`business_hours_start/end` são `TIME` sem timezone — cálculo usa timezone fixo `America/Sao_Paulo` (`lib/messaging-eligibility.ts`), hardcoded. Só existe 1 loja hoje; multi-fuso é dívida futura, mesma classe da original BL-0016.
+
+Leads existentes no deploy ficam com `follow_up_completed_at` nulo — reprocessados pela âncora de fallback (não pela âncora primária) até completarem um novo ciclo de follow-up, se algum dia completarem. Decisão consciente (opção mais simples e segura, discutida com o founder): zerar/recontar em vez de tentar preservar posição na cadência antiga.
+
+Owner
+
+Engineering (implementação) / Founder (pedido de aperto de cadência + aprovação do ajuste de cron e da âncora de fallback)
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0040 (implementação), BL-0016 (resolvido por esta entrega), BL-0029 (premissa superada — ver nota na entrada), BL-0041/BL-0042 (desdobramentos, registrados como IDEA)
+
+Related Runbook
+
+None
+
+Review Date
+
+Revisar se volume de leads tornar a trava de 48h uma barreira real pra conversão, ou se alguma loja pedir cadência diferente do padrão (aí sim BL-0041 deixa de ser IDEA).
+
+Status
+
+Implementado — aguardando validação em produção real (Speed Motos) antes de fechar
+
+**Atualização 2026-08-26 (Camada 1 de validação):** migration 044 aplicada em produção (`supabase db push --linked`). Efeito colateral necessário, não planejado: o comando bloqueou no resíduo órfão `20260615193022` (já documentado em `DL-0020`/`KI-0009` — duplicata inofensiva de migration 020, registrada via SQL Editor em 2026-06-15 sob timestamp em vez de `020`). Removido via `supabase migration repair --status reverted`, sugerido pelo próprio CLI. Investigado e verificado antes e depois de agir — **relato completo, não resumido, em `30_KNOWN_ISSUES.md` KI-0009** (não é incidente novo, é o mesmo item do DL-0020 finalmente resolvido). `canSendMarketingMessage` e M1 confirmados contra dado real (Speed Motos, RPCs reais); opt-out e cron (produção) seguem pendentes.
+
+**Atualização 2026-08-26 (teste real de opt-out via WhatsApp — 2 achados, extensão do mesmo escopo):**
+
+1. **Deploy nunca tinha acontecido.** `feature/bl-0040-messaging-engine` só estava commitada/pushada, nunca mergeada em `main`/deployada — confirmado por 2 evidências independentes (deployment de produção mais recente na Vercel tinha 7 dias; branch nunca teve PR aberta). O teste real de "para" bateu no pipeline antigo (pré-BL-0040), que não sabe nem que opt-out existe — daí a IA ter respondido normal ("Beleza, Vitor!... Boa sorte!") em vez de confirmar opt-out. Não é bug de lógica (a chamada direta via código já tinha confirmado a gravação certa em `leads`/`audit_logs`) — é passo de sequência que faltou. Resolve com merge + deploy (próximo passo desta entrega).
+
+2. **Gap de design real, achado durante a mesma investigação**: a spec original (seção 5.4) nunca definiu o que a IA deveria responder quando opt-out dispara **dentro da conversa**. `applyOptOutIfDetected` só grava o flag — não influenciava em nada a geração de resposta da IA (caminhos desconectados). Sem correção, a IA responderia normal/simpática pra quem acabou de pedir pra parar de receber mensagem, mesmo depois do deploy. **Corrigido nesta mesma entrega**: `lib/ai-pipeline.ts` agora chama `applyOptOutIfDetected` como primeira coisa em `runAiPipeline` (prioridade sobre qualquer guardrail, inclusive handoff humano) — se detectado, suprime a chamada à LLM neste turno e envia `OPT_OUT_CONFIRMATION_TEXT` (`lib/opt-out.ts`, texto fixo: "Combinado, não vamos mais te enviar mensagens promocionais por aqui."), novo `agent_status = "skipped_opt_out"`. Mesma filosofia do guardrail de margem/idade: regra sensível nunca fica na mão do modelo probabilístico. Opt-out continua sendo só de marketing — turnos seguintes de atendimento normal não são bloqueados.
+
+Achado lateral, registrado como nota de processo (não bug de produto): consulta manual de debugging encontrou 2 leads com o mesmo telefone em stores diferentes — comportamento esperado (mesma pessoa pode ser lead em 2 revendas), mas a query inicial não filtrou por `store_id` e quase levou a uma conclusão errada. Ver `KI-0010`.
+
+---
+
+Date
+
+2026-08-25
+
+Decision ID
+
+DL-0020
+
+Title
+
+Auditoria de `schema_migrations` (020-043) + resolução de 2 gaps de produção (029 audit_logs, 031 RENAVE) — incidente encontrado e corrigido na mesma sessão
+
+Category
+
+Engineering / Infra
+
+Context
+
+Ao aplicar a migration 022 (agendamento_data/agendamento_horario) manualmente em produção via `supabase db query --linked` (mesmo SQL do arquivo, direto — ver contexto de BL-0037), `supabase migration list` revelou que a tabela de controle do CLI (`supabase_migrations.schema_migrations`) só reconhece migrations até a 019. As migrations 020-043 (24 arquivos) nunca foram registradas nela, mesmo que boa parte já estivesse de fato aplicada no schema real — indício de que foram rodadas manualmente via SQL Editor do Supabase Studio (migration 026 já documentava isso explicitamente no próprio arquivo, para essa migration específica). Rodar `supabase migration up`/`db push` às cegas nesse estado tentaria reaplicar as 24 do zero e quebraria em "column/constraint already exists".
+
+Vitor pediu auditoria completa (Passo 1) antes de qualquer repair (Passo 2): comparar cada arquivo 020-043 contra o schema real de produção via consultas read-only (information_schema, pg_constraint, pg_indexes, pg_policy, pg_views, pg_proc, storage.buckets, pg_publication_tables, pg_extension), sem executar nenhum DDL.
+
+Decision
+
+Auditoria completa executada, só leitura. Resultado: **21 de 23 migrations batem 100%** com o schema real (colunas, tipos, nullability, defaults, constraints, índices, funções — comparadas byte-a-byte onde aplicável, ex: `assign_lead_to_least_loaded_vendedor`/`webhook_ingest_message`/`claim_conversation_pipeline_lock` idênticas ao arquivo). **2 migrations NUNCA foram aplicadas**, nem manualmente nem via CLI:
+
+- **029 (audit_logs)** — tabela `public.audit_logs` não existe em produção. Nenhuma trilha de auditoria está sendo gravada hoje, apesar do código/documentação tratarem isso como implementado.
+- **031 (RENAVE status)** — colunas `vehicles.renave_stage`/`renave_nfe_key`/`renave_stage_updated_by`/`renave_stage_updated_at` não existem em produção. Qualquer feature de controle de RENAVE que dependa dessas colunas falha silenciosamente ou quebra em produção.
+
+Achado adicional (fora do escopo de 020-043, mas descoberto durante a auditoria): `stores` tem DUAS constraints de validação de cor primária — `stores_cor_primaria_hex_check` (a da migration 039, regex `^#[0-9A-Fa-f]{6}$`) e `stores_cor_primaria_format` (nome e regex diferentes, `^#[0-9a-fA-F]{6}$`, funcionalmente equivalente mas não rastreada em NENHUM arquivo de migration do repo). Provável artefato de teste manual no SQL Editor que nunca foi limpo — redundante, não conflitante (mesma regra, duas vezes).
+
+Por instrução explícita do Vitor: **NÃO fazer repair da tabela de controle enquanto houver migration divergente** (029/031 contam como divergência — schema não bate com o arquivo, mesmo que a causa seja "nunca rodou" em vez de "rodou diferente"). `supabase migration repair` marcando 020-043 como applied ficou pausado até decisão sobre como tratar 029 e 031 especificamente.
+
+**Outcome (mesmo dia, após aprovação do Vitor) — incidente de produção real, não só limpeza de schema:**
+
+- **029 aplicada.** Antes da aplicação, confirmado em código (`lib/audit.ts:31-49`, `logAudit`) que a trilha de auditoria falhava 100% silenciosa: `try/catch` engole qualquer erro de insert e manda pro Sentry (`tags: { pipeline_stage: "audit_log" }`), nunca lança — toda ação sensível (reatribuição de lead, handoff, fechamento, criação de usuário, avanço de RENAVE) estava sem registro de auditoria, sem qualquer sinal visível pro usuário ou operador, só possivelmente visível no Sentry. `CREATE TABLE audit_logs` rodado via `supabase db query --linked --file`, validado estruturalmente (colunas/tipos/índices/RLS idênticos ao arquivo) e funcionalmente (insert de teste com o mesmo shape exato de `logAudit`, dentro de `BEGIN`/`ROLLBACK` — sucesso confirmado, zero linha deixada em produção).
+- **031 aplicada.** Antes da aplicação, confirmado em código (`app/renave/page.tsx:32-38`) que a tela `/renave` estava **realmente quebrada em produção**: o SELECT falhava por coluna inexistente, a página capturava o erro sem crashar mas renderizava um banner vermelho com a mensagem crua do Postgres pro usuário final ("Erro ao carregar pendências de RENAVE: column vehicles.renave_stage does not exist"), e a tabela de pendências nunca aparecia — `advanceRenaveStage` (`lib/renave-actions.ts`) nunca ficava alcançável pela UI (zero linha renderizada com botão de ação). 4 colunas + CHECK constraint + FK + índice parcial rodados via `db query --file`, validados estruturalmente e funcionalmente (SELECT idêntico ao da página + UPDATE idêntico ao de `advanceRenaveStage`, mesmo padrão `BEGIN`/`ROLLBACK`, sucesso confirmado sem persistir nada).
+- **Constraint duplicada removida.** `stores_cor_primaria_format` (não rastreada em nenhum arquivo de migration, regex funcionalmente idêntica à `stores_cor_primaria_hex_check` da migration 039 — confirmado antes de remover) dropada via `ALTER TABLE ... DROP CONSTRAINT`. Só a constraint oficial (039) permanece.
+- **Root cause do gap de tracking, descoberto durante a auditoria**: `supabase_migrations.schema_migrations` já tinha um registro da migration 020 — mas sob `version = '20260615193022'` (timestamp, `created_by = vexautoai@gmail.com`, `name = '020_lead_sale_fields'`, `statements` idêntico ao arquivo), não sob `version = '020'` como o CLI local espera. Ou seja: aplicar via SQL Editor do Supabase Studio grava no histórico, só que com um identificador de versão diferente do que o CLI usa pra arquivos numerados simples — os dois nunca batem, por isso o CLI via `migration list` sempre viu 020+ como "nunca aplicada" mesmo quando estava. Esse registro antigo (`20260615193022`) continua no histórico, agora duplicado com o `020` que o repair de hoje registrou — inofensivo (nenhum dos dois nunca vai re-rodar DDL, `migration list`/`up` só checam presença), não removido, só documentado aqui pra não confundir uma auditoria futura.
+- **`supabase migration repair --status applied --linked 020 022 023 024 025 026 027 028 029 030 031 032 033 034 035 036 037 038 039 040 041 042 043` executado.** `supabase migration list` confirmado: `001` a `043` todos com `local == remote`, sem gap algum (único item residual é o `20260615193022` explicado acima, que não tem arquivo local correspondente — histórico, não um problema ativo).
+
+Reasoning
+
+Reconciliar a tabela de controle antes de garantir que o schema real bate 100% com os arquivos locais marcaria como "applied" duas migrations que na verdade nunca rodaram — a tabela de controle mentiria sobre o estado real do banco, o oposto do que ela existe pra garantir. Auditoria evidence-based (query direta) em vez de confiar em `CLAUDE.md`/docs (que diziam migration 020 confirmada mas nada sobre 029/031 especificamente).
+
+Alternatives Considered
+
+Rodar `supabase migration repair` pra todas as 24 de uma vez, assumindo que "documentado como aplicado" bastava como evidência — descartado porque essa mesma suposição (aplicada a só migration 022) já tinha se provado falsa horas antes nesta mesma sessão.
+
+Expected Impact
+
+Resolvido: `/renave` volta a funcionar (colunas existem, tela deve parar de mostrar o banner de erro), trilha de auditoria (`audit_logs`) volta a gravar a partir de agora (ações anteriores à aplicação nunca tiveram registro — não é retroativo, não dá pra reconstruir). `schema_migrations` agora reflete o schema real sem gap.
+
+Potential Risks
+
+Baixo — todas as mudanças foram aditivas (`ADD COLUMN`/`CREATE TABLE`/`CREATE INDEX`), sem perda de dado possível. Validação funcional rodou dentro de `BEGIN`/`ROLLBACK`, sem persistir nenhuma linha de teste em produção. Único residual: o registro órfão `20260615193022` no histórico de migrations (ver Outcome acima) — puramente informativo, não bloqueia nada.
+
+Owner
+
+Engineering (auditoria + aplicação) / Founder (aprovação de cada passo)
+
+Related ADR
+
+None
+
+Related Issue
+
+Continuação de BL-0037 (migration 022 aplicada na mesma sessão)
+
+Related Runbook
+
+**Reforço de processo para sessões futuras**: aplicar migrations sempre via `supabase migration up`/`db push` (ou, quando isso não for viável no ambiente, via `supabase db query --linked --file <arquivo>` rodando o SQL exato do arquivo) — nunca colar SQL solto no SQL Editor do Supabase Studio sem depois rodar `supabase migration repair` pra manter a tabela de controle sincronizada. O gap desta auditoria (24 migrations invisíveis pro CLI) existe exatamente porque isso não foi seguido no passado.
+
+Review Date
+
+N/A — resolvido
+
+Status
+
+Resolved — 029/031 aplicadas e validadas, constraint duplicada removida, repair concluído, `schema_migrations` sem gap
+
+---
+
+Date
+
+2026-08-25
+
+Decision ID
+
+DL-0019
+
+Title
+
+Rota `/inicio` renomeada pra `/dashboard`
+
+Category
+
+Engineering
+
+Context
+
+`/inicio` era o nome da rota do dashboard operacional desde a Fase 1 — nome herdado da primeira versão do produto, não reflete mais o que a página é (painel operacional central, não uma "página inicial" genérica). BL-0037 (redesign visual, continuação) pediu o rename direto do founder, junto com a remoção de 2 cards redundantes e a adição de um seletor de período global com 4 cards novos.
+
+Decision
+
+`app/inicio/` virou `app/dashboard/`. Redirect permanente `/inicio` → `/dashboard` adicionado em `next.config.mjs` (mesmo padrão já usado pelo redirect `/analytics` → dashboard, que teve o destino atualizado junto pra não encadear um redirect no outro). Todo link/redirect hardcoded pra `/inicio` no código (sidebar, pós-login, callback de OAuth, onboarding, alerta de estoque, middleware) atualizado pra `/dashboard`.
+
+Reasoning
+
+Bookmark e link salvo de quem já usa o sistema não pode virar 404 — o redirect permanente cobre isso sem exigir nenhuma ação do usuário. Atualizar os links internos (em vez de deixar todos dependerem do redirect) evita um hop de rede extra em todo o navegação principal do app.
+
+Alternatives Considered
+
+Manter `/inicio` como rota real e só mudar o label da sidebar pra "Dashboard" — descartado porque o pedido explícito era renomear a rota de verdade (BL-0037), não só o texto exibido; deixaria a URL e o label dessincronizados.
+
+Expected Impact
+
+Nenhuma mudança de comportamento pro usuário final (mesmo conteúdo, nova URL) além de quem tinha `/inicio` salvo como favorito — esse caso é coberto pelo redirect permanente, sem 404.
+
+Potential Risks
+
+Baixo — mudança de rota + redirect é um padrão já usado no projeto (`/analytics` → dashboard já funcionava assim). Risco residual: algum serviço externo (ex: link em campanha de WhatsApp) apontando pra `/inicio` continua funcionando via redirect, só com um hop a mais.
+
+Owner
+
+Engineering (implementação) / Founder (pedido)
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0037 (Fase 1, continuação)
+
+Related Runbook
+
+None
+
+Review Date
+
+N/A
+
+Status
+
+Active
+
+---
+
+Date
+
+2026-08-19
+
+Decision ID
+
+DL-0018
+
+Title
+
+Cores do Funil de Temperatura: Frio reaproveita `--accent`, Morno/Quente ganham tokens novos (`--funnel-morno`/`--funnel-quente`)
+
+Category
+
+Engineering / Design System
+
+Context
+
+Funil de Temperatura (`app/components/LeadsFunnel.tsx`, `/leads` e `/inicio`) agrupa `lead_status` em 3 camadas (Frio = Novo+Engajado, Morno = Interessado, Quente = Quente+Negociação) e pede degradê termal explícito azul→âmbar→vermelho entre elas. Primeira versão usou um azul sky (`#38BDF8`) novo pra Frio — Vitor corrigiu: a camada fria devia usar o azul canônico do projeto (`#005BFE`, já é `--accent`/`--sky`), não inventar um tom "frio" à parte. Pra Morno/Quente, as 7 cores de status já documentadas em DESIGN.md (`--status-novo` `#94A3B8`, `--status-engajado` `#0EA5E9`, `--status-interessado` `#8B5CF6`, `--status-quente` `#F97316`, `--status-negociacao` `#22C55E`, `--status-fechado` `#10B981`, `--status-perdido` `#EF4444`) continuam sem equivalente semântico pro degradê pedido — `--status-interessado` é roxo (não âmbar), `--status-quente` é laranja (não vermelho).
+
+Decision
+
+Frio usa `var(--accent)` direto (sem token novo — é literalmente a cor de marca). 2 tokens novos em `:root` (`app/globals.css`): `--funnel-morno: #FBBF24`, `--funnel-quente: #F43F5E`. `--funnel-quente` deliberadamente diferente de `--status-perdido` (`#EF4444`, também vermelho) pra não colidir visualmente o mesmo hex em dois conceitos diferentes (lead perdido vs. lead quente) mesmo que nunca apareçam lado a lado no mesmo componente.
+
+Reasoning
+
+DESIGN.md pede reaproveitar token existente quando houver equivalente semântico — pra Frio havia (o azul de marca é literalmente "frio" na percepção de cor), pra Morno/Quente não há (mapear Morno pra `--status-interessado`, roxo, contradiria o requisito explícito de "morno = âmbar/laranja").
+
+Alternatives Considered
+
+Reaproveitar as 7 cores de status existentes mesmo sem casar semanticamente com o degradê termal pedido — descartado por gerar uma paleta inconsistente (roxo no meio de azul→vermelho não lê como "temperatura subindo").
+
+Expected Impact
+
+Funil de Temperatura com degradê visualmente coerente, sem herdar acidentalmente do sistema de cor por status (que é uma taxonomia diferente: 7 estados de pipeline, não 3 faixas de temperatura).
+
+Potential Risks
+
+Mais 2 tokens de cor no design system pra manter (Frio não soma token novo — reaproveita `--accent`). Baixo risco — escopo restrito a um único componente (`LeadsFunnel.tsx`), documentado aqui pra não virar "de onde veio isso" numa auditoria futura.
+
+Owner
+
+Engineering
+
+Related ADR
+
+None
+
+Related Issue
+
+DESIGN.md (seção de cores de status), BL-0037
+
+Related Runbook
+
+None
+
+Review Date
+
+N/A
+
+Status
+
+Active
+
+---
 
 Date
 

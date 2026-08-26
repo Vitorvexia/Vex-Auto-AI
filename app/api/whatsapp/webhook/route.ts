@@ -209,6 +209,13 @@ export async function POST(req: NextRequest) {
           };
 
           if (!r.duplicate) {
+            // Opt-out determinístico (nunca pela LLM) — detectado dentro de
+            // runAiPipeline (lib/ai-pipeline.ts), não aqui: precisa rodar sob
+            // o claim atômico do dispatchAiPipeline (evita detecção/gravação
+            // duplicada se 2 requests concorrentes chegarem pra mesma
+            // conversa) e precisa poder substituir a resposta da LLM neste
+            // turno, não só gatear envio futuro de marketing.
+
             // dispatchAiPipeline faz claim atômico por conversation_id antes de
             // rodar o pipeline — evita 2 runAiPipeline concorrentes pra mesma
             // conversa quando mensagens do mesmo lead chegam em requests

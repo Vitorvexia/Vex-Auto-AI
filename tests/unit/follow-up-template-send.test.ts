@@ -63,6 +63,13 @@ const ELIGIBLE_CONV = {
   nome: "Carlos",
   phone_normalized: "+5511999990001",
   attempt_count: 0,
+  // Fora da janela de sessão (força caminho de template, que é o que este
+  // arquivo testa) + fora de qualquer gate de elegibilidade — determinístico
+  // independente do horário real em que o teste roda.
+  last_inbound_at: null,
+  last_marketing_sent_at: null,
+  business_hours_start: "00:00",
+  business_hours_end: "23:59",
 };
 
 beforeEach(() => {

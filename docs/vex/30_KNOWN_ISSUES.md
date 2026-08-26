@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-07-21
+Last Updated: 2026-08-25
 
 ---
 
@@ -963,6 +963,178 @@ None
 Notes
 
 Esta limpeza é paliativo, não solução. Ausência de Supabase de staging pra testes de integração é dívida estrutural conhecida — cada novo teste de integração que grava em produção repete o mesmo risco até essa dívida ser paga.
+
+---
+
+Issue ID
+
+KI-0009
+
+Title
+
+`schema_migrations` desatualizada — migrations 020-043 nunca registradas no CLI, 2 delas (029 audit_logs, 031 RENAVE) nunca de fato aplicadas em produção apesar de documentadas como "fechadas"
+
+Category
+
+Database
+
+Severity
+
+High
+
+Status
+
+Resolved (2026-08-25) — ver `29_DECISIONS_LOG.md` DL-0020
+
+Environment
+
+Produção (Supabase, projeto `nrwnlhnmsmlyaueylsci`, "VEX AUTO AI").
+
+Date Discovered
+
+2026-08-25, ao aplicar a migration 022 manualmente via `supabase db query --linked` (BL-0037, card "Visitas agendadas") — `supabase migration list` revelou que `supabase_migrations.schema_migrations` só reconhecia migrations até a 019.
+
+Reported By
+
+Achado pelo Claude durante a sessão de redesign do dashboard, ao verificar o estado da migration 022; investigação completa pedida pelo Vitor em seguida.
+
+Owner
+
+Engineering
+
+Description
+
+Migrations 020-043 (24 arquivos) existiam no repo, mas nenhuma tinha registro na tabela de controle do Supabase CLI. Causa: pelo menos parte delas foi aplicada historicamente colando o SQL direto no SQL Editor do Supabase Studio em vez de via CLI — isso grava um registro em `schema_migrations`, só que sob uma `version` timestamp (ex: `20260615193022` pra migration 020, `created_by: vexautoai@gmail.com`), não sob o número simples (`020`) que o CLI local usa — os dois nunca batiam, então `migration list` sempre via 020+ como "nunca aplicada", mesmo quando o schema real já tinha a mudança.
+
+Symptoms
+
+`supabase migration list --linked` mostrava `local: 020..043` / `remote: ""` pra todas — qualquer `supabase migration up`/`db push` às cegas nesse estado tentaria reaplicar 24 migrations do zero e quebraria em "column/constraint already exists" pras que já estavam aplicadas.
+
+Root Cause
+
+Auditoria read-only completa (comparando cada arquivo 020-043 contra o schema real via `information_schema`/`pg_constraint`/`pg_indexes`/`pg_policy`/`pg_views`/`pg_proc`/`storage.buckets`/`pg_publication_tables`/`pg_extension`) encontrou:
+
+1. **21 de 23 migrations batiam 100%** com produção (só nunca tinham sido *registradas* — o schema já estava certo).
+2. **2 migrations NUNCA tinham sido aplicadas de verdade**, apesar de `27_PROJECT_STATUS.md` as descrever como "fechadas": `029` (tabela `audit_logs` não existia) e `031` (colunas RENAVE em `vehicles` não existiam).
+3. **Achado extra**: `stores` tinha 2 constraints de validação de cor primária — `stores_cor_primaria_hex_check` (migration 039, fonte de verdade) e `stores_cor_primaria_format` (mesma regra, não rastreada em nenhum arquivo — artefato de teste manual esquecido no SQL Editor).
+
+Impact
+
+- **`audit_logs` ausente**: toda chamada a `logAudit()` (`lib/audit.ts`) falhava no insert — capturado por `try/catch`, nunca lançava, erro só ia pro Sentry (`tags: pipeline_stage=audit_log`). **Toda trilha de auditoria esteve 100% silenciosa desde 2026-07-30** (~4 semanas) — nenhuma ação sensível (reatribuição de lead, handoff, fechamento, criação de usuário, avanço de RENAVE) ficou registrada.
+- **RENAVE ausente**: `/renave` (`app/renave/page.tsx`) fazia SELECT incluindo `renave_stage`/`renave_nfe_key`/`renave_stage_updated_at` — coluna inexistente, PostgREST retornava erro, página renderizava banner vermelho com a mensagem crua do Postgres pro usuário final em vez da tabela de pendências. **Tela efetivamente inutilizável em produção desde 2026-08-01** (~3 semanas), sem alarme automático porque o erro era só visual, não um crash monitorado.
+- Nenhum risco de integridade/perda de dado em nenhum dos dois casos — ausência de escrita, não escrita incorreta.
+
+Workaround
+
+Nenhum aplicado durante o período — os dois problemas ficaram sem mitigação até serem encontrados.
+
+Permanent Fix
+
+Migrations 029 e 031 aplicadas via `supabase db query --linked --file <arquivo>` (SQL exato do repo, sem edição). Validadas estrutural (colunas/tipos/constraints/índices idênticos ao arquivo) e funcionalmente (`BEGIN`/insert ou update mimetizando exatamente `logAudit`/`advanceRenaveStage`/o SELECT de `/renave`/`ROLLBACK`, zero dado de teste persistido em produção). Constraint duplicada `stores_cor_primaria_format` removida. `supabase migration repair --status applied --linked 020 022 023 ... 043` rodado — `schema_migrations` sincronizada, `migration list` confirma `001`-`043` todos com `local == remote`, sem gap.
+
+Validation Steps
+
+`npx supabase migration list --linked` deve mostrar todas as migrations locais com `remote` preenchido (mesmo valor), sem `remote: ""`. Pra qualquer migration nova daqui pra frente: aplicar via `supabase migration up`/`db push` sempre que possível; quando não for viável no ambiente, usar `supabase db query --linked --file <arquivo>` (mesmo SQL, sem colar solto no SQL Editor) e rodar `supabase migration repair` logo em seguida pra manter a tabela de controle sincronizada — nunca deixar uma migration aplicada sem registro.
+
+**Atualização 2026-08-26 — resíduo órfão finalmente removido (não é incidente novo):**
+
+Ao aplicar a migration 044 (`BL-0040`/`DL-0021`) via `supabase db push --linked`, o comando bloqueou com `LegacyDbPushMissingLocalError` apontando exatamente o registro órfão já documentado acima (`version = '20260615193022'`) — o duplicado de migration 020 registrado sob timestamp em vez de `020`, que o DL-0020/esta entrada já tinham identificado e deliberadamente deixado como estava ("inofensivo — não removido, só documentado, pra não confundir uma auditoria futura"). Não é achado novo, é o mesmo item batendo na porta de novo, desta vez bloqueando um comando em vez de só aparecer numa auditoria read-only.
+
+Investigado antes de agir (mesma disciplina do DL-0020, não assumido por memória): `select version, name, statements[1], array_length(statements,1) from supabase_migrations.schema_migrations where version = '20260615193022'` confirmou os mesmos dados já registrados aqui (`name = '020_lead_sale_fields'`, conteúdo idêntico ao arquivo `020_lead_sale_fields.sql`) antes de qualquer ação.
+
+Removido via `supabase migration repair --status reverted 20260615193022` — comando sugerido pelo próprio CLI no erro. Importante: **`--status reverted` deleta a linha da tabela de controle**, não só marca um status (confirmado — reconsulta pós-repair pela mesma `version` retornou 0 linhas). Verificado depois, antes de prosseguir: `version = '020'` (a entrada oficial, correta) continua intacta (`name = 'lead_sale_fields'`, 2 statements) e as colunas reais que ela criou (`leads.valor_final`, `leads.vehicle_id`) seguem presentes — o repair removeu só o duplicado inofensivo, não tocou schema real nem a entrada de controle correta. `supabase db push --linked` rodado em seguida aplicou a 044 normalmente, `migration list` confirma `001`-`044` `local == remote` sem gap e **sem o resíduo órfão pela primeira vez desde o incidente original**.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+Nenhum incidente formal aberto — tratado como achado de auditoria de rotina, corrigido na mesma sessão em que foi encontrado.
+
+Notes
+
+`29_DECISIONS_LOG.md` (`DL-0019`, `DL-0020`) tem o relato completo passo a passo, incluindo os comandos exatos rodados e o resultado de cada validação. `27_PROJECT_STATUS.md` teve 2 entradas históricas corrigidas (as que diziam "029/031 fechado" sem qualificar que era só código, não deploy real) — ver notas de correção datadas 2026-08-25 nessas entradas. Resíduo órfão (`20260615193022`) removido em 2026-08-26 durante a aplicação da migration 044 — ver atualização datada acima e `DL-0021`/`BL-0040`.
+
+---
+
+KI-0010
+
+Title
+
+Telefone repetido em leads de stores diferentes pode confundir consulta manual sem filtro de `store_id` explícito
+
+Category
+
+Process / Database
+
+Severity
+
+Low
+
+Status
+
+Documented — não é bug, é hábito de investigação a reforçar
+
+Environment
+
+Produção (Supabase, projeto `nrwnlhnmsmlyaueylsci`), qualquer consulta manual de debugging.
+
+Date Discovered
+
+2026-08-26, durante validação em produção de `BL-0040`/`DL-0021` (teste real de opt-out via WhatsApp).
+
+Reported By
+
+Achado pelo Claude ao investigar por que um teste de opt-out não tinha disparado — primeira consulta (`select ... from leads where phone_normalized = '+55...'`, sem filtro de `store_id`) trouxe o lead errado (loja demo/seed, `store_id = 'aaaaaaaa-...'`) em vez do lead real de teste na Speed Motos, atrasando a investigação até o founder apontar o padrão.
+
+Description
+
+`leads.phone_normalized` não é único globalmente — o mesmo telefone pode (e deve poder) existir como lead em lojas diferentes, já que a mesma pessoa pode estar interessada em veículos de duas revendas distintas. **Isso não é violação de isolamento multi-tenant** — o sistema em si (RLS, RPCs de elegibilidade, `getServerStoreId()`) sempre filtra corretamente por `store_id`. O risco é só em queries manuais de debugging/investigação rodadas direto contra produção fora do código da aplicação, que podem esquecer o filtro e pegar a linha errada silenciosamente (sem erro, só dado errado).
+
+Symptoms
+
+Consulta manual por `phone_normalized` sozinho pode retornar mais de 1 linha ou a linha "errada" quando existe lead homônimo em outra loja — investigação parte de premissa errada até alguém notar a divergência (ex: dado que não bate com o esperado).
+
+Root Cause
+
+Nenhum bug — `phone_normalized` nunca teve (nem deveria ter) constraint de unicidade global, só é único por prática dentro de uma loja. Causa é hábito de consulta, não schema.
+
+Impact
+
+Nenhum em produção — sistema aplicativo sempre filtra certo. Impacto é só em velocidade/precisão de investigação manual (o achado de 2026-08-26 atrasou, mas não invalidou, a conclusão certa).
+
+Workaround
+
+Nenhum necessário — não bloqueia nada.
+
+Permanent Fix
+
+Não é caso de fix de código. Prática a reforçar: toda query manual de debugging contra `leads`/`conversations`/tabelas relacionadas deveria filtrar por `store_id` explícito (ou pelo menos checar `count` > 1 antes de assumir resultado único), nunca só por telefone/nome.
+
+Validation Steps
+
+N/A — item de processo, não de código.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+Nenhum — achado lateral durante validação de `BL-0040`, não incidente próprio.
+
+Notes
+
+`29_DECISIONS_LOG.md` `DL-0021`, atualização de 2026-08-26, tem o contexto completo de onde isso apareceu.
 
 ---
 

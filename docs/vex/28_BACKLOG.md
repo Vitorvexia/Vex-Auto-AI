@@ -1260,7 +1260,7 @@ P3/P4 — não bloqueia o piloto atual (1 loja, `BUSINESS_HOURS_START`/`END` fun
 
 Status
 
-IDEA — não implementado, registrado no momento do achado (2026-07-30)
+🟡 Parcialmente resolvido (2026-08-26, DL-0021/BL-0040) — sub-item 1 (horário por loja) implementado: `stores.business_hours_start`/`business_hours_end` (migration 044), consumido por `lib/messaging-eligibility.ts` pra follow-up/reativação. **Não** migrado ainda: `lib/ai-pipeline.ts`/`lib/guardrails.ts` (guardrail de atendimento da IA em si) continua lendo `BUSINESS_HOURS_START`/`BUSINESS_HOURS_END` como env var global — são duas colunas com o mesmo propósito e nomes parecidos hoje, não a mesma fonte de verdade; unificar é trabalho futuro, não incluído em BL-0040 (escopo era só mensagens business-initiated). Sub-item 2 (parser determinístico de agendamento) segue IDEA, não tocado.
 
 Owner
 
@@ -1269,7 +1269,7 @@ Engineering
 Estimated Complexity
 
 Médio. Dois sub-itens que podem ser feitos juntos ou separados:
-- Horário por loja: coluna nova em `stores` (ex: `horario_atendimento_inicio`/`fim`), `lib/guardrails.ts` passa a receber config por `store_id` em vez de env var global — migration nova
+- ~~Horário por loja: coluna nova em `stores` (ex: `horario_atendimento_inicio`/`fim`), `lib/guardrails.ts` passa a receber config por `store_id` em vez de env var global — migration nova~~ — ✔ coluna existe (`business_hours_start/end`, migration 044), mas só consumida por `lib/messaging-eligibility.ts` hoje; `lib/guardrails.ts` ainda não migrado pra ler de `stores` (ver Status acima)
 - Parser determinístico de agendamento: exigiria `agendamento_horario` virar campo estruturado (hora, não texto livre) — mudança de schema (`leads`/`troca_draft`) e de prompt (LLM extrai hora estruturada em vez de texto livre), reabre a coleta de troca inteira
 
 Dependencies
@@ -2142,6 +2142,8 @@ Notes
 
 Achado de produção real durante validação deliberada (não acidental) — 8 templates testados via `scripts/test-template-send.ts` pro mesmo número, 3 entregues, 5 aceitos pela API mas retidos pela Meta. Não é bug de código, script, ou template mal configurado — confirmado que todos os 9 templates estão `APPROVED` e a categoria (MARKETING) é uniforme entre os que entregaram e os que não entregaram, o que aponta pro teto de frequência como causa, não pra diferença de template. `res.ok`-only na resposta de envio (`lib/whatsapp-send.ts`) é decisão consciente de não logar corpo da resposta da Meta (risco de PII) — significa que esse teto é invisível pro sistema em runtime, só detectável por teste manual como este ou por reclamação de lead que não recebeu.
 
+**Atualização 2026-08-26 (DL-0021/BL-0040):** a premissa de "Customer Value"/"Priority" acima ("cadências atuais já espaçam, nenhuma mitigação necessária") não vale mais — o founder apertou a cadência (follow-up 2h/24h/72h → 20h/3d/7d, reativação 14d/30d/30d → 7d/15d/30d), tornando a colisão do dia 7 real, não hipotética. Mitigação (1) da lista de "Estimated Complexity" acima foi implementada: trava de frequência de 48h compartilhada entre os dois motores (`leads.last_marketing_sent_at`, `lib/messaging-eligibility.ts`). Mitigação (2) (migrar templates pra categoria UTILITY) segue não avaliada — fora do escopo de BL-0040.
+
 ---
 
 BL-0030
@@ -2616,7 +2618,9 @@ P1 — motivado por necessidade de material de marketing. Fase 1 cobre só as te
 
 Status
 
-IN PROGRESS — sidebar (nav vertical, largura, esquema de cor), `/inicio` (ops-strip + consolidação com Analytics, dado real), `/login` e `/agenda` (calendário mensal) redesenhados. Conversa/dossiê/handoff (`/conversations`) validado visualmente pelo founder em sessão anterior. `/leads` ganhou uma segunda rodada de trabalho (2026-08-17): filtro por vendedor default-próprio, kanban com drag-and-drop nativo (substitui dropdown "Mover para..."), filtro "Todos/Sem responsável/Atrasados/Vendedores", gráfico "Leads por Status" (`BarChart` reaproveitado de `/inicio`) e badge flutuante "Lead Atrasado" — ver `27_PROJECT_STATUS.md` (2026-08-17) para detalhe completo. Tudo na branch `claude/vex-redesign-visual-fase1-sqkmmf`, **6 commits desta rodada commitados e pushados pra `origin`**, branch como um todo não mergeada em main / não em produção — aguardando validação visual final antes do merge.
+IN PROGRESS — **atualização 2026-08-25**: `/inicio` renomeado pra `/dashboard` (`DL-0019`); Central de Operações/ops-strip/Métricas Operacionais/Tendência Diária (herdadas da consolidação de 2026-08-13) removidas por completo a pedido do founder e substituídas por "Painel por Período" — seletor global (Hoje/7 dias/30 dias/Todo período + range custom) controlando 4 cards novos (Leads, Visitas agendadas, donut Origem, donut Vendedor); Funil de Temperatura e Ranking de Vendedores mantidos intocados. Ver `27_PROJECT_STATUS.md` (2026-08-25) pra detalhe completo, incluindo o incidente de produção real (migrations 029/031 nunca aplicadas) encontrado e corrigido na mesma sessão.
+
+sidebar (nav vertical, largura, esquema de cor), `/inicio` (ops-strip + consolidação com Analytics, dado real — histórico, seção substituída em 2026-08-25 acima), `/login` (redesign + toggle mostrar senha) e `/agenda` (calendário mensal) redesenhados. Conversa/dossiê/handoff (`/conversations`) validado visualmente pelo founder em sessão anterior. `/leads` teve 2 rodadas de trabalho (2026-08-17 e 2026-08-19): filtro por vendedor default-próprio, kanban com drag-and-drop **custom pointer-based** (2026-08-19, substitui a primeira versão nativa HTML5 de 2026-08-17 — nativo tinha ghost translúcido + card cortado pelo overflow da coluna, sem solução dentro do modelo do browser), filtro "Todos/Sem responsável/Atrasados/Vendedores", badge flutuante "Lead Atrasado". `/inicio` ganhou Funil de Temperatura (SVG, 4 camadas, breakdown por etapa, toggle de período 7/30/90/Todo, substitui o card "Leads por Status" — feature nasceu em `/leads`, passou por várias iterações visuais em cima de feedback ao vivo do founder e acabou só em `/inicio` por decisão dele). Ver `27_PROJECT_STATUS.md` (2026-08-19) pra detalhe completo. Tudo na branch `claude/vex-redesign-visual-fase1-sqkmmf`, **22 commits desta rodada commitados e pushados pra `origin`** (PR aberta pra review), branch como um todo não mergeada em main / não em produção — aguardando validação final antes do merge.
 
 Owner
 
@@ -2660,11 +2664,11 @@ BL-0038
 
 Title
 
-Alerta "conversa aguardando vendedor há mais de 40min" em /inicio — falta decisão de arquitetura pra fonte do timestamp
+Alerta "conversa aguardando vendedor há mais de 40min" em /dashboard (era /inicio) — falta decisão de arquitetura pra fonte do timestamp
 
 Problem
 
-Consolidação de Início+Analytics (2026-08-13) tornou reais os outros 2 alertas que antes eram mock (`sem resposta >24h`, `margem <5% no estoque`), mas este terceiro alerta do mock original ficou de fora por decisão consciente: não existe hoje um timestamp exato de "quando a conversa entrou em handoff" persistido de forma barata de consultar. `conversations.handoff_to='HUMANO'` marca o estado atual, mas não quando a transição aconteceu. O único registro do momento exato é `audit_logs` (ação `conversation.handoff_to_human`, roadmap 0.5) — tabela pensada pra auditoria/rastreamento, não pra alimentar leitura de dashboard em todo carregamento de página.
+Consolidação de Início+Analytics (2026-08-13) tornou reais os outros 2 alertas que antes eram mock (`sem resposta >24h`, `margem <5% no estoque`), mas este terceiro alerta do mock original ficou de fora por decisão consciente: não existe hoje um timestamp exato de "quando a conversa entrou em handoff" persistido de forma barata de consultar. `conversations.handoff_to='HUMANO'` marca o estado atual, mas não quando a transição aconteceu. O único registro do momento exato é `audit_logs` (ação `conversation.handoff_to_human`, roadmap 0.5) — tabela pensada pra auditoria/rastreamento, não pra alimentar leitura de dashboard em todo carregamento de página. **Nota (2026-08-25):** `/inicio` foi renomeado pra `/dashboard` (`DL-0019`); o alerta continuaria integrando no mesmo array `alerts`/`AlertsWidget` já existente lá, mecanismo intocado pelo rename. **Correção importante (`DL-0020`):** até 2026-08-25, a opção (a) abaixo não era só arquiteturalmente imperfeita — era literalmente inexecutável, porque a tabela `audit_logs` nunca tinha sido de fato aplicada em produção (migration 029 documentada como "fechada" desde 2026-07-30 mas nunca rodada de verdade). Auditoria de rotina encontrou e corrigiu isso hoje — `audit_logs` agora existe e está gravando eventos reais, então a opção (a) passa a ser tecnicamente viável, não só uma alternativa teórica.
 
 Business Value
 
@@ -2785,6 +2789,262 @@ Não definido — depende da fonte de dado externa escolhida e do formato final 
 Notes
 
 Guardrail a preservar desde já (mesmo antes do desenho): IA sugere, nunca decide compra sozinha — mesma filosofia de "Human in the Loop" do `CLAUDE.md` (aprovação humana em decisões financeiras). Nunca modelar como ação automática de compra/pedido.
+
+---
+
+BL-0040
+
+Title
+
+Motor de Mensagens Business-Initiated — cadência unificada + trava de frequência + janela de horário + opt-out
+
+Problem
+
+Aperto de cadência de follow-up (2h/24h/72h → 20h/3d/7d) e reativação (14d/30d/30d → 7d/15d/30d) tornava real a colisão dos dois motores no mesmo lead no mesmo dia — antes, cadências mais espaçadas nunca colidiam por acidente de calendário. Faltavam também janela de horário de disparo (existia só como env var global — BL-0016), opt-out de marketing e trava de frequência entre os dois motores.
+
+Business Value
+
+Reduz risco de denúncia/degradação de quality rating na Meta (LGPD + spam), vetor real de perda de número (DL-0009). Preserva a cadência mais agressiva pedida pelo founder sem o risco que ela introduziria sozinha.
+
+Customer Value
+
+Lead nunca recebe 2 mensagens de marketing (follow-up + reativação) no mesmo dia. Lead que pede pra não receber mais é respeitado. Mensagens só chegam em horário comercial da loja.
+
+Priority
+
+Alta — pedido direto do founder (aperto de cadência), implementação teve que resolver os 3 gaps (horário/opt-out/trava) pra ser segura.
+
+Status
+
+✔ Implementado (branch `feature/bl-0040-messaging-engine`) — aguardando validação em produção real (Speed Motos) antes de fechar. Ver DL-0021 pro desenho completo, migration 044, `lib/messaging-eligibility.ts`, `lib/opt-out.ts`.
+
+Owner
+
+Engineering (implementação) / Founder (pedido + aprovação dos ajustes de cron e âncora de fallback de reativação)
+
+Estimated Complexity
+
+Média-alta — 2 RPCs reescritas (cadência + nova âncora + fallback), 1 migration, 2 libs novas, `lib/follow-up.ts`/`lib/reactivation.ts` reescritos, opt-out conectado no webhook.
+
+Dependencies
+
+Nenhuma bloqueante — migrations 001-043 já aplicadas em produção (DL-0020).
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+DL-0021 (decisão completa). Supera a premissa de BL-0029 (ver nota nessa entrada). Resolve BL-0016 (horário comercial vira coluna por loja).
+
+Target Version
+
+Já implementado — falta validação em produção.
+
+Success Metrics
+
+Zero caso de lead recebendo follow-up e reativação no mesmo dia. Zero mensagem de marketing enviada a lead com opt-out. Zero mensagem de marketing enviada fora do horário comercial da loja.
+
+Notes
+
+Cron `daily-run` (Vercel Hobby, 1x/dia) precisou mudar de `0 9 * * *` para `0 12 * * *` — 9h UTC caía sempre fora da janela comercial default (6h BRT), o que bloquearia todo envio permanentemente, não só adiaria (achado durante a implementação, não previsto no desenho original). Confirmado no diff do commit `5abd387` (`vercel.json`).
+
+---
+
+BL-0041
+
+Title
+
+Cadência de follow-up/reativação configurável por loja
+
+Problem
+
+BL-0040 fixou os delays (20h/3d/7d follow-up, 7d/15d/30d reativação) como constantes em código. Nem founder nem IA sabem se esses valores são o ótimo — só existe 1 loja hoje pra validar contra.
+
+Business Value
+
+Permite ajustar cadência por loja conforme dado real de conversão/resposta, sem precisar de deploy de código a cada mudança.
+
+Customer Value
+
+Loja com perfil de cliente diferente (ex: ticket mais alto, ciclo de decisão mais longo) pode pedir cadência mais espaçada sem esperar uma feature nova.
+
+Priority
+
+Baixa — registrado como desdobramento natural de BL-0040, não pedido ainda por nenhuma loja real.
+
+Status
+
+IDEA — não implementado. Ver DL-0021 (alternativa considerada e adiada nesta mesma decisão).
+
+Owner
+
+Engineering / Founder (decisão de quando parametrizar)
+
+Estimated Complexity
+
+Baixa — colunas em `stores` (ou tabela de config), trocar constantes por valores lidos do banco nas RPCs de elegibilidade (migration 044). Sem mudança de arquitetura.
+
+Dependencies
+
+BL-0040 (implementado — usa os valores desta entrega como default).
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+DL-0021
+
+Target Version
+
+Sem agendamento — revisar quando volume de leads permitir avaliar se a cadência fixa é boa o suficiente, ou se alguma loja pedir diferente (ver Review Date de DL-0021).
+
+Success Metrics
+
+Não definido — depende de qual sinal (conversão, taxa de resposta, reclamação de lojista) motivar a parametrização.
+
+Notes
+
+Nenhuma.
+
+---
+
+BL-0042
+
+Title
+
+Webhook de status de entrega da Meta (fecha BL-0022 junto)
+
+Problem
+
+Sistema não distingue mensagem business-initiated entregue de retida — teste real de 2026-08-05 (`scripts/test-template-send.ts`) confirmou que a Meta retorna HTTP 2xx mesmo quando retém mensagens em rajada. `error_category` ausente em `reactivation_logs` e `error_message` nunca populado em `follow_up_logs` (BL-0022) — falhas de envio são silenciosas nos jobs.
+
+Business Value
+
+Observabilidade real de entrega — hoje "enviado com sucesso" no log não significa "chegou no celular do lead". Sem isso, qualquer métrica de taxa de resposta de follow-up/reativação (`calculateOperationalMetrics`) está potencialmente contaminada por mensagens que nunca chegaram.
+
+Customer Value
+
+Indireto — melhora a confiabilidade da automação que o lojista já usa, sem mudança visível de UX.
+
+Priority
+
+Não definida — registrado como desdobramento de BL-0040 (motor de mensagens ficou mais crítico de observar corretamente com cadência mais agressiva), mas depende de trabalho maior (assinar webhook de status da Meta, tabela nova ou colunas novas pra rastrear delivered/read/failed por mensagem).
+
+Status
+
+IDEA — não implementado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Média-alta — novo endpoint de webhook (status callbacks da Meta), correlação com `messages`/`follow_up_logs`/`reactivation_logs` via `message_id` (já existe, PR 15), possível migration nova.
+
+Dependencies
+
+Nenhuma técnica bloqueante. Faz mais sentido depois de BL-0040 em produção (mais dado real de envio pra correlacionar).
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+DL-0021, BL-0022 (fechado por esta entrega quando implementada)
+
+Target Version
+
+Sem agendamento
+
+Success Metrics
+
+Não definido — depende do desenho final (rastrear delivered/read/failed por mensagem individual vs. agregado).
+
+Notes
+
+Nenhuma.
+
+---
+
+BL-0043
+
+Title
+
+Base suja de lead de teste cruzando loja errada (`nome="wadaw"`, `phone_normalized="+1231333333"`) — limpeza de dado antes do cliente 2
+
+Problem
+
+Achado durante a validação em produção de BL-0040 (Camada 1, 2026-08-26): a RPC `get_followup_eligible_conversations` (real, contra produção) devolveu um lead genuinamente elegível sob a nova cadência de 20h — nome `"wadaw"`, telefone `+1231333333` (não é E.164 válido de nenhuma região real, claramente lixo de teste manual anterior), numa loja que **não** é a Speed Motos (store_id diferente). Não foi tocado — só descoberto de graça pela query read-only de validação.
+
+Business Value
+
+Dado de teste convivendo com dado real no mesmo schema de produção atrapalha qualquer teste futuro de isolamento multi-tenant de verdade (ex: confirmar que um lead de uma loja nunca aparece pra outra) — a diferença entre "isolamento funciona" e "só não vi contaminação ainda porque só testei com dado limpo" fica mais difícil de provar com lixo residual no meio.
+
+Customer Value
+
+Nenhum direto — dado invisível pro lojista, mas relevante pra confiabilidade de qualquer auditoria/teste que a engenharia rodar contra produção real dali pra frente.
+
+Priority
+
+Baixa — não bloqueia nada hoje (RPC já filtra corretamente por `store_id`, o lead só apareceu porque a query de validação rodou com `p_store_id = null`, todas as lojas). Vira relevante antes do cliente 2 existir, quando lixo cruzando loja passa a ser risco real de teste de isolamento dar falso-positivo.
+
+Status
+
+IDEA — não implementado, só registrado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixa — provavelmente é só `DELETE` de 1 (ou poucos) leads/conversas de teste manual antigo, depois de confirmar que não há mais nenhum residual do mesmo tipo (auditoria rápida: leads com telefone fora de padrão E.164 real, ou nome claramente placeholder).
+
+Dependencies
+
+Nenhuma técnica bloqueante.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Achado durante validação de produção de BL-0040/DL-0021.
+
+Target Version
+
+Antes do onboarding do cliente 2 (mesma dependência raiz de outros itens de multi-tenant real, ex: `BL-0016`).
+
+Success Metrics
+
+Zero lead com telefone/nome claramente placeholder em produção. Auditoria de dado residual antes do próximo onboarding real.
+
+Notes
+
+Não é o mesmo tipo de achado do `KI-0009` (aquele é gap de tracking de migration, este é lixo de dado de teste manual) — registrado em backlog, não em known issues, porque não é bug de sistema, é higiene de dado.
 
 ---
 
