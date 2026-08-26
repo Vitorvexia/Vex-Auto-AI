@@ -3048,6 +3048,70 @@ Não é o mesmo tipo de achado do `KI-0009` (aquele é gap de tracking de migrat
 
 ---
 
+BL-0044
+
+Title
+
+Reset de campos de cadência de mensageria (opt-out, last_marketing_sent_at, follow_up_completed_at + logs) não tem rota própria no produto — só via script manual
+
+Problem
+
+Achado durante a validação de Camada 2 de BL-0040 (2026-08-26): resetar um lead pra reentrar limpo na cadência de follow-up/reativação (`marketing_opt_out`, `marketing_opt_out_at`, `last_marketing_sent_at`, `follow_up_completed_at` em `leads` + apagar `follow_up_logs`/`reactivation_logs` antigos, já que a contagem de tentativas é vitalícia, sem reset por ciclo — ver nota em `DL-0021`) só foi possível porque o founder tem acesso direto ao banco de produção via service role. Não existe Server Action, botão de UI, ou endpoint interno pra isso.
+
+Business Value
+
+Sem essa rota, qualquer motivo operacional legítimo pra resetar cadência de um lead real (reclamação de lojista, erro identificado, pedido explícito do cliente pra "recomeçar do zero" um lead específico) fica bloqueado até alguém com acesso a banco intervir manualmente — não escala além do piloto com 1 loja e o founder operando.
+
+Customer Value
+
+Lojista (ou suporte Vex) resolveria esse tipo de pedido sozinho, sem precisar escalar pra engenharia mexer em banco.
+
+Priority
+
+Baixa — não bloqueia nada hoje, só existe porque o founder é quem opera o piloto e já tem acesso direto ao banco. Vira relevante quando suporte deixar de ser "engenheiro com acesso a banco" — antes do cliente 2, mesma classe de outros itens de operação real (ex: `BL-0016`, `BL-0043`).
+
+Status
+
+IDEA — não implementado, só registrado.
+
+Owner
+
+Engineering
+
+Estimated Complexity
+
+Baixa-média — Server Action nova (`resetLeadCadence` ou nome similar), validação de quem pode chamar (RBAC ainda pendente, `BL-0017`-adjacente), decidir se apaga `follow_up_logs`/`reactivation_logs` de verdade ou só marca como "não conta" (mudança de schema se for a segunda opção — hoje não existe campo pra isso).
+
+Dependencies
+
+Nenhuma técnica bloqueante. Faz mais sentido decidir o desenho (apagar vs. soft-exclude) junto com qualquer trabalho futuro em `BL-0022`/`BL-0042` (observabilidade de envio), já que os dois mexem no mesmo par de tabelas de log.
+
+Related ADR
+
+None
+
+Related RFC
+
+None
+
+Related Issue
+
+Achado durante validação de Camada 2 de `BL-0040`/`DL-0021`.
+
+Target Version
+
+Sem agendamento — antes do cliente 2, se suporte deixar de ser só engenharia.
+
+Success Metrics
+
+Não definido.
+
+Notes
+
+O reset feito manualmente em 2026-08-26 (lead de teste do founder, `leads.id = 68067c0a-...`) está documentado em detalhe na conversa que gerou este item — não precisa de runbook formal enquanto for só o founder operando.
+
+---
+
 # FEATURE ACCEPTANCE RULES
 
 Before implementation every feature must answer:
