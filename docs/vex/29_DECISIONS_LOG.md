@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering Leadership
 
-Last Updated: 2026-08-03
+Last Updated: 2026-08-26
 
 ---
 
@@ -252,6 +252,90 @@ Active
 ---
 
 # REAL DECISIONS
+
+Date
+
+2026-08-26
+
+Decision ID
+
+DL-0021
+
+Title
+
+Motor único de mensagens business-initiated — follow-up e reativação passam a compartilhar trava de frequência, janela de horário e opt-out (BL-0040)
+
+Category
+
+Product / Engineering
+
+Context
+
+Pedido do founder: apertar a cadência de follow-up (2h/24h/72h → 20h/3d/7d) e reativação (14d/30d/30d → 7d/15d/30d, contados a partir do fim do follow-up em vez de independentemente). Com as cadências antigas, mais espaçadas, os dois motores nunca colidiam por acidente de calendário — apertando as duas, a colisão do dia 7 deixa de ser hipotética: os dois mandam mensagem MARKETING pro mesmo lead no mesmo dia.
+
+Teste real de 2026-08-05 (`scripts/test-template-send.ts`, ver `27_PROJECT_STATUS.md`) confirmou que a Meta retém mensagens em rajada retornando HTTP 2xx (sucesso falso) — o sistema não tem como distinguir enviado de retido. Colisão de dois motores independentes não é só ineficaz, é silenciosamente ineficaz.
+
+Auditoria do contexto atual (2026-08-26) encontrou três gaps que a mudança de cadência torna obrigatórios em vez de opcionais: ausência de janela de horário de disparo (`BUSINESS_HOURS_START/END` só existia como env var global, usada só pelo guardrail de atendimento — BL-0016), ausência de opt-out de marketing, e ausência de trava de frequência entre motores. Nenhum dos três era viável de adiar quando a cadência aperta — sem eles, o motor mais agressivo aumenta risco de denúncia (LGPD + quality rating da Meta), que é o vetor real de perda de número (DL-0009).
+
+**Achado durante a implementação, não previsto no desenho original**: o cron `daily-run` roda no máximo 1x/dia (plano Vercel Hobby) e estava agendado para `0 9 * * *` (9h UTC = 6h BRT) — sempre antes da abertura da janela comercial default (08:00 BRT). Como não existe um segundo disparo no mesmo dia, o gate de horário bloquearia follow-up/reativação permanentemente, não apenas adiaria. Corrigido junto: cron movido para `0 12 * * *` (9h BRT, dentro de 08:00–20:00).
+
+**Achado durante a implementação, também não previsto**: trocar a âncora de elegibilidade da reativação para `follow_up_completed_at` (só preenchido quando a sequência de follow-up termina) tornaria permanentemente inelegíveis leads que nunca completam essa sequência — handoff pro vendedor antes da 3ª tentativa, ou leads existentes no deploy (que ficam com o campo nulo pra sempre, já que não estão mais ativamente em follow-up). Isso regrediria o comportamento atual, em que a reativação pega base fria independente de follow-up. Corrigido com uma âncora de fallback na RPC (`get_reactivation_eligible_leads`, migration 044): usa `ultima_mensagem_em` da conversa quando `follow_up_completed_at` é nulo E o lead não está mais ativamente em follow-up (evita as duas cadências disputarem o mesmo lead ao mesmo tempo).
+
+Decision
+
+Follow-up e reativação viram um motor sequencial: follow-up dispara primeiro (20h → 3d → 7d, âncora inalterada), reativação só começa depois que o follow-up termina (7d → 15d → 30d, contados a partir de `leads.follow_up_completed_at` — ou do fallback acima, pra leads que nunca completam a sequência). Trava de frequência de 48h (`leads.last_marketing_sent_at`), janela de horário comercial por loja (`stores.business_hours_start/end`, substitui a env var global — resolve BL-0016) e opt-out de marketing (`leads.marketing_opt_out`, detectado deterministicamente por `lib/opt-out.ts`, nunca pela LLM) são compartilhados pelos dois motores via `canSendMarketingMessage` (`lib/messaging-eligibility.ts`) — única porta de saída de qualquer envio business-initiated.
+
+Reasoning
+
+Contar a reativação a partir do fim do follow-up (em vez de créated_at/última atividade isolada, como antes) torna a colisão estruturalmente impossível, em vez de depender de lógica de exclusão mútua ad-hoc que quebraria de novo assim que qualquer cadência mudasse (o mesmo risco que BL-0029 já tinha avisado). A trava de frequência de 48h é a rede de segurança que cobre o resto: reprocessamento manual do cron no mesmo dia, ou qualquer caso não previsto pela âncora sequencial.
+
+Cadência fixa em código (20h/3d/7d e 7d/15d/30d), não parametrizada por loja — nem founder nem IA sabem se esses valores são o ótimo, mas parametrizar por loja é decisão de produto separada, registrada como BL-0041 (IDEA), não bloqueante pra esta entrega.
+
+Alternatives Considered
+
+Manter motores independentes, só ajustar datas manualmente pra não colidir — rejeitada: frágil, reintroduz o mesmo risco assim que qualquer cadência mudar de novo.
+
+Reativação contando a partir de `created_at`/última mensagem (comportamento anterior) — rejeitada: exige lógica de exclusão mútua complexa pra não colidir com follow-up; contar a partir do fim do follow-up torna a colisão estruturalmente impossível.
+
+Cadência configurável por loja desde já — adiada pra BL-0041: nem founder nem IA sabem se 20h/3d/7d é o valor certo: shippar o fixo primeiro, parametrizar depois com dado real.
+
+Expected Impact
+
+Elimina a colisão estrutural entre follow-up e reativação no mesmo lead no mesmo dia. Resolve BL-0016 (horário comercial deixa de ser env var global). Adiciona opt-out de marketing, ausente até então — reduz risco de denúncia/perda de número (DL-0009). Requer validação em produção real (Speed Motos) antes de ser considerado concluído — código + testes não é "pronto", é "implementado" (mesma disciplina de sempre, `27_PROJECT_STATUS.md`).
+
+Potential Risks
+
+Cron não roda mais de 1x/dia (Hobby) — se `business_hours_start/end` de uma loja futura excluir o horário do cron (9h BRT), essa loja nunca recebe follow-up/reativação. Não bloqueia hoje (só Speed Motos, BRT, cron dentro da janela default), mas é um limite estrutural do plano Hobby que só desaparece migrando pra Vercel Pro (cron mais frequente) ou passando a rodar reativação de mensagens fora do modelo de cron único diário.
+
+`business_hours_start/end` são `TIME` sem timezone — cálculo usa timezone fixo `America/Sao_Paulo` (`lib/messaging-eligibility.ts`), hardcoded. Só existe 1 loja hoje; multi-fuso é dívida futura, mesma classe da original BL-0016.
+
+Leads existentes no deploy ficam com `follow_up_completed_at` nulo — reprocessados pela âncora de fallback (não pela âncora primária) até completarem um novo ciclo de follow-up, se algum dia completarem. Decisão consciente (opção mais simples e segura, discutida com o founder): zerar/recontar em vez de tentar preservar posição na cadência antiga.
+
+Owner
+
+Engineering (implementação) / Founder (pedido de aperto de cadência + aprovação do ajuste de cron e da âncora de fallback)
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0040 (implementação), BL-0016 (resolvido por esta entrega), BL-0029 (premissa superada — ver nota na entrada), BL-0041/BL-0042 (desdobramentos, registrados como IDEA)
+
+Related Runbook
+
+None
+
+Review Date
+
+Revisar se volume de leads tornar a trava de 48h uma barreira real pra conversão, ou se alguma loja pedir cadência diferente do padrão (aí sim BL-0041 deixa de ser IDEA).
+
+Status
+
+Implementado — aguardando validação em produção real (Speed Motos) antes de fechar
+
+---
 
 Date
 
