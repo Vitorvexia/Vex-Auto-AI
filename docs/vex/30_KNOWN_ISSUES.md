@@ -1062,6 +1062,82 @@ Notes
 
 ---
 
+KI-0010
+
+Title
+
+Telefone repetido em leads de stores diferentes pode confundir consulta manual sem filtro de `store_id` explícito
+
+Category
+
+Process / Database
+
+Severity
+
+Low
+
+Status
+
+Documented — não é bug, é hábito de investigação a reforçar
+
+Environment
+
+Produção (Supabase, projeto `nrwnlhnmsmlyaueylsci`), qualquer consulta manual de debugging.
+
+Date Discovered
+
+2026-08-26, durante validação em produção de `BL-0040`/`DL-0021` (teste real de opt-out via WhatsApp).
+
+Reported By
+
+Achado pelo Claude ao investigar por que um teste de opt-out não tinha disparado — primeira consulta (`select ... from leads where phone_normalized = '+55...'`, sem filtro de `store_id`) trouxe o lead errado (loja demo/seed, `store_id = 'aaaaaaaa-...'`) em vez do lead real de teste na Speed Motos, atrasando a investigação até o founder apontar o padrão.
+
+Description
+
+`leads.phone_normalized` não é único globalmente — o mesmo telefone pode (e deve poder) existir como lead em lojas diferentes, já que a mesma pessoa pode estar interessada em veículos de duas revendas distintas. **Isso não é violação de isolamento multi-tenant** — o sistema em si (RLS, RPCs de elegibilidade, `getServerStoreId()`) sempre filtra corretamente por `store_id`. O risco é só em queries manuais de debugging/investigação rodadas direto contra produção fora do código da aplicação, que podem esquecer o filtro e pegar a linha errada silenciosamente (sem erro, só dado errado).
+
+Symptoms
+
+Consulta manual por `phone_normalized` sozinho pode retornar mais de 1 linha ou a linha "errada" quando existe lead homônimo em outra loja — investigação parte de premissa errada até alguém notar a divergência (ex: dado que não bate com o esperado).
+
+Root Cause
+
+Nenhum bug — `phone_normalized` nunca teve (nem deveria ter) constraint de unicidade global, só é único por prática dentro de uma loja. Causa é hábito de consulta, não schema.
+
+Impact
+
+Nenhum em produção — sistema aplicativo sempre filtra certo. Impacto é só em velocidade/precisão de investigação manual (o achado de 2026-08-26 atrasou, mas não invalidou, a conclusão certa).
+
+Workaround
+
+Nenhum necessário — não bloqueia nada.
+
+Permanent Fix
+
+Não é caso de fix de código. Prática a reforçar: toda query manual de debugging contra `leads`/`conversations`/tabelas relacionadas deveria filtrar por `store_id` explícito (ou pelo menos checar `count` > 1 antes de assumir resultado único), nunca só por telefone/nome.
+
+Validation Steps
+
+N/A — item de processo, não de código.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+Nenhum — achado lateral durante validação de `BL-0040`, não incidente próprio.
+
+Notes
+
+`29_DECISIONS_LOG.md` `DL-0021`, atualização de 2026-08-26, tem o contexto completo de onde isso apareceu.
+
+---
+
 (Update continuously.)
 
 ---

@@ -36,12 +36,24 @@ export function isOptOutRequest(text: string): boolean {
   return OPT_OUT_PHRASES.has(normalize(text));
 }
 
+// Resposta fixa, determinística — nunca gerada pela LLM. Achado em validação
+// real (2026-08-26): sem isso, o turno de opt-out passava batido pelo
+// pipeline normal e a IA respondia com despedida simpática de atendimento
+// pra quem tinha acabado de pedir pra parar de receber mensagem. Mesmo
+// padrão de "regra sensível nunca fica na mão do modelo probabilístico" do
+// guardrail de margem/idade. Ver DL-0021, nota de 2026-08-26.
+export const OPT_OUT_CONFIRMATION_TEXT =
+  "Combinado, não vamos mais te enviar mensagens promocionais por aqui.";
+
 /**
  * Detecta e persiste opt-out se a mensagem casar. Não-fatal — nunca lança;
- * falha de escrita vai pro Sentry (mesmo padrão de lib/audit.ts). Só afeta
- * elegibilidade de mensagens business-initiated (follow-up/reativação) via
- * canSendMarketingMessage — nunca bloqueia a resposta normal da IA dentro
- * da conversa.
+ * falha de escrita vai pro Sentry (mesmo padrão de lib/audit.ts). Afeta dois
+ * caminhos: elegibilidade de mensagens business-initiada (follow-up/
+ * reativação) via canSendMarketingMessage, E o turno de conversa atual —
+ * quando detectado, lib/ai-pipeline.ts substitui a resposta livre da LLM
+ * por OPT_OUT_CONFIRMATION_TEXT (determinístico) neste turno. Não bloqueia
+ * atendimento normal em turnos futuros — opt-out é de marketing, não de
+ * suporte.
  */
 export async function applyOptOutIfDetected(params: {
   leadId: string;

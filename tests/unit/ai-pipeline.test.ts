@@ -103,6 +103,11 @@ vi.mock("@/lib/follow-up", () => ({
   markFollowUpCompletedIfInterrupted: vi.fn().mockResolvedValue(undefined),
 }));
 
+vi.mock("@/lib/opt-out", () => ({
+  applyOptOutIfDetected: vi.fn().mockResolvedValue(false),
+  OPT_OUT_CONFIRMATION_TEXT: "Combinado, não vamos mais te enviar mensagens promocionais por aqui.",
+}));
+
 vi.mock("@/lib/timing", () => ({
   sleep: vi.fn().mockResolvedValue(undefined),
 }));
@@ -122,6 +127,7 @@ import { sendWhatsAppMessage, WhatsAppSendError } from "@/lib/whatsapp-send";
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { calculateLeadScore } from "@/lib/lead-scoring";
 import { sleep } from "@/lib/timing";
+import { applyOptOutIfDetected, OPT_OUT_CONFIRMATION_TEXT } from "@/lib/opt-out";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -213,6 +219,7 @@ beforeEach(() => {
   vi.mocked(getStoreWhatsAppPhoneId).mockResolvedValue("test-phone-id");
   vi.mocked(calculateLeadScore).mockReturnValue(DEFAULT_SCORE_RESULT as any);
   vi.mocked(supabaseAdmin.from).mockImplementation(defaultSupabaseChain as any);
+  vi.mocked(applyOptOutIfDetected).mockResolvedValue(false);
   process.env.ANTHROPIC_MODEL = "claude-haiku-4-5";
 });
 
@@ -1109,5 +1116,98 @@ describe("runAiPipeline — aviso de IA (item 0.7 parte 2)", () => {
       .flatMap((c) => c.chain.update.mock.calls)
       .find((args: any[]) => args[0]?.contexto?.pending_topics?.includes("financiamento"));
     expect(contextoUpdateCall).toBeDefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runAiPipeline — opt-out (BL-0040/DL-0021, achado em validação real 2026-08-26)
+// ---------------------------------------------------------------------------
+
+describe("runAiPipeline — opt-out", () => {
+  it("optedOut=true: retorna skipped_opt_out, nunca chama a LLM", async () => {
+    vi.mocked(applyOptOutIfDetected).mockResolvedValueOnce(true);
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("skipped_opt_out");
+    expect(runAgent).not.toHaveBeenCalled();
+  });
+
+  it("optedOut=true: envia OPT_OUT_CONFIRMATION_TEXT fixo via WhatsApp, não texto gerado", async () => {
+    vi.mocked(applyOptOutIfDetected).mockResolvedValueOnce(true);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    expect(sendWhatsAppMessage).toHaveBeenCalledWith(
+      BASE_CTX.lead.phone_normalized,
+      OPT_OUT_CONFIRMATION_TEXT,
+      "test-phone-id"
+    );
+  });
+
+  it("optedOut=true: salva a confirmação em messages com autor=sistema, direcao=saida", async () => {
+    vi.mocked(applyOptOutIfDetected).mockResolvedValueOnce(true);
+    const messagesInsertMock = vi.fn().mockReturnValue({
+      select: vi.fn().mockReturnValue({
+        single: vi.fn().mockResolvedValue({ data: { id: "msg-optout-1" }, error: null }),
+      }),
+    });
+    vi.mocked(supabaseAdmin.from).mockImplementation((table: string) => {
+      if (table === "messages") return { insert: messagesInsertMock } as any;
+      return defaultSupabaseChain();
+    });
+
+    await runAiPipeline(BASE_PARAMS);
+
+    expect(messagesInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        direcao: "saida",
+        autor: "sistema",
+        mensagem: OPT_OUT_CONFIRMATION_TEXT,
+      })
+    );
+  });
+
+  it("optedOut=true: chama applyOptOutIfDetected com storeId/leadId/text corretos", async () => {
+    vi.mocked(applyOptOutIfDetected).mockResolvedValueOnce(true);
+
+    await runAiPipeline(BASE_PARAMS);
+
+    expect(applyOptOutIfDetected).toHaveBeenCalledWith({
+      storeId: BASE_PARAMS.storeId,
+      leadId: BASE_PARAMS.leadId,
+      text: BASE_PARAMS.incomingText,
+    });
+  });
+
+  it("optedOut=true tem prioridade sobre handoff humano — nunca chega a computar guardrail", async () => {
+    vi.mocked(applyOptOutIfDetected).mockResolvedValueOnce(true);
+    vi.mocked(runGuardrails).mockReturnValue({ mode: "human_handoff", reason: "handoff" } as any);
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("skipped_opt_out");
+    expect(runGuardrails).not.toHaveBeenCalled();
+  });
+
+  it("optedOut=true: falha no envio WA da confirmação é non-fatal, ainda retorna skipped_opt_out", async () => {
+    vi.mocked(applyOptOutIfDetected).mockResolvedValueOnce(true);
+    vi.mocked(sendWhatsAppMessage).mockRejectedValueOnce(new Error("WA down"));
+
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(result.agent_status).toBe("skipped_opt_out");
+  });
+
+  it("optedOut=false: fluxo normal segue, LLM é chamada", async () => {
+    const result = await runAiPipeline(BASE_PARAMS);
+
+    expect(applyOptOutIfDetected).toHaveBeenCalledWith({
+      storeId: BASE_PARAMS.storeId,
+      leadId: BASE_PARAMS.leadId,
+      text: BASE_PARAMS.incomingText,
+    });
+    expect(runAgent).toHaveBeenCalled();
+    expect(result.agent_status).toBe("ok");
   });
 });
