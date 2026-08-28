@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-08-26
+Last Updated: 2026-08-28
 
 ---
 
@@ -165,9 +165,9 @@ WhatsApp Integration
 
 Status
 
-🟡 Waiting Production Validation
+✅ Stable
 
-Não é mais "sandbox / aguardando número real" — isso foi resolvido (B001, ver `ACTIVE BLOCKERS`). É "número real ativo em produção desde 27/07, acumulando validação": a janela inicial de ~4h com mensagens reais e `agent_status: ok` (27/07, 18:31–22:44) é começo da validação, não conclusão. Não inflar pra ✅ até rodar mais tempo.
+Número real ativo em produção desde 27/07 (B001). Mais de um mês de tráfego real: lock de concorrência (`pipeline_locked_at`) comprovado em uso real (2026-07-31), opt-out validado ao vivo contra WhatsApp real (2026-08-26).
 
 ---
 
@@ -175,7 +175,7 @@ AI Pipeline
 
 Status
 
-🟡 Waiting Production Validation
+✅ Stable
 
 ---
 
@@ -185,6 +185,8 @@ Status
 
 🟡 Waiting Production Validation
 
+Aguardando Camada 2 do BL-0040 (validação por tempo decorrido da nova cadência 20h/3d/7d) — checkpoints 2026-09-02 e 2026-09-09.
+
 ---
 
 Lead Reactivation
@@ -192,6 +194,8 @@ Lead Reactivation
 Status
 
 🟡 Waiting Production Validation
+
+Aguardando Camada 2 do BL-0040 (mesma validação — reativação depende de `follow_up_completed_at` gravar corretamente) — checkpoints 2026-09-02 e 2026-09-09.
 
 ---
 
@@ -283,7 +287,7 @@ Resolved (2026-07-21)
 
 B005
 
-MVP end-to-end acceptance test (real WhatsApp number → AI pipeline → close with margin guardrail) blocked until B001-B002 clear.
+MVP end-to-end acceptance test (real WhatsApp number → AI pipeline → close with margin guardrail). B001/B002 já resolvidos — nada mais bloqueia tecnicamente. O que falta de fato: o braço de fechamento de venda com guardrail de margem nunca foi exercido ponta a ponta em produção real.
 
 Owner
 
@@ -291,7 +295,7 @@ Engineering
 
 Status
 
-Blocked by B001 (B002 resolved)
+Open
 
 ---
 
@@ -539,17 +543,23 @@ Every active risk belongs here.
 
 # CURRENT TECHNICAL DEBT
 
-Only active debt. Source: CLAUDE.md 2026-07-20 audit.
+Only active debt. Source: CLAUDE.md 2026-07-20 audit, revisado 2026-08-28 contra estado real do repo.
 
-RBAC absent — any store user can reassign any lead (`assignLeadToUser`/`removeLeadAssignment` only check `store_id`). Blocks reliable commission attribution.
+`error_category`/`error_message` — a coluna `error_message` existe em `reactivation_logs` (migration 024, confirmada em produção 2026-08-01), mas nenhum código a popula; `error_category` continua ausente em ambas as tabelas (`reactivation_logs`/`follow_up_logs`). Falhas de envio WA em cron jobs seguem silenciosas (observability gap). Ver `BL-0022`, `BL-0042`.
 
-Message query has no limit.
+Histórico de atribuição de lead — o dado passou a existir: `audit_logs` grava `lead.reassigned`/`lead.unassigned` desde 2026-08-25 (`lib/actions.ts`). Falta rota de consulta no produto, não o dado.
 
-`error_category`/`error_message` missing in `reactivation_logs`/`follow_up_logs` — WhatsApp send failures in cron jobs are silent (observability gap).
+`calculateOperationalMetrics()` não usa `leads.valor_final` (existe desde migration 020) — sem faturamento, margem por venda ou CAC em analytics ainda. Fase 2.3 do roadmap.
 
-Lead assignment has no history — only current `assigned_to` is stored. Needed before commission/ROI auditing.
+`WHATSAPP_ACCESS_TOKEN` global, escopado ao Business Manager da CMOV — bloqueia tecnicamente o onboarding do cliente 2 (token não pertence à loja nova). Ver `DL-0003`, roadmap 3.1/3.2.
 
-`calculateOperationalMetrics()` does not use `leads.valor_final` (exists since migration 020) — no revenue, margin-per-sale, or CAC in analytics yet.
+`follow_up_logs`/`reactivation_logs` contam tentativas de forma vitalícia, sem reset por ciclo — lead que completa 3 follow-ups fica permanentemente inelegível pra follow-up futuro, mesmo esfriando de novo meses depois. Ver `BL-0044`.
+
+`users` não tem flag de vendedor ativo/inativo — todo `role='vendedor'` é candidato na distribuição automática, mesmo afastado. Ver `BL-0028`.
+
+Resíduo órfão em `schema_migrations`. Ver `KI-0009`.
+
+Fila de mensagens sem resposta (`getUnansweredIncomingText`, `lib/pipeline-dispatch.ts:71-82`) não tem `.limit()` nem paginação — bounded na prática pelo filtro "desde a última saída", mas sem teto explícito. Demais queries de `messages` no pipeline já têm `.limit()` (`lib/agent-context.ts:106` histórico de conversa, `.limit(10)`; dashboard `app/inicio/page.tsx:45`, `.limit(2000)`).
 
 Document every intentional debt.
 
@@ -717,31 +727,9 @@ Public launch.
 
 ---
 
-# DECISION LOG
-
-Latest important decisions.
-
-YYYY-MM-DD
-
-Decision
-
-Description
-
-Reference
-
-ADR-XXXX
-
-This section is chronological.
-
-Newest first.
-
----
-
 # RECENT INCIDENTS
 
-None
-
-or
+2026-08-25 — `audit_logs` nunca aplicada em produção apesar de doc marcar "fechado" desde 30/07. Trilha de auditoria 100% silenciosa por ~1 mês (`logAudit` falhando só pro Sentry). Causa raiz: migrations 020-043 aplicadas via SQL Editor, não CLI — `schema_migrations` travado na 019. Corrigido no mesmo dia. Ver DL-0020, KI-0009.
 
 List latest production incidents.
 
@@ -794,21 +782,21 @@ Never start coding without understanding current project status.
 
 The MVP is considered validated only when:
 
-□ Production environment configured.
+[x] Production environment configured.
 
-□ WhatsApp production number operational.
+[x] WhatsApp production number operational.
 
-□ Token permanent.
+[x] Token permanent.
 
-□ Migration applied.
+[x] Migration applied. (ressalva: resíduo órfão em `schema_migrations`, KI-0009)
 
 □ CRON validated.
 
 □ End-to-end tests completed.
 
-□ No critical bugs.
+[x] No critical bugs.
 
-□ Operational logs healthy.
+[x] Operational logs healthy. (Sentry ativo com scrub de PII)
 
 □ Internal pilot completed.
 
