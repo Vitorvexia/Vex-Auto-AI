@@ -1138,6 +1138,89 @@ Notes
 
 ---
 
+KI-0011
+
+Title
+
+`WHATSAPP_TEMPLATE_SEND_ENABLED` ausente em produção bloqueava silenciosamente todo follow-up/reativação fora da janela de sessão de 24h
+
+Category
+
+Configuration / Observability
+
+Severity
+
+High — bloqueio funcional total de 2 motores de negócio (follow-up + reativação), sem qualquer erro visível
+
+Status
+
+Resolved (2026-08-31) — flag ligado em produção + 2 fixes de observabilidade pra não repetir o silêncio
+
+Environment
+
+Produção (Vercel, `vercel.json` cron `0 12 * * *`) + Supabase produção (`follow_up_logs`/`reactivation_logs`)
+
+Date Discovered
+
+2026-08-31, durante checagem de Camada 2 de `BL-0040`/`DL-0021` — lead de teste do founder (`68067c0a-da0a-452a-83c7-1e6bb38fbb53`) sem nenhum registro em `follow_up_logs` 5 dias depois do ponto zero (2026-08-26T20:09:29Z).
+
+Reported By
+
+Achado por investigação em 5 etapas read-only (Claude), a partir de um sintoma reportado pelo founder ("zero registro em `follow_up_logs`, cron rodando 2XX").
+
+Description
+
+`lib/follow-up.ts`/`lib/reactivation.ts` decidem entre texto livre (dentro da janela de sessão WhatsApp de 24h desde a última mensagem do lead) e template Meta aprovado (fora dela). Se a conversa está fora da janela **e** `WHATSAPP_TEMPLATE_SEND_ENABLED !== "true"`, o código pula o envio (`reason=template_required_not_enabled`) — **antes** do insert em `follow_up_logs`/`reactivation_logs`, só com `console.log`, sem Sentry, sem qualquer coluna de banco marcada.
+
+Follow-up dispara por definição depois do lead ficar quieto (20h/3d/7d) — está, por construção, quase sempre fora da janela de 24h. Com o flag ausente, isso não é uma falha ocasional: é bloqueio estrutural de **todo** follow-up/reativação, sempre, desde que o motor `BL-0040` subiu em produção (2026-08-26).
+
+`27_PROJECT_STATUS.md` B006 dizia desde 2026-07-29 que o flag estava `true` em produção com os 9 templates aprovados — nunca verificado contra `vercel env ls production`, só inferido de um teste manual (`scripts/test-template-send.ts`) que chama a função de envio direto, sem passar pelo job/RPC real. Erro de documentação de ~33 dias.
+
+Symptoms
+
+`follow_up_logs`/`reactivation_logs` sem nenhuma linha nova pra um lead genuinamente elegível (confirmado via RPC chamada manualmente), mesmo com o cron `daily-run` retornando 2XX e fazendo chamadas reais ao Supabase todo dia. Nenhum erro em nenhum lugar visível (sem retenção de log no plano Vercel Hobby, sem Sentry porque não era um `throw`, sem coluna de status porque o `continue` acontecia antes do insert).
+
+Root Cause
+
+`WHATSAPP_TEMPLATE_SEND_ENABLED` ausente das env vars de produção na Vercel (confirmado via `vercel env ls production` — 15 vars listadas, essa fora da lista). Doc dizia o contrário desde 07-29, nunca reverificado.
+
+Impact
+
+5 dias corridos (2026-08-26 a 2026-08-31) sem nenhum follow-up/reativação real enviado em produção — funcionalmente equivalente a essas 2 features estarem desligadas, apesar de "implementadas e deployadas".
+
+Workaround
+
+Nenhum necessário além do fix — founder ligou o flag em produção em 2026-08-31.
+
+Permanent Fix
+
+1. Flag `WHATSAPP_TEMPLATE_SEND_ENABLED=true` confirmado em produção (2026-08-31, founder).
+2. `Sentry.captureException` no erro de RPC de elegibilidade (`lib/follow-up.ts`/`lib/reactivation.ts`) — não resolve este caso específico (não era erro de RPC), mas fecha um gap de observabilidade adjacente encontrado no caminho.
+3. Contador `skipped_template_disabled` (`FollowUpJobResult`/`ReactivationJobResult`) — soma dentro de `skipped`, aparece no corpo de resposta do cron. Esse é o fix que teria tornado este problema específico visível em minutos em vez de 5 dias, se já existisse.
+4. `scripts/diag-followup-trace.ts` (novo, permanente) — trace de gates pra 1 lead, read-only, reusa `canSendMarketingMessage` real. Ferramenta de suporte pra qualquer investigação parecida no futuro.
+
+Validation Steps
+
+`scripts/diag-followup-trace.ts --lead-id 68067c0a-da0a-452a-83c7-1e6bb38fbb53` com o flag ligado mostrou os 3 gates passando (`canSendMarketingMessage: allowed=true`, `withinSessionWindow=false` mas `TEMPLATE_SEND_ENABLED=true` → segue pro insert). Simulação com `now` fixado no horário do próximo cron (2026-09-01T12:00 UTC) confirmou que o lead passaria por todos os gates e chegaria no envio via template `follow_up_1`.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+Ver `27_PROJECT_STATUS.md` "RECENT INCIDENTS", entrada de 2026-08-31.
+
+Notes
+
+`29_DECISIONS_LOG.md` `DL-0022` tem o relato completo da investigação, decisão e reasoning. B006 em `27_PROJECT_STATUS.md` tem nota de correção anexada (não reescrita) explicando por que o fechamento de 07-29 estava errado.
+
+---
+
 (Update continuously.)
 
 ---
