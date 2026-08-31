@@ -12,11 +12,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted() — variáveis usadas nas factories dos vi.mock()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, mockSend, mockGetPhoneId } = vi.hoisted(() => ({
+const { mockFrom, mockRpc, mockSend, mockGetPhoneId, mockCaptureException } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockRpc: vi.fn(),
   mockSend: vi.fn(),
   mockGetPhoneId: vi.fn(),
+  mockCaptureException: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -25,6 +26,10 @@ const { mockFrom, mockRpc, mockSend, mockGetPhoneId } = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockRpc },
+}));
+
+vi.mock("@sentry/nextjs", () => ({
+  captureException: mockCaptureException,
 }));
 
 vi.mock("@/lib/whatsapp-send", () => ({
@@ -245,6 +250,18 @@ describe("runFollowUpJob — sem conversas elegíveis", () => {
     const result = await runFollowUpJob();
 
     expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0 });
+  });
+
+  it("erro de RPC vai pro Sentry — não fica silencioso", async () => {
+    const rpcError = { message: "RPC error" };
+    mockRpc.mockResolvedValueOnce({ data: null, error: rpcError });
+
+    await runFollowUpJob();
+
+    expect(mockCaptureException).toHaveBeenCalledWith(
+      rpcError,
+      { tags: { job: "follow_up_rpc_error" } }
+    );
   });
 
   it("passa storeId e limit ao RPC", async () => {

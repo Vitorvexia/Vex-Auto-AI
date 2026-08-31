@@ -4,6 +4,7 @@ import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { maskPhone } from "@/lib/pii";
 import { getSafeName } from "@/lib/lead-name";
 import { canSendMarketingMessage } from "@/lib/messaging-eligibility";
+import * as Sentry from "@sentry/nextjs";
 
 // Envio por template Meta aprovado (follow_up_1/2/3) — desligado por padrão.
 // Template não aprovado retorna erro da Meta; ativar só depois da aprovação
@@ -139,7 +140,10 @@ export async function runFollowUpJob(opts?: {
   );
 
   if (error || !data || (data as EligibleConv[]).length === 0) {
-    if (error) console.error("[follow-up] RPC error:", error.message);
+    if (error) {
+      console.error("[follow-up] RPC error:", error.message);
+      Sentry.captureException(error, { tags: { job: "follow_up_rpc_error" } });
+    }
     return { processed: 0, sent: 0, skipped: 0, failed: 0 };
   }
 
