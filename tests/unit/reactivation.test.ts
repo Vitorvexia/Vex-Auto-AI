@@ -422,13 +422,13 @@ describe("runReactivationJob — sem leads elegíveis", () => {
   it("retorna zeros quando RPC retorna vazio", async () => {
     mockRpc.mockResolvedValueOnce({ data: [], error: null });
     const result = await runReactivationJob();
-    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0 });
+    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0, skipped_template_disabled: 0 });
   });
 
   it("retorna zeros quando RPC retorna erro", async () => {
     mockRpc.mockResolvedValueOnce({ data: null, error: { message: "RPC error" } });
     const result = await runReactivationJob();
-    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0 });
+    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0, skipped_template_disabled: 0 });
   });
 
   it("erro de RPC vai pro Sentry — não fica silencioso", async () => {

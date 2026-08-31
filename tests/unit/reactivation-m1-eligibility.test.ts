@@ -103,7 +103,26 @@ describe("runReactivationJob — M1 janela de sessão", () => {
 
     expect(mockSendText).not.toHaveBeenCalled();
     expect(mockFrom).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ processed: 1, sent: 0, skipped: 1, failed: 0 });
+    expect(result).toMatchObject({ processed: 1, sent: 0, skipped: 1, failed: 0, skipped_template_disabled: 1 });
+  });
+
+  it("skipped_template_disabled soma por lote — só conta esse motivo específico, não outros skips", async () => {
+    const lead1 = { ...BASE_LEAD, lead_id: "lead-1", conversation_id: "conv-1", last_inbound_at: null };
+    const lead2 = {
+      ...BASE_LEAD,
+      lead_id: "lead-2",
+      conversation_id: "conv-2",
+      last_marketing_sent_at: new Date(NOW.getTime() - 60 * 60 * 1000).toISOString(),
+    };
+    mockRpc.mockResolvedValueOnce({ data: [lead1, lead2], error: null });
+
+    const result = await runReactivationJob({ now: NOW });
+
+    expect(result).toMatchObject({
+      processed: 2,
+      skipped: 2,
+      skipped_template_disabled: 1,
+    });
   });
 });
 

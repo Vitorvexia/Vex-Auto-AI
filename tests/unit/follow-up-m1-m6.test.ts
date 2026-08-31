@@ -111,7 +111,27 @@ describe("runFollowUpJob — M1 janela de sessão", () => {
     expect(mockSendTemplate).not.toHaveBeenCalled();
     // Nenhum claim inserido — só a chamada de RPC acontece.
     expect(mockFrom).not.toHaveBeenCalled();
-    expect(result).toMatchObject({ processed: 1, sent: 0, skipped: 1, failed: 0 });
+    expect(result).toMatchObject({ processed: 1, sent: 0, skipped: 1, failed: 0, skipped_template_disabled: 1 });
+  });
+
+  it("skipped_template_disabled soma por lote — só conta esse motivo específico, não outros skips", async () => {
+    // conv1: template desligado (skipped_template_disabled). conv2: trava de frequência (skip comum).
+    const conv1 = { ...BASE_CONV, conversation_id: "conv-1", lead_id: "lead-1", last_inbound_at: null };
+    const conv2 = {
+      ...BASE_CONV,
+      conversation_id: "conv-2",
+      lead_id: "lead-2",
+      last_marketing_sent_at: new Date(NOW.getTime() - 60 * 60 * 1000).toISOString(),
+    };
+    mockRpc.mockResolvedValueOnce({ data: [conv1, conv2], error: null });
+
+    const result = await runFollowUpJob({ now: NOW });
+
+    expect(result).toMatchObject({
+      processed: 2,
+      skipped: 2,
+      skipped_template_disabled: 1,
+    });
   });
 
   it("last_inbound_at exatamente 24h atrás: já fora da janela (limite exclusivo)", async () => {

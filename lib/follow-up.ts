@@ -110,6 +110,10 @@ export interface FollowUpJobResult {
   sent: number;
   skipped: number;
   failed: number;
+  // Subconjunto de `skipped` — fora da janela de sessão de 24h e
+  // WHATSAPP_TEMPLATE_SEND_ENABLED desligado. Visível na resposta do cron
+  // pra não depender de log/Sentry pra flagrar (ver DL-0021 seção templates).
+  skipped_template_disabled: number;
 }
 
 interface EligibleConv {
@@ -144,7 +148,7 @@ export async function runFollowUpJob(opts?: {
       console.error("[follow-up] RPC error:", error.message);
       Sentry.captureException(error, { tags: { job: "follow_up_rpc_error" } });
     }
-    return { processed: 0, sent: 0, skipped: 0, failed: 0 };
+    return { processed: 0, sent: 0, skipped: 0, failed: 0, skipped_template_disabled: 0 };
   }
 
   const result: FollowUpJobResult = {
@@ -152,6 +156,7 @@ export async function runFollowUpJob(opts?: {
     sent: 0,
     skipped: 0,
     failed: 0,
+    skipped_template_disabled: 0,
   };
 
   for (const conv of data as EligibleConv[]) {
@@ -186,6 +191,7 @@ export async function runFollowUpJob(opts?: {
         `[follow-up] skipped conv=${conv.conversation_id} attempt=${attemptNumber} reason=template_required_not_enabled`
       );
       result.skipped++;
+      result.skipped_template_disabled++;
       continue;
     }
 

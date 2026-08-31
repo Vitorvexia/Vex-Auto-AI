@@ -151,6 +151,10 @@ export interface ReactivationJobResult {
   sent: number;
   skipped: number;
   failed: number;
+  // Subconjunto de `skipped` — fora da janela de sessão de 24h e
+  // WHATSAPP_TEMPLATE_SEND_ENABLED desligado. Visível na resposta do cron
+  // pra não depender de log/Sentry pra flagrar (ver DL-0021 seção templates).
+  skipped_template_disabled: number;
 }
 
 interface EligibleLead {
@@ -186,7 +190,7 @@ export async function runReactivationJob(opts?: {
       console.error("[reactivation] RPC error:", error.message);
       Sentry.captureException(error, { tags: { job: "reactivation_rpc_error" } });
     }
-    return { processed: 0, sent: 0, skipped: 0, failed: 0 };
+    return { processed: 0, sent: 0, skipped: 0, failed: 0, skipped_template_disabled: 0 };
   }
 
   const result: ReactivationJobResult = {
@@ -194,6 +198,7 @@ export async function runReactivationJob(opts?: {
     sent: 0,
     skipped: 0,
     failed: 0,
+    skipped_template_disabled: 0,
   };
 
   for (const lead of data as EligibleLead[]) {
@@ -226,6 +231,7 @@ export async function runReactivationJob(opts?: {
         `[reactivation] skipped lead=${lead.lead_id} attempt=${attemptNumber} reason=template_required_not_enabled`
       );
       result.skipped++;
+      result.skipped_template_disabled++;
       continue;
     }
 

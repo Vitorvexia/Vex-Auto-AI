@@ -241,7 +241,7 @@ describe("runFollowUpJob — sem conversas elegíveis", () => {
 
     const result = await runFollowUpJob();
 
-    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0 });
+    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0, skipped_template_disabled: 0 });
   });
 
   it("retorna zeros quando RPC retorna erro", async () => {
@@ -249,7 +249,7 @@ describe("runFollowUpJob — sem conversas elegíveis", () => {
 
     const result = await runFollowUpJob();
 
-    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0 });
+    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0, skipped_template_disabled: 0 });
   });
 
   it("erro de RPC vai pro Sentry — não fica silencioso", async () => {
