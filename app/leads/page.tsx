@@ -9,6 +9,7 @@ import { getStoreAssignmentSummary } from "@/lib/seller-metrics";
 import { resolveAssignedToFilter, isStaleLead } from "@/lib/lead-filter";
 import { BarChart } from "@/app/components/BarChart";
 import { DelayedLeadsBadge } from "@/app/components/DelayedLeadsBadge";
+import { KanbanDragProvider } from "@/lib/kanban-drag";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
@@ -232,28 +233,30 @@ export default async function LeadsPage({
         {assignmentSummary.leads_without_owner} sem responsável
       </p>
 
-      <div className="kanban">
-        {COLUMNS.map((status) => {
-          const items = byStatus[status];
-          return (
-            <KanbanColumn key={status} status={status} count={items.length}>
-              {items.length === 0 ? (
-                <div className="empty">Nenhum lead</div>
-              ) : (
-                items.map((l) => (
-                  <LeadCard
-                    key={l.id}
-                    {...l}
-                    assignedTo={l.assigned_to}
-                    vendedores={vendedores}
-                    canReassign={canReassign}
-                  />
-                ))
-              )}
-            </KanbanColumn>
-          );
-        })}
-      </div>
+      <KanbanDragProvider>
+        <div className="kanban">
+          {COLUMNS.map((status) => {
+            const items = byStatus[status];
+            return (
+              <KanbanColumn key={status} status={status} count={items.length}>
+                {items.length === 0 ? (
+                  <div className="empty">Nenhum lead</div>
+                ) : (
+                  items.map((l) => (
+                    <LeadCard
+                      key={l.id}
+                      {...l}
+                      assignedTo={l.assigned_to}
+                      vendedores={vendedores}
+                      canReassign={canReassign}
+                    />
+                  ))
+                )}
+              </KanbanColumn>
+            );
+          })}
+        </div>
+      </KanbanDragProvider>
 
       <div className="section-card leads-status-chart">
         <div className="section-card-head">

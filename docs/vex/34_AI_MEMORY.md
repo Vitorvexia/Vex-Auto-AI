@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-07-20
+Last Updated: 2026-08-25
 
 ---
 
@@ -254,6 +254,62 @@ AI Engineering
 SRE Guide
 
 Performance
+
+Status
+
+Active
+
+---
+
+# REAL MEMORIES
+
+Memory ID
+
+MEM-0002
+
+Date
+
+2026-08-25
+
+Category
+
+Database
+
+Title
+
+Migration aplicada via SQL Editor do Supabase Studio grava versão-timestamp, não o número do arquivo — `migration list` nunca vê como aplicada
+
+Observation
+
+Quando alguém cola o SQL de uma migration direto no SQL Editor do Supabase Studio (em vez de rodar via CLI), o Studio registra o evento em `supabase_migrations.schema_migrations` — mas sob uma `version` timestamp (ex: `20260615193022`), não sob o número simples do arquivo local (ex: `020`). O CLI (`supabase migration list`) compara por essa `version` exata — os dois nunca batem, então a migration aparece como "nunca aplicada" (`remote: ""`) mesmo quando o schema real já tem a mudança.
+
+Context
+
+Descoberto ao investigar por que `supabase migration list` mostrava 24 migrations (020-043) como nunca aplicadas, quando 21 delas já estavam de fato no schema de produção. Confirmado via `select * from supabase_migrations.schema_migrations where version='20260615193022'` — `name` e `statements` batiam exatamente com `020_lead_sale_fields.sql`, `created_by: vexautoai@gmail.com`. Ver `29_DECISIONS_LOG.md` DL-0020 e `30_KNOWN_ISSUES.md` KI-0009 pro relato completo (incluindo 2 migrations que pareciam "nunca aplicadas" mas na verdade eram um caso pior — nunca tinham sido aplicadas mesmo, `audit_logs`/RENAVE, achado só pela auditoria linha-a-linha contra o schema real).
+
+Impact
+
+Nunca confiar em `migration list`/CLAUDE.md/docs pra decidir se um schema mudou de verdade — sempre confirmar com uma query direta contra `information_schema`/`pg_constraint`/`pg_indexes` antes de rodar `migration up`/`db push` num projeto onde SQL Editor manual é possível (ou já aconteceu no passado). Rodar `supabase migration repair` logo depois de qualquer aplicação manual evita o gap se repetir.
+
+Confidence
+
+High
+
+Source
+
+Sessão de 2026-08-25 (BL-0037, aplicação da migration 022 + auditoria completa 020-043)
+
+Related Documents
+
+29_DECISIONS_LOG.md (DL-0020)
+
+30_KNOWN_ISSUES.md (KI-0009)
+
+12_DATABASE_STANDARDS.md
+
+Review Date
+
+N/A
 
 Status
 

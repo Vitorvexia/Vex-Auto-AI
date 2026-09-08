@@ -26,6 +26,9 @@
   --status-fechado:     #10B981;
   --status-perdido:     #EF4444;
 
+  --funnel-morno: #FBBF24;
+  --funnel-quente:#F43F5E;
+
   --bubble-lead:   #1E2836;
   --bubble-ia:     #0A1628;
   --bubble-humano: #0A1E14;
@@ -312,6 +315,20 @@ a { color: inherit; text-decoration: none; }
 }
 .kanban-col-body[data-pending]             { opacity: .55; pointer-events: none; }
 
+/* ─── Kanban drag error (feedback quando moveLeadStatus rejeita) ── */
+.kanban-drag-error {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  z-index: 70; display: flex; align-items: center; gap: 10px;
+  padding: 10px 14px; border-radius: 8px; max-width: min(420px, calc(100vw - 32px));
+  background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
+  color: #F87171; font-size: 12.5px; line-height: 1.4;
+  box-shadow: 0 4px 16px rgba(0,0,0,.25);
+}
+.kanban-drag-error button {
+  background: none; border: none; color: inherit; cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0; flex-shrink: 0;
+}
+
 /* ─── Lead card ──────────────────────────────── */
 .lead-card {
   display: block; background: var(--panel);
@@ -351,22 +368,44 @@ a { color: inherit; text-decoration: none; }
 .lead-card-phone { font-size: 11.5px; color: var(--muted); margin-bottom: 6px; }
 .lead-card-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 7px; padding-top: 6px; border-top: 1px solid var(--border); }
 .lead-card-time  { font-size: 11px; color: var(--muted); }
-.lead-card-chat  { font-size: 11px; color: var(--accent); font-weight: 600; }
+/* Botão visual (secundário/outline) — mesma família do .lead-create-trigger
+   (accent sólido, topo da página), só que outline e menor pro contexto do
+   card. Continua <span>: o Link do card inteiro já é o alvo do clique. */
+.lead-card-chat {
+  display: inline-flex; align-items: center; gap: 3px;
+  padding: 3px 9px; border-radius: 6px;
+  background: rgba(0,91,254,.08); border: 1px solid rgba(0,91,254,.3);
+  color: var(--accent); font-size: 11px; font-weight: 700;
+  transition: background-color .15s, border-color .15s;
+}
+.lead-card:hover .lead-card-chat { background: rgba(0,91,254,.16); border-color: var(--accent); }
 
 /* ─── Lead card wrapper + tray (mover status / atribuir vendedor) ───── */
 .lead-card-wrap {
   display: flex; flex-direction: column; cursor: grab;
+  position: relative; /* âncora pro botão/menu de LeadStatusMenu, canto do card */
   transform-origin: center;
-  transition: transform .18s cubic-bezier(.16,1,.3,1), box-shadow .18s cubic-bezier(.16,1,.3,1), opacity .18s;
+  touch-action: none; /* pointer drag próprio — sem isso o browser rouba o gesto pra scroll em touch */
+  user-select: none; -webkit-user-select: none; /* sem isso mousedown+move seleciona texto do card */
+  transition: transform .18s cubic-bezier(.16,1,.3,1), box-shadow .18s cubic-bezier(.16,1,.3,1);
   animation: lead-card-in .22s cubic-bezier(.16,1,.3,1) both;
 }
 .lead-card-wrap.is-dragging {
+  /* card original vira só placeholder (reserva o espaço na coluna) — a
+     versão visível é o .lead-card-drag-ghost, num portal fora do overflow
+     da coluna (senão fica cortado nas bordas + atrás da scrollbar). */
   cursor: grabbing;
-  opacity: .96;
+  opacity: 0;
+  pointer-events: none;
+}
+.lead-card-drag-ghost {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  cursor: grabbing;
+  margin: 0;
   transform: scale(1.045) rotate(-1.5deg);
-  box-shadow: 0 16px 32px rgba(0,0,0,.35), 0 4px 10px rgba(0,0,0,.22);
-  z-index: 20;
-  position: relative;
+  box-shadow: 0 18px 36px rgba(0,0,0,.38), 0 6px 12px rgba(0,0,0,.24);
 }
 @keyframes lead-card-in {
   from { opacity: 0; transform: translateY(5px) scale(.98); }
@@ -404,6 +443,47 @@ a { color: inherit; text-decoration: none; }
 .lead-card-tray select:hover:not(:disabled) { border-color: var(--border-strong); }
 .lead-card-tray select:focus { border-color: var(--accent); outline: none; }
 .lead-card-tray select:disabled { opacity: .55; cursor: not-allowed; }
+
+/* ─── Lead status menu (fallback acessível ao drag-and-drop) ── */
+.lead-status-menu {
+  position: absolute; top: -8px; right: -8px; z-index: 5;
+  cursor: default; /* não herda o cursor:grab do wrap — não é área de drag */
+}
+.lead-status-menu.is-pending { opacity: .55; }
+.lead-status-menu-trigger {
+  display: flex; align-items: center; justify-content: center;
+  width: 22px; height: 22px; border-radius: 50%;
+  background: var(--panel); border: 1px solid var(--border);
+  color: var(--muted); cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0,0,0,.2);
+  transition: border-color .15s, color .15s;
+}
+.lead-status-menu-trigger:hover:not(:disabled),
+.lead-status-menu-trigger:focus-visible {
+  border-color: var(--accent); color: var(--accent); outline: none;
+}
+.lead-status-menu-trigger:disabled { cursor: not-allowed; }
+.lead-status-menu-list {
+  position: absolute; top: 26px; right: 0; z-index: 6;
+  display: flex; flex-direction: column; min-width: 132px;
+  padding: 4px; gap: 1px;
+  background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.3);
+}
+.lead-status-menu-item {
+  text-align: left; padding: 6px 8px; border-radius: 5px;
+  background: none; border: none; cursor: pointer;
+  font-size: 12px; color: var(--text);
+}
+.lead-status-menu-item:hover,
+.lead-status-menu-item:focus-visible { background: var(--panel-2); outline: none; }
+.lead-status-menu-error {
+  position: absolute; top: 26px; right: 0; z-index: 6;
+  display: block; width: max-content; max-width: 180px;
+  padding: 6px 8px; border-radius: 6px;
+  background: rgba(239,68,68,.1); border: 1px solid rgba(239,68,68,.3);
+  color: #F87171; font-size: 10.5px; line-height: 1.4;
+}
 
 .lead-assignment { display: flex; align-items: center; gap: 6px; }
 .lead-assignment-current {
@@ -943,6 +1023,62 @@ a { color: inherit; text-decoration: none; }
 .vendor-filter-clear { border-color: rgba(239,68,68,.45) !important; background: rgba(239,68,68,.1) !important; color: #F87171 !important; }
 
 .leads-status-chart { margin-top: 18px; }
+
+/* ─── Funil de Temperatura (leads page) ──────────── */
+.leads-funnel { padding: 14px 16px; }
+.leads-funnel-head {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: 16px;
+}
+.leads-funnel-toggle {
+  display: inline-flex; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 7px;
+  overflow: hidden;
+}
+.leads-funnel-toggle button {
+  border: none; border-radius: 0; padding: 5px 10px;
+  font-size: 11px; font-weight: 600; color: var(--muted); white-space: nowrap;
+  background: var(--panel-2); cursor: pointer; transition: background .15s, color .15s;
+}
+.leads-funnel-toggle button.active { background: var(--accent); color: #fff; }
+.leads-funnel-svg-wrap {
+  position: relative; width: 100%; max-width: 900px; margin: 0 auto;
+  aspect-ratio: 640 / 310;
+}
+.leads-funnel-svg { width: 100%; height: 100%; display: block; overflow: visible; }
+.leads-funnel-svg text { font-family: var(--font-exo2), "Exo 2", system-ui, sans-serif; }
+.leads-funnel-etapa-label { font-size: 11px; }
+.leads-funnel-etapa-count { font-size: 11px; }
+.leads-funnel-etapa-percent { font-size: 11px; font-weight: 700; }
+.leads-funnel-shape {
+  transition: filter .15s, opacity .15s;
+  filter: drop-shadow(0 3px 6px rgba(0,0,0,.25));
+}
+.leads-funnel-shape-group.clickable { cursor: pointer; }
+.leads-funnel-shape-group.clickable:hover .leads-funnel-shape { filter: brightness(1.12) drop-shadow(0 3px 6px rgba(0,0,0,.25)); }
+.leads-funnel-shape-group.active .leads-funnel-shape {
+  filter: brightness(1.15) drop-shadow(0 0 0 2px var(--text-strong)) drop-shadow(0 3px 6px rgba(0,0,0,.3));
+}
+.leads-funnel-stage-overlay {
+  position: absolute; transform: translate(-50%, -50%);
+  font-size: 15px; font-weight: 800; color: var(--navy-dark);
+  text-shadow: 0 1px 1px rgba(255,255,255,.35);
+  pointer-events: none;
+}
+.leads-funnel-conversao-overlay {
+  display: flex; flex-direction: column; align-items: center; gap: 1px;
+  text-align: center;
+}
+.leads-funnel-conversao-count { font-size: 15px; font-weight: 800; }
+.leads-funnel-conversao-rate { font-size: 10px; font-weight: 700; }
+.leads-funnel-conversion {
+  position: absolute; transform: translate(-50%, -50%);
+  font-size: 10.5px; font-weight: 700; color: var(--muted);
+  background: var(--panel); border: 1px solid var(--border); border-radius: 999px;
+  padding: 1px 7px; pointer-events: none;
+}
+.leads-funnel-closed-chip {
+  margin: 14px 0 0; font-size: 11.5px; color: var(--muted); text-align: center;
+}
 
 /* ─── Delayed leads floating badge (leads page) ──── */
 .delayed-leads-badge {
@@ -1800,4 +1936,49 @@ details:not([open]) .dossie-title::before { content: "▶ "; }
   .mkt-step-reverse .mkt-step-media,
   .mkt-step-reverse .mkt-step-copy { order: initial; }
 }
+
+/* ─── Donut chart (dashboard) ────────────────────── */
+.donut-chart { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.donut-chart-ring { position: relative; width: 100px; height: 100px; flex-shrink: 0; }
+.donut-chart-svg { width: 100%; height: 100%; }
+.donut-chart-total {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  font-size: 18px; font-weight: 700; color: var(--text-strong);
+}
+.donut-chart-legend { display: flex; flex-direction: column; gap: 6px; flex: 1; min-width: 140px; }
+.donut-chart-legend li { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+.donut-chart-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.donut-chart-legend-label { flex: 1; }
+.donut-chart-legend-percent { color: var(--muted); font-size: 11px; }
+.donut-chart-legend-count { font-weight: 700; color: var(--text-strong); }
+.donut-chart-empty { font-style: italic; }
+
+.donut-card { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.donut-card-title { font-size: 13px; font-weight: 700; color: var(--text-strong); margin-bottom: 12px; display: block; }
+.dashboard-donut-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 0 16px 16px; }
 .onboarding-progress-dot.done { background: var(--accent); }
+
+/* ─── Seletor de período global (dashboard) ──────── */
+.dashboard-period-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dashboard-period-calendar { position: relative; margin-left: 20px; }
+.dashboard-period-calendar-btn {
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; border: 1px solid var(--border); border-radius: 7px;
+  background: var(--panel-2); color: var(--muted); cursor: pointer;
+}
+.dashboard-period-calendar-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.dashboard-period-popover {
+  position: absolute; top: calc(100% + 6px); right: 0; z-index: 20;
+  display: flex; flex-direction: column; gap: 8px;
+  background: var(--panel); border: 1px solid var(--border); border-radius: 8px;
+  padding: 12px; box-shadow: 0 4px 16px rgba(0,0,0,.25); min-width: 180px;
+}
+.dashboard-period-popover label { display: flex; flex-direction: column; gap: 4px; font-size: 11px; color: var(--muted); }
+.dashboard-period-popover input[type="date"] {
+  border: 1px solid var(--border); border-radius: 6px; padding: 5px 6px;
+  background: var(--panel-2); color: var(--text-strong); font-size: 12px;
+}
+.dashboard-period-popover-apply {
+  background: var(--accent); color: #fff; border: none; border-radius: 6px;
+  padding: 7px 12px; font-size: 12px; font-weight: 700; cursor: pointer; margin-top: 2px;
+}

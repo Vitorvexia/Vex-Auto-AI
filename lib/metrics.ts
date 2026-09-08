@@ -31,7 +31,7 @@ export type OperationalMetrics = {
   negotiation_leads: number;
   closed_leads: number;
   lost_leads: number;
-  avg_first_response_minutes: number;
+  avg_first_response_minutes: number | null;
   followup_response_rate: number;
   reactivation_response_rate: number;
   revenue_generated: number;
@@ -172,10 +172,14 @@ export function calculateOperationalMetrics(input: MetricsInput): OperationalMet
       if (diff > 0) responseTimes.push(diff / 60000);
     }
   }
+  // null = sem dado (nenhuma conversa com par entrada+resposta IA no período);
+  // distinto de 0, que é resposta real arredondada pra ~0min — distinção usada
+  // por quem consome avg_first_response_minutes (hoje nenhuma UI renderiza
+  // este campo; card que o exibia foi removido do dashboard)
   const avg_first_response_minutes =
     responseTimes.length > 0
       ? Math.round((responseTimes.reduce((a, b) => a + b, 0) / responseTimes.length) * 10) / 10
-      : 0;
+      : null;
 
   // followup response rate: % of sent followups where lead replied afterwards
   const sentFollowups = followUpLogs.filter((f) => f.status === "sent");

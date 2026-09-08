@@ -27,8 +27,8 @@ function pct(rate: number): string {
   return `${Math.round(rate * 100)}%`;
 }
 
-function mins(avg: number): string {
-  if (avg === 0) return "—";
+function mins(avg: number | null): string {
+  if (avg === null) return "—"; // sem dado — distinto de 0 (resposta real ~0min)
   return avg < 1 ? `${Math.round(avg * 60)}s` : `${avg.toFixed(1)} min`;
 }
 

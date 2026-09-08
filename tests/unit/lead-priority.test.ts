@@ -3,6 +3,7 @@ import {
   calculateLeadPriority,
   sortLeads,
   countStaleLeads,
+  pickConversationActivity,
   type PriorityInput,
   type PriorityTier,
 } from "@/lib/lead-priority";
@@ -222,5 +223,60 @@ describe("countStaleLeads", () => {
     ];
     expect(countStaleLeads(leads, TWO_HOURS, now)).toBe(2);
     expect(countStaleLeads(leads, 24 * 60 * 60 * 1000, now)).toBe(1);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// pickConversationActivity — escolhe qual ultima_mensagem_em usar quando um
+// lead tem múltiplas conversas, sem depender de ordem de retorno do banco
+// (bug real: fetchStaleCount em app/inicio/page.tsx usava convs[0] como
+// fallback arbitrário, sem .order() na query)
+// ---------------------------------------------------------------------------
+
+describe("pickConversationActivity", () => {
+  it("T1: sem conversas → null", () => {
+    expect(pickConversationActivity([])).toBeNull();
+  });
+
+  it("T2: uma conversa aberta → sua ultima_mensagem_em", () => {
+    const convs = [{ conversation_status: "ATIVA", ultima_mensagem_em: "2026-08-13T10:00:00Z" }];
+    expect(pickConversationActivity(convs)).toBe("2026-08-13T10:00:00Z");
+  });
+
+  it("T3: conversa ENCERRADA mais recente + conversa ATIVA mais antiga → prioriza a aberta, não a mais recente", () => {
+    const convs = [
+      { conversation_status: "ENCERRADA", ultima_mensagem_em: "2026-08-13T15:00:00Z" },
+      { conversation_status: "ATIVA", ultima_mensagem_em: "2026-08-13T09:00:00Z" },
+    ];
+    expect(pickConversationActivity(convs)).toBe("2026-08-13T09:00:00Z");
+  });
+
+  it("T4: duas conversas ENCERRADA (nenhuma aberta) → pega a mais recente, não a primeira do array", () => {
+    const convs = [
+      { conversation_status: "ENCERRADA", ultima_mensagem_em: "2026-07-01T10:00:00Z" }, // mais antiga, primeira no array
+      { conversation_status: "ENCERRADA", ultima_mensagem_em: "2026-08-10T10:00:00Z" }, // mais recente
+    ];
+    expect(pickConversationActivity(convs)).toBe("2026-08-10T10:00:00Z");
+  });
+
+  it("T5: duas conversas ATIVA (caso não deveria existir mas não pode quebrar) → pega a mais recente", () => {
+    const convs = [
+      { conversation_status: "ATIVA", ultima_mensagem_em: "2026-08-01T10:00:00Z" },
+      { conversation_status: "ATIVA", ultima_mensagem_em: "2026-08-15T10:00:00Z" },
+    ];
+    expect(pickConversationActivity(convs)).toBe("2026-08-15T10:00:00Z");
+  });
+
+  it("T6: ultima_mensagem_em nula na conversa aberta → cai pro fallback do caller (null), não quebra", () => {
+    const convs = [{ conversation_status: "ATIVA", ultima_mensagem_em: null }];
+    expect(pickConversationActivity(convs)).toBeNull();
+  });
+
+  it("T7: PAUSADA conta como aberta (só ENCERRADA é excluída)", () => {
+    const convs = [
+      { conversation_status: "ENCERRADA", ultima_mensagem_em: "2026-08-13T15:00:00Z" },
+      { conversation_status: "PAUSADA", ultima_mensagem_em: "2026-08-13T08:00:00Z" },
+    ];
+    expect(pickConversationActivity(convs)).toBe("2026-08-13T08:00:00Z");
   });
 });

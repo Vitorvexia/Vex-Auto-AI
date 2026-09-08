@@ -19,3 +19,12 @@ export function canTransitionLead(from: LeadStatus, to: LeadStatus): boolean {
   if (from === to) return true;
   return LEAD_TRANSITIONS[from].includes(to);
 }
+
+// Etapas de destino válidas a partir de `from`, pra popular menus de troca de
+// status (fallback acessível ao drag do Kanban e qualquer UI futura do tipo).
+// Mesma exclusão de FECHADO que moveLeadStatus aplica no servidor — fechar
+// venda exige vehicle_id + valor_final via página da conversa (guardrail de
+// margem), nunca uma simples troca de status.
+export function validLeadTargets(from: LeadStatus): LeadStatus[] {
+  return LEAD_TRANSITIONS[from].filter((to) => to !== "FECHADO");
+}
