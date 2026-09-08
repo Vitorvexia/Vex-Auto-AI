@@ -22,6 +22,7 @@ const PROTECTED_PATH_PREFIXES = [
   "/estoque",
   "/equipe",
   "/dashboard",
+  "/inicio",
   "/admin",
   "/onboarding",
 ];

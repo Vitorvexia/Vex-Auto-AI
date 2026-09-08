@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering
 
-Last Updated: 2026-08-25
+Last Updated: 2026-08-31
 
 ---
 
@@ -165,9 +165,9 @@ WhatsApp Integration
 
 Status
 
-🟡 Waiting Production Validation
+✅ Stable
 
-Não é mais "sandbox / aguardando número real" — isso foi resolvido (B001, ver `ACTIVE BLOCKERS`). É "número real ativo em produção desde 27/07, acumulando validação": a janela inicial de ~4h com mensagens reais e `agent_status: ok` (27/07, 18:31–22:44) é começo da validação, não conclusão. Não inflar pra ✅ até rodar mais tempo.
+Número real ativo em produção desde 27/07 (B001). Mais de um mês de tráfego real: lock de concorrência (`pipeline_locked_at`) comprovado em uso real (2026-07-31), opt-out validado ao vivo contra WhatsApp real (2026-08-26).
 
 ---
 
@@ -175,7 +175,7 @@ AI Pipeline
 
 Status
 
-🟡 Waiting Production Validation
+✅ Stable
 
 ---
 
@@ -183,7 +183,13 @@ Follow-up Automation
 
 Status
 
-🟡 Waiting Production Validation
+✅ Stable
+
+Camada 2 (validação por tempo decorrido) **invalidada e reiniciada em 2026-08-31** — os checkpoints originais (2026-09-02/09-09) mediam uma cadência que estava estruturalmente bloqueada: `WHATSAPP_TEMPLATE_SEND_ENABLED` ausente em produção fazia todo follow-up fora da janela de sessão de 24h ser pulado silenciamente (`reason=template_required_not_enabled`, só `console.log`, nunca inseria em `follow_up_logs`). Achado e corrigido 2026-08-31 (ver `DL-0022`, `KI-0011`). Flag ligado em produção no mesmo dia pelo founder.
+
+**Confirmado 2026-09-05** — `scripts/check-messaging-cadence.ts` no lead `68067c0a` mostra 2 envios reais confirmados recebidos no WhatsApp de destino (não só gravados no banco): `follow_up #1` em 2026-09-01, `follow_up #2` em 2026-09-05, gap de 96h — dentro da cadência esperada (72h+). Bloqueio era mesmo só o flag, motor confirmado funcionando ponta a ponta em produção real.
+
+**Novo checkpoint (substitui os invalidados 09-02/09-09): confirmar follow-up #3 (7d) por volta de 2026-09-08~09** — rodar `check-messaging-cadence.ts` de novo no mesmo lead.
 
 ---
 
@@ -192,6 +198,10 @@ Lead Reactivation
 Status
 
 🟡 Waiting Production Validation
+
+Depende de `follow_up_completed_at`, que só grava quando os 3 follow-ups completam. Follow-up Automation confirmado ✅ acima (2 de 3 envios reais validados) — reativação permanece 🟡 até follow-up #3 completar. Ver `DL-0022`/`KI-0011`.
+
+**Checkpoint: mesmo do Follow-up Automation acima (~2026-09-08~09 pro follow-up #3) + alguns dias depois pra reativação #1**, conforme cadência 7/15/30 dias após `follow_up_completed_at`.
 
 ---
 
@@ -227,7 +237,7 @@ Evidência:
 
 Ressalva de evidência: não há prova ao nível do payload de qual `phone_number_id` recebeu os eventos, porque o webhook nunca captura `metadata.phone_number_id` (só `display_phone_number`, usado pra achar a loja por `stores.whatsapp_numero`). Esse dado nunca foi persistido — ausência real na base (ver `BL-0012`, `28_BACKLOG.md`). Mas como a resolução do número é por `stores.*` e não pelo payload, o payload é irrelevante pra conclusão: a cadeia código→banco→envios-ok está comprovada onde importa.
 
-Consequência: aviso de IA (0.7 parte 2) ATIVO em produção. 0.2 (templates) a um passo — falta aprovação Meta dos 9 templates + ligar `WHATSAPP_TEMPLATE_SEND_ENABLED`.
+Consequência: aviso de IA (0.7 parte 2) ATIVO em produção. 0.2 (templates): ver B006 — status real só confirmado em 2026-08-31 (`DL-0022`/`KI-0011`), não em 07-29 como a entrada original de B006 dizia.
 
 Owner
 
@@ -283,7 +293,7 @@ Resolved (2026-07-21)
 
 B005
 
-MVP end-to-end acceptance test (real WhatsApp number → AI pipeline → close with margin guardrail) blocked until B001-B002 clear.
+MVP end-to-end acceptance test (real WhatsApp number → AI pipeline → close with margin guardrail). B001/B002 já resolvidos — nada mais bloqueia tecnicamente. O que falta de fato: o braço de fechamento de venda com guardrail de margem nunca foi exercido ponta a ponta em produção real.
 
 Owner
 
@@ -291,7 +301,7 @@ Engineering
 
 Status
 
-Blocked by B001 (B002 resolved)
+Open
 
 ---
 
@@ -308,6 +318,8 @@ Status
 Resolved (2026-07-29). Send path implemented (2026-07-27): `sendWhatsAppTemplateMessage` in `lib/whatsapp-send.ts`, wired into `follow-up.ts`/`reactivation.ts` behind `WHATSAPP_TEMPLATE_SEND_ENABLED` (now `true` in production). All 9 templates (`follow_up_1/2/3`, `reactivation_vehicle_1/2/3`, `reactivation_no_vehicle_1/2/3`) approved in Meta. Real send confirmed 2026-07-29: `follow_up_1` (`{{1}}="Carlos"`) sent via `scripts/test-template-send.ts` (direct call to `sendWhatsAppTemplateMessage`, bypassing the eligibility RPC/job to avoid any risk of touching a real customer's conversation), arrived on a real device, copy matched the local `TEMPLATES[1]` string in `lib/follow-up.ts` exactly (no drift between approved Meta copy and what the CRM logs to `messages`). All three closing criteria met: templates approved + flag on in prod + real business-initiated send confirmed outside the 24h session window.
 
 Residual note: only `follow_up_1` was live-tested. `follow_up_2/3` and all 6 reactivation templates share the same code path (`sendWhatsAppTemplateMessage`) and the same param shape (1 variable, nome), so risk is low, but they haven't individually been confirmed arriving on a device — acceptable, not tracked as a blocker.
+
+**Correção (2026-08-31):** o texto acima ("now `true` in production", "All 9 templates approved") estava incorreto sobre o estado real de produção — não foi verificado contra `vercel env ls production` na época, só assumido a partir do teste manual via `scripts/test-template-send.ts` (que chama `sendWhatsAppTemplateMessage` direto, sem passar pela RPC/job real, e portanto não prova que o flag estava ligado no ambiente do cron). Investigação de 2026-08-31 (5 dias sem nenhum registro em `follow_up_logs` pro lead de teste do founder) confirmou por leitura direta que `WHATSAPP_TEMPLATE_SEND_ENABLED` **não aparecia** em `vercel env ls production` (15 env vars listadas, essa ausente) — o teste de 07-29 provou que o envio por template *funciona* quando chamado direto, não que o job de produção estava configurado pra usá-lo. Ver relato completo em `KI-0011`/`DL-0022`. Founder confirmou o flag ligado em produção em 2026-08-31 — esta seção passa a refletir esse estado como o primeiro real, não o de 07-29.
 
 ---
 
@@ -330,6 +342,45 @@ Resolved (2026-08-01)
 # RECENT COMPLETED WORK
 
 Most recent accomplishments (source: git log, most recent first).
+
+✅ Investigação + fix de bloqueio silencioso de follow-up/reativação (2026-08-31) — ver `DL-0022`/`KI-0011` pro relato completo, passo a passo.
+
+- **Causa raiz confirmada**: `WHATSAPP_TEMPLATE_SEND_ENABLED` ausente em `vercel env ls production` — todo follow-up/reativação fora da janela de sessão de 24h (a maioria, estruturalmente) era pulado silenciosamente em `lib/follow-up.ts`/`lib/reactivation.ts` (`reason=template_required_not_enabled`, só `console.log`). 5 dias sem nenhum registro em `follow_up_logs` pro lead de teste do founder (`68067c0a-...`) apesar do cron rodando 2XX todo dia.
+- **Fix 1 — observabilidade da RPC**: `Sentry.captureException` adicionado no ponto onde `get_followup_eligible_conversations`/`get_reactivation_eligible_leads` retornavam erro — antes só `console.error`, `job` retornava `{processed:0,...}` como se tivesse rodado normal, sem nenhum rastro em Sentry (mesmo padrão do `daily_run_stores_fetch_failed` já existente na rota).
+- **Fix 2 — contador `skipped_template_disabled`**: novo campo em `FollowUpJobResult`/`ReactivationJobResult`, soma dentro de `skipped` existente, aparece no corpo da resposta do cron (`/api/internal/daily-run`) — se o flag cair de novo, aparece em minutos na resposta do próprio job, não exige reconstruir a investigação.
+- **`scripts/diag-followup-trace.ts`** (novo, permanente): reproduz os gates de `runFollowUpJob` pra 1 lead (RPC real + `canSendMarketingMessage` real + janela de sessão), sem insert nem envio — usado pra fechar exatamente onde a corrente quebrava.
+- Founder confirmou o flag ligado em produção no mesmo dia (2026-08-31) — não verificável via `vercel env ls`/`env pull` (var marcada `[SENSITIVE]`, mascarada em ambos os comandos), simulação com o flag forçado `true` (env override local, sem tocar `.env.local`) confirmou que o lead de teste passaria por todos os gates no próximo disparo do cron.
+- 4 commits locais no momento da investigação (`01f65e2`, `98899d9`, `d605e41` + este). 1229 testes unitários totais verdes, lint/typecheck limpos.
+
+✅ BL-0040 — Motor único de mensagens business-initiated (follow-up + reativação), migration 044 + `lib/messaging-eligibility.ts` + `lib/opt-out.ts` (2026-08-26, implementado + validado ao vivo em produção + mergeado e deployado no mesmo dia — ver fechamento completo no final desta entrada).
+
+- **Cadência unificada**: follow-up (20h/3d/7d, era 2h/24h/72h) e reativação (7d/15d/30d contados a partir de `leads.follow_up_completed_at`, era 14d/30d/30d contados independentemente) — pedido do founder de apertar cadência tornava real a colisão dos dois motores no mesmo lead no mesmo dia, que as cadências antigas (mais espaçadas) nunca batiam por acidente. Ver `DL-0021` pro desenho completo, incluindo os 2 achados durante a implementação (cron 1x/dia caía sempre fora do horário comercial default; âncora nova tornaria leads que nunca completam follow-up permanentemente inelegíveis pra reativação — corrigido com fallback na RPC).
+- **`lib/messaging-eligibility.ts`** (novo): `canSendMarketingMessage` — opt-out > trava de frequência de 48h (`leads.last_marketing_sent_at`, compartilhada entre os dois motores) > janela de horário comercial (`stores.business_hours_start/end`, migration 044, resolve parcialmente `BL-0016`). Única porta de saída de qualquer envio business-initiated — bloqueio aqui não consome tentativa (sem claim, RPC devolve o mesmo lead no próximo cron elegível).
+- **`lib/opt-out.ts`** (novo): detecção determinística (match exato de frase normalizada, nunca substring — evita falso-positivo tipo "para de vender essa moto") de pedido de opt-out, conectada no webhook logo após `ingestMessage`. `marketing_opt_out`/`marketing_opt_out_at` em `leads`, log em `audit_logs` (`lead.marketing_opt_out`, novo valor em `AuditAction`).
+- **M1 (janela de sessão)**: follow-up/reativação usam texto livre (`sendWhatsAppMessage`) quando a última mensagem do lead foi há menos de 24h, template fora disso — antes o código sempre usava texto livre quando `WHATSAPP_TEMPLATE_SEND_ENABLED=false`, o que na prática já violava a janela de sessão da Meta na maioria dos disparos reais (lead que não respondeu não abre sessão nova). **Correção (2026-08-31):** a nota original aqui dizia que `WHATSAPP_TEMPLATE_SEND_ENABLED=true` já estava ativo em produção desde 0.2 — isso era falso; o flag estava ausente de `vercel env ls production` até 2026-08-31, e por isso todo follow-up/reativação fora da janela de 24h (a maioria, por definição) era pulado silenciosamente (`skip`, só `console.log`, nunca chegava no insert de `follow_up_logs`). Achado durante a Camada 2 de validação (5 dias sem nenhum registro pro lead de teste). Ver `DL-0022`/`KI-0011`.
+- **M6**: `markFollowUpCompletedIfInterrupted` (`lib/follow-up.ts`), chamado do pipeline de IA (`lib/ai-pipeline.ts`) quando o lead responde no meio da sequência — marca `follow_up_completed_at` mesmo quando a sequência para antes da 3ª tentativa (sem isso a reativação nunca saberia que o follow-up "acabou").
+- **vercel.json**: cron `daily-run` movido de `"0 9 * * *"` (9h UTC = 6h BRT, sempre antes da abertura da janela comercial default) pra `"0 12 * * *"` (9h BRT, dentro de 08:00–20:00) — **confirmado no diff do commit `5abd387`**. Achado durante a implementação, não fix cosmético: sem isso o gate de horário bloquearia follow-up/reativação permanentemente (Vercel Hobby só roda cron 1x/dia, não haveria segunda tentativa no mesmo dia).
+- Migration 044 (`stores.business_hours_start/end`, `leads.marketing_opt_out(_at)`/`last_marketing_sent_at`/`follow_up_completed_at`) e as 2 RPCs de elegibilidade reescritas — **não aplicada em produção ainda**.
+
+99 testes unitários novos ao todo (messaging-eligibility, opt-out, follow-up-m1-m6, reactivation-m1-eligibility, + 7 do opt-out fixo no pipeline, + fixtures atualizadas), 1225 testes unitários totais verdes, lint/typecheck limpos. **Pendências fechadas**: (1) ~~aplicar migration 044 em produção~~ ✔, (2) ~~validar em ambiente real que follow-up e reativação não colidem mais~~ ✔ Camada 1 completa (4/4 itens, ver abaixo) — Camada 2 (validação por tempo decorrido) em andamento, datas no final desta entrada, (3) ~~abrir PR contra `main`~~ ✔ PR #34 mergeada e deployada.
+
+**Nota de processo (achado pelo founder na revisão, 2026-08-26):** os documentos desta entrada (DL-0021/BL-0040) foram commitados por engano na branch `claude/vex-redesign-visual-fase1-sqkmmf` (branch do PR #33, redesign visual, sem relação com mensageria) numa primeira passada — revertido lá (`git revert`, confirmado idêntico ao estado anterior) e reaplicado na branch correta (`feature/bl-0040-messaging-engine`), junto com um commit de sincronização dos 3 docs vivos (27/28/29) a partir do baseline correto, pra não perder DL-0018/19/20 e BL-0035-039 que só existiam na branch de redesign.
+
+**Validação em produção — Camada 1 (2026-08-26, contra Speed Motos real):**
+- Migration 044 aplicada (`supabase db push --linked`). Bloqueou no resíduo órfão `20260615193022` (já documentado em `DL-0020`/`KI-0009`) — removido via `supabase migration repair --status reverted`, verificado antes/depois (entrada oficial `020` e colunas reais `valor_final`/`vehicle_id` intactas). Relato completo em `KI-0009`, atualização de 2026-08-26.
+- Item 1 (`canSendMarketingMessage` isolada): ✔ confirmado contra `stores` real da Speed Motos (opt-out, frequency cap, sem bloqueio — todos com `reason` correto).
+- Item 3 (M1, texto livre vs template): ✔ confirmado contra 2 conversas reais genuinamente elegíveis agora (172h e 119.9h desde última msg do lead, ambas corretamente resolvidas pra `template`). Braço `texto_livre` sem caso real disponível hoje — coberto pelos 11 testes unitários dedicados.
+- Item 4 (cron no painel Vercel): ✔ confirmado ativo depois do deploy — `npx vercel crons ls` mostra `/api/internal/daily-run` com `0 12 * * *`.
+- Item 2 (opt-out, chamada direta + WhatsApp real): ✔ os dois confirmados. Chamada direta (`applyOptOutIfDetected` contra lead real da Speed Motos) gravou certo na hora. Teste real via WhatsApp (mandar "para" de verdade) **na primeira tentativa não disparou** — achado de causa raiz, não bug de lógica: `feature/bl-0040-messaging-engine` só tinha sido commitada/pushada, nunca mergeada/deployada (confirmado por 2 evidências independentes: deployment de produção mais recente na Vercel tinha 7 dias; branch sem PR aberta). O webhook real bateu no pipeline antigo, sem noção de opt-out — daí a IA ter respondido normal ("Beleza, Vitor!... Boa sorte!") em vez de confirmar.
+- **2º achado real, no mesmo teste**: mesmo depois de corrigido o deploy, ficou claro um gap de design nunca especificado — o que a IA deveria responder quando opt-out dispara **dentro da conversa** (não só o gate de envio futuro de marketing). Corrigido na mesma sessão: `lib/ai-pipeline.ts` agora roda `applyOptOutIfDetected` como primeira coisa em `runAiPipeline` (prioridade sobre qualquer guardrail, inclusive handoff humano) — se detectado, suprime a LLM neste turno e envia `OPT_OUT_CONFIRMATION_TEXT` fixo ("Combinado, não vamos mais te enviar mensagens promocionais por aqui."), novo `agent_status="skipped_opt_out"`. 7 testes novos, ver `DL-0021`.
+- **PR #34 aberta e mergeada em `main`** (squash, `66f81a4`), deploy automático confirmado — não só "parece pronto": GitHub API (`commits/.../status`) cruzada com Vercel confirma que esse commit exato foi buildado e está `Ready`, aliasado nos domínios reais (`vexauto.com.br`, `speed-motos.vexauto.com.br`).
+- **Reteste real do "para" pós-deploy**: ✔ confirmado no banco, texto exato batendo char a char com `OPT_OUT_CONFIRMATION_TEXT` (68 chars), `marketing_opt_out_at` com timestamp novo, 2ª linha em `audit_logs`. Camada 1 fechada — os 4 itens com prova ao vivo contra produção real, não só teste isolado.
+- Achado lateral (não é bug, é dado sujo): RPC real devolveu lead genuinamente elegível pra follow-up sob a nova cadência (`nome="wadaw"`, `phone_normalized="+1231333333"`, loja diferente da Speed Motos) — não tocado, registrado como `BL-0043` (limpeza de dado de teste antes do cliente 2).
+- **Achado lateral #2 (arquitetural)**: `follow_up_logs`/`reactivation_logs` contam tentativas de forma **vitalícia**, sem reset por ciclo — um lead que completa 3 follow-ups fica permanentemente inelegível pra follow-up futuro, mesmo esfriando de novo meses depois. Descoberto ao tentar resetar o lead de teste do founder (3 `follow_up_logs`/1 `reactivation_logs` de ciclo já completo em ago/2026 bloqueavam elegibilidade mesmo depois de zerar os campos de `leads`). Registrado como `BL-0044` (reset de cadência não tem rota própria no produto, só via script manual — `scripts/check-messaging-cadence.ts`, novo, commitado em `main`).
+
+**Camada 2 — validação por tempo decorrido (em andamento, iniciada 2026-08-26):** lead de teste do founder (Speed Motos, `leads.id = 68067c0a-da0a-452a-83c7-1e6bb38fbb53`) resetado pra observação limpa — `marketing_opt_out`/`last_marketing_sent_at`/`follow_up_completed_at` zerados, `follow_up_logs`/`reactivation_logs` antigos apagados (ver achado lateral #2 acima). `ultima_saida_em` da conversa = 2026-08-26T20:09:29Z, ponto zero da cadência.
+
+**Checkpoints originais INVALIDADOS (2026-08-31)** — 2026-09-02 e 2026-09-09 mediam uma cadência estruturalmente bloqueada (`WHATSAPP_TEMPLATE_SEND_ENABLED` ausente em produção, ver `DL-0022`/`KI-0011`): teriam dado negativo de qualquer forma, não por falha do motor, e sim porque nenhum envio sequer era tentado. Flag ligado em produção em 2026-08-31 — Camada 2 reinicia a partir daqui. Novos checkpoints a definir (mesma lógica: ~20h/3d/7d desde `ultima_saida_em`, agora contados a partir de 2026-08-31 em vez de 2026-08-26). Rodar `scripts/check-messaging-cadence.ts --lead-id 68067c0a-da0a-452a-83c7-1e6bb38fbb53` pra acompanhar.
 
 🟢 BL-0037 (Fase 1, continuação) — `/inicio` renomeado pra `/dashboard` + Painel por Período novo + incidente de produção real encontrado e corrigido na mesma sessão (2026-08-25, mesma branch `claude/vex-redesign-visual-fase1-sqkmmf`, ~14 commits, pushados pra `origin` — PR #33 atualizada, branch ainda não mergeada).
 
@@ -506,17 +557,23 @@ Every active risk belongs here.
 
 # CURRENT TECHNICAL DEBT
 
-Only active debt. Source: CLAUDE.md 2026-07-20 audit.
+Only active debt. Source: CLAUDE.md 2026-07-20 audit, revisado 2026-08-28 contra estado real do repo.
 
-RBAC absent — any store user can reassign any lead (`assignLeadToUser`/`removeLeadAssignment` only check `store_id`). Blocks reliable commission attribution.
+`error_category`/`error_message` — a coluna `error_message` existe em `reactivation_logs` (migration 024, confirmada em produção 2026-08-01), mas nenhum código a popula; `error_category` continua ausente em ambas as tabelas (`reactivation_logs`/`follow_up_logs`). Falhas de envio WA em cron jobs seguem silenciosas (observability gap). Ver `BL-0022`, `BL-0042`.
 
-Message query has no limit.
+Histórico de atribuição de lead — o dado passou a existir: `audit_logs` grava `lead.reassigned`/`lead.unassigned` desde 2026-08-25 (`lib/actions.ts`). Falta rota de consulta no produto, não o dado.
 
-`error_category`/`error_message` missing in `reactivation_logs`/`follow_up_logs` — WhatsApp send failures in cron jobs are silent (observability gap).
+`calculateOperationalMetrics()` não usa `leads.valor_final` (existe desde migration 020) — sem faturamento, margem por venda ou CAC em analytics ainda. Fase 2.3 do roadmap.
 
-Lead assignment has no history — only current `assigned_to` is stored. Needed before commission/ROI auditing.
+`WHATSAPP_ACCESS_TOKEN` global, escopado ao Business Manager da CMOV — bloqueia tecnicamente o onboarding do cliente 2 (token não pertence à loja nova). Ver `DL-0003`, roadmap 3.1/3.2.
 
-`calculateOperationalMetrics()` does not use `leads.valor_final` (exists since migration 020) — no revenue, margin-per-sale, or CAC in analytics yet.
+`follow_up_logs`/`reactivation_logs` contam tentativas de forma vitalícia, sem reset por ciclo — lead que completa 3 follow-ups fica permanentemente inelegível pra follow-up futuro, mesmo esfriando de novo meses depois. Ver `BL-0044`.
+
+`users` não tem flag de vendedor ativo/inativo — todo `role='vendedor'` é candidato na distribuição automática, mesmo afastado. Ver `BL-0028`.
+
+Resíduo órfão em `schema_migrations`. Ver `KI-0009`.
+
+Fila de mensagens sem resposta (`getUnansweredIncomingText`, `lib/pipeline-dispatch.ts:71-82`) não tem `.limit()` nem paginação — bounded na prática pelo filtro "desde a última saída", mas sem teto explícito. Demais queries de `messages` no pipeline já têm `.limit()` (`lib/agent-context.ts:106` histórico de conversa, `.limit(10)`; dashboard `app/inicio/page.tsx:45`, `.limit(2000)`).
 
 Document every intentional debt.
 
@@ -684,31 +741,11 @@ Public launch.
 
 ---
 
-# DECISION LOG
-
-Latest important decisions.
-
-YYYY-MM-DD
-
-Decision
-
-Description
-
-Reference
-
-ADR-XXXX
-
-This section is chronological.
-
-Newest first.
-
----
-
 # RECENT INCIDENTS
 
-None
+2026-08-31 — `WHATSAPP_TEMPLATE_SEND_ENABLED` ausente em produção bloqueava estruturalmente todo follow-up/reativação fora da janela de sessão de 24h (a maioria, por definição — follow-up dispara depois do lead ficar quieto). 5 dias sem nenhum registro em `follow_up_logs`. Doc (B006, `27_PROJECT_STATUS.md`) dizia desde 2026-07-29 que o flag estava `true` em produção — nunca tinha sido verificado contra `vercel env ls production`, só inferido de um teste manual que não passava pelo job real. Corrigido no mesmo dia (flag ligado pelo founder) + 2 fixes de observabilidade pra não repetir o silêncio. Ver DL-0022, KI-0011.
 
-or
+2026-08-25 — `audit_logs` nunca aplicada em produção apesar de doc marcar "fechado" desde 30/07. Trilha de auditoria 100% silenciosa por ~1 mês (`logAudit` falhando só pro Sentry). Causa raiz: migrations 020-043 aplicadas via SQL Editor, não CLI — `schema_migrations` travado na 019. Corrigido no mesmo dia. Ver DL-0020, KI-0009.
 
 List latest production incidents.
 
@@ -761,21 +798,21 @@ Never start coding without understanding current project status.
 
 The MVP is considered validated only when:
 
-□ Production environment configured.
+[x] Production environment configured.
 
-□ WhatsApp production number operational.
+[x] WhatsApp production number operational.
 
-□ Token permanent.
+[x] Token permanent.
 
-□ Migration applied.
+[x] Migration applied. (ressalva: resíduo órfão em `schema_migrations`, KI-0009)
 
 □ CRON validated.
 
 □ End-to-end tests completed.
 
-□ No critical bugs.
+[x] No critical bugs.
 
-□ Operational logs healthy.
+[x] Operational logs healthy. (Sentry ativo com scrub de PII)
 
 □ Internal pilot completed.
 

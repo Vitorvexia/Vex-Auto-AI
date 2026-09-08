@@ -1036,6 +1036,14 @@ Validation Steps
 
 `npx supabase migration list --linked` deve mostrar todas as migrations locais com `remote` preenchido (mesmo valor), sem `remote: ""`. Pra qualquer migration nova daqui pra frente: aplicar via `supabase migration up`/`db push` sempre que possível; quando não for viável no ambiente, usar `supabase db query --linked --file <arquivo>` (mesmo SQL, sem colar solto no SQL Editor) e rodar `supabase migration repair` logo em seguida pra manter a tabela de controle sincronizada — nunca deixar uma migration aplicada sem registro.
 
+**Atualização 2026-08-26 — resíduo órfão finalmente removido (não é incidente novo):**
+
+Ao aplicar a migration 044 (`BL-0040`/`DL-0021`) via `supabase db push --linked`, o comando bloqueou com `LegacyDbPushMissingLocalError` apontando exatamente o registro órfão já documentado acima (`version = '20260615193022'`) — o duplicado de migration 020 registrado sob timestamp em vez de `020`, que o DL-0020/esta entrada já tinham identificado e deliberadamente deixado como estava ("inofensivo — não removido, só documentado, pra não confundir uma auditoria futura"). Não é achado novo, é o mesmo item batendo na porta de novo, desta vez bloqueando um comando em vez de só aparecer numa auditoria read-only.
+
+Investigado antes de agir (mesma disciplina do DL-0020, não assumido por memória): `select version, name, statements[1], array_length(statements,1) from supabase_migrations.schema_migrations where version = '20260615193022'` confirmou os mesmos dados já registrados aqui (`name = '020_lead_sale_fields'`, conteúdo idêntico ao arquivo `020_lead_sale_fields.sql`) antes de qualquer ação.
+
+Removido via `supabase migration repair --status reverted 20260615193022` — comando sugerido pelo próprio CLI no erro. Importante: **`--status reverted` deleta a linha da tabela de controle**, não só marca um status (confirmado — reconsulta pós-repair pela mesma `version` retornou 0 linhas). Verificado depois, antes de prosseguir: `version = '020'` (a entrada oficial, correta) continua intacta (`name = 'lead_sale_fields'`, 2 statements) e as colunas reais que ela criou (`leads.valor_final`, `leads.vehicle_id`) seguem presentes — o repair removeu só o duplicado inofensivo, não tocou schema real nem a entrada de controle correta. `supabase db push --linked` rodado em seguida aplicou a 044 normalmente, `migration list` confirma `001`-`044` `local == remote` sem gap e **sem o resíduo órfão pela primeira vez desde o incidente original**.
+
 Related ADR
 
 None
@@ -1050,7 +1058,166 @@ Nenhum incidente formal aberto — tratado como achado de auditoria de rotina, c
 
 Notes
 
-`29_DECISIONS_LOG.md` (`DL-0019`, `DL-0020`) tem o relato completo passo a passo, incluindo os comandos exatos rodados e o resultado de cada validação. `27_PROJECT_STATUS.md` teve 2 entradas históricas corrigidas (as que diziam "029/031 fechado" sem qualificar que era só código, não deploy real) — ver notas de correção datadas 2026-08-25 nessas entradas.
+`29_DECISIONS_LOG.md` (`DL-0019`, `DL-0020`) tem o relato completo passo a passo, incluindo os comandos exatos rodados e o resultado de cada validação. `27_PROJECT_STATUS.md` teve 2 entradas históricas corrigidas (as que diziam "029/031 fechado" sem qualificar que era só código, não deploy real) — ver notas de correção datadas 2026-08-25 nessas entradas. Resíduo órfão (`20260615193022`) removido em 2026-08-26 durante a aplicação da migration 044 — ver atualização datada acima e `DL-0021`/`BL-0040`.
+
+---
+
+KI-0010
+
+Title
+
+Telefone repetido em leads de stores diferentes pode confundir consulta manual sem filtro de `store_id` explícito
+
+Category
+
+Process / Database
+
+Severity
+
+Low
+
+Status
+
+Documented — não é bug, é hábito de investigação a reforçar
+
+Environment
+
+Produção (Supabase, projeto `nrwnlhnmsmlyaueylsci`), qualquer consulta manual de debugging.
+
+Date Discovered
+
+2026-08-26, durante validação em produção de `BL-0040`/`DL-0021` (teste real de opt-out via WhatsApp).
+
+Reported By
+
+Achado pelo Claude ao investigar por que um teste de opt-out não tinha disparado — primeira consulta (`select ... from leads where phone_normalized = '+55...'`, sem filtro de `store_id`) trouxe o lead errado (loja demo/seed, `store_id = 'aaaaaaaa-...'`) em vez do lead real de teste na Speed Motos, atrasando a investigação até o founder apontar o padrão.
+
+Description
+
+`leads.phone_normalized` não é único globalmente — o mesmo telefone pode (e deve poder) existir como lead em lojas diferentes, já que a mesma pessoa pode estar interessada em veículos de duas revendas distintas. **Isso não é violação de isolamento multi-tenant** — o sistema em si (RLS, RPCs de elegibilidade, `getServerStoreId()`) sempre filtra corretamente por `store_id`. O risco é só em queries manuais de debugging/investigação rodadas direto contra produção fora do código da aplicação, que podem esquecer o filtro e pegar a linha errada silenciosamente (sem erro, só dado errado).
+
+Symptoms
+
+Consulta manual por `phone_normalized` sozinho pode retornar mais de 1 linha ou a linha "errada" quando existe lead homônimo em outra loja — investigação parte de premissa errada até alguém notar a divergência (ex: dado que não bate com o esperado).
+
+Root Cause
+
+Nenhum bug — `phone_normalized` nunca teve (nem deveria ter) constraint de unicidade global, só é único por prática dentro de uma loja. Causa é hábito de consulta, não schema.
+
+Impact
+
+Nenhum em produção — sistema aplicativo sempre filtra certo. Impacto é só em velocidade/precisão de investigação manual (o achado de 2026-08-26 atrasou, mas não invalidou, a conclusão certa).
+
+Workaround
+
+Nenhum necessário — não bloqueia nada.
+
+Permanent Fix
+
+Não é caso de fix de código. Prática a reforçar: toda query manual de debugging contra `leads`/`conversations`/tabelas relacionadas deveria filtrar por `store_id` explícito (ou pelo menos checar `count` > 1 antes de assumir resultado único), nunca só por telefone/nome.
+
+Validation Steps
+
+N/A — item de processo, não de código.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+Nenhum — achado lateral durante validação de `BL-0040`, não incidente próprio.
+
+Notes
+
+`29_DECISIONS_LOG.md` `DL-0021`, atualização de 2026-08-26, tem o contexto completo de onde isso apareceu.
+
+---
+
+KI-0011
+
+Title
+
+`WHATSAPP_TEMPLATE_SEND_ENABLED` ausente em produção bloqueava silenciosamente todo follow-up/reativação fora da janela de sessão de 24h
+
+Category
+
+Configuration / Observability
+
+Severity
+
+High — bloqueio funcional total de 2 motores de negócio (follow-up + reativação), sem qualquer erro visível
+
+Status
+
+Resolved (2026-08-31) — flag ligado em produção + 2 fixes de observabilidade pra não repetir o silêncio
+
+Environment
+
+Produção (Vercel, `vercel.json` cron `0 12 * * *`) + Supabase produção (`follow_up_logs`/`reactivation_logs`)
+
+Date Discovered
+
+2026-08-31, durante checagem de Camada 2 de `BL-0040`/`DL-0021` — lead de teste do founder (`68067c0a-da0a-452a-83c7-1e6bb38fbb53`) sem nenhum registro em `follow_up_logs` 5 dias depois do ponto zero (2026-08-26T20:09:29Z).
+
+Reported By
+
+Achado por investigação em 5 etapas read-only (Claude), a partir de um sintoma reportado pelo founder ("zero registro em `follow_up_logs`, cron rodando 2XX").
+
+Description
+
+`lib/follow-up.ts`/`lib/reactivation.ts` decidem entre texto livre (dentro da janela de sessão WhatsApp de 24h desde a última mensagem do lead) e template Meta aprovado (fora dela). Se a conversa está fora da janela **e** `WHATSAPP_TEMPLATE_SEND_ENABLED !== "true"`, o código pula o envio (`reason=template_required_not_enabled`) — **antes** do insert em `follow_up_logs`/`reactivation_logs`, só com `console.log`, sem Sentry, sem qualquer coluna de banco marcada.
+
+Follow-up dispara por definição depois do lead ficar quieto (20h/3d/7d) — está, por construção, quase sempre fora da janela de 24h. Com o flag ausente, isso não é uma falha ocasional: é bloqueio estrutural de **todo** follow-up/reativação, sempre, desde que o motor `BL-0040` subiu em produção (2026-08-26).
+
+`27_PROJECT_STATUS.md` B006 dizia desde 2026-07-29 que o flag estava `true` em produção com os 9 templates aprovados — nunca verificado contra `vercel env ls production`, só inferido de um teste manual (`scripts/test-template-send.ts`) que chama a função de envio direto, sem passar pelo job/RPC real. Erro de documentação de ~33 dias.
+
+Symptoms
+
+`follow_up_logs`/`reactivation_logs` sem nenhuma linha nova pra um lead genuinamente elegível (confirmado via RPC chamada manualmente), mesmo com o cron `daily-run` retornando 2XX e fazendo chamadas reais ao Supabase todo dia. Nenhum erro em nenhum lugar visível (sem retenção de log no plano Vercel Hobby, sem Sentry porque não era um `throw`, sem coluna de status porque o `continue` acontecia antes do insert).
+
+Root Cause
+
+`WHATSAPP_TEMPLATE_SEND_ENABLED` ausente das env vars de produção na Vercel (confirmado via `vercel env ls production` — 15 vars listadas, essa fora da lista). Doc dizia o contrário desde 07-29, nunca reverificado.
+
+Impact
+
+5 dias corridos (2026-08-26 a 2026-08-31) sem nenhum follow-up/reativação real enviado em produção — funcionalmente equivalente a essas 2 features estarem desligadas, apesar de "implementadas e deployadas".
+
+Workaround
+
+Nenhum necessário além do fix — founder ligou o flag em produção em 2026-08-31.
+
+Permanent Fix
+
+1. Flag `WHATSAPP_TEMPLATE_SEND_ENABLED=true` confirmado em produção (2026-08-31, founder).
+2. `Sentry.captureException` no erro de RPC de elegibilidade (`lib/follow-up.ts`/`lib/reactivation.ts`) — não resolve este caso específico (não era erro de RPC), mas fecha um gap de observabilidade adjacente encontrado no caminho.
+3. Contador `skipped_template_disabled` (`FollowUpJobResult`/`ReactivationJobResult`) — soma dentro de `skipped`, aparece no corpo de resposta do cron. Esse é o fix que teria tornado este problema específico visível em minutos em vez de 5 dias, se já existisse.
+4. `scripts/diag-followup-trace.ts` (novo, permanente) — trace de gates pra 1 lead, read-only, reusa `canSendMarketingMessage` real. Ferramenta de suporte pra qualquer investigação parecida no futuro.
+
+Validation Steps
+
+`scripts/diag-followup-trace.ts --lead-id 68067c0a-da0a-452a-83c7-1e6bb38fbb53` com o flag ligado mostrou os 3 gates passando (`canSendMarketingMessage: allowed=true`, `withinSessionWindow=false` mas `TEMPLATE_SEND_ENABLED=true` → segue pro insert). Simulação com `now` fixado no horário do próximo cron (2026-09-01T12:00 UTC) confirmou que o lead passaria por todos os gates e chegaria no envio via template `follow_up_1`.
+
+Related ADR
+
+None
+
+Related Runbook
+
+None
+
+Related Incident
+
+Ver `27_PROJECT_STATUS.md` "RECENT INCIDENTS", entrada de 2026-08-31.
+
+Notes
+
+`29_DECISIONS_LOG.md` `DL-0022` tem o relato completo da investigação, decisão e reasoning. B006 em `27_PROJECT_STATUS.md` tem nota de correção anexada (não reescrita) explicando por que o fechamento de 07-29 estava errado.
 
 ---
 

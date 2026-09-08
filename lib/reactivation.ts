@@ -3,12 +3,21 @@ import { sendWhatsAppMessage, sendWhatsAppTemplateMessage } from "@/lib/whatsapp
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { maskPhone } from "@/lib/pii";
 import { getSafeName } from "@/lib/lead-name";
+import { canSendMarketingMessage } from "@/lib/messaging-eligibility";
+import * as Sentry from "@sentry/nextjs";
 
 // Envio por template Meta aprovado (reactivation_vehicle_1/2/3,
 // reactivation_no_vehicle_1/2/3) — desligado por padrão, mesmo mecanismo de
 // lib/follow-up.ts. Ativar só depois da aprovação dos 9 templates.
+//
+// Fora da janela de 24h (M1, BL-0040/DL-0021) o envio SÓ pode ser via
+// template — se o flag estiver desligado, a tentativa é pulada (não falha,
+// não consome tentativa) até os templates serem aprovados.
 const TEMPLATE_SEND_ENABLED = process.env.WHATSAPP_TEMPLATE_SEND_ENABLED === "true";
 const TEMPLATE_LANGUAGE = "pt_BR";
+
+// Janela de sessão da WhatsApp Cloud API — mesmo mecanismo de lib/follow-up.ts.
+const SESSION_WINDOW_MS = 24 * 60 * 60 * 1000;
 
 // ---------------------------------------------------------------------------
 // Context de reativação — dados do lead usados para enriquecer templates
@@ -142,6 +151,10 @@ export interface ReactivationJobResult {
   sent: number;
   skipped: number;
   failed: number;
+  // Subconjunto de `skipped` — fora da janela de sessão de 24h e
+  // WHATSAPP_TEMPLATE_SEND_ENABLED desligado. Visível na resposta do cron
+  // pra não depender de log/Sentry pra flagrar (ver DL-0021 seção templates).
+  skipped_template_disabled: number;
 }
 
 interface EligibleLead {
@@ -152,14 +165,20 @@ interface EligibleLead {
   phone_normalized: string;
   attempt_count: number;
   veiculo_interesse: string | null;
+  last_inbound_at: string | null;
+  last_marketing_sent_at: string | null;
+  business_hours_start: string | null;
+  business_hours_end: string | null;
 }
 
 export async function runReactivationJob(opts?: {
   storeId?: string;
   limit?: number;
+  now?: Date;
 }): Promise<ReactivationJobResult> {
   const storeId = opts?.storeId ?? null;
   const limit = opts?.limit ?? 20;
+  const now = opts?.now ?? new Date();
 
   const { data, error } = await supabaseAdmin.rpc(
     "get_reactivation_eligible_leads",
@@ -167,8 +186,11 @@ export async function runReactivationJob(opts?: {
   );
 
   if (error || !data || (data as EligibleLead[]).length === 0) {
-    if (error) console.error("[reactivation] RPC error:", error.message);
-    return { processed: 0, sent: 0, skipped: 0, failed: 0 };
+    if (error) {
+      console.error("[reactivation] RPC error:", error.message);
+      Sentry.captureException(error, { tags: { job: "reactivation_rpc_error" } });
+    }
+    return { processed: 0, sent: 0, skipped: 0, failed: 0, skipped_template_disabled: 0 };
   }
 
   const result: ReactivationJobResult = {
@@ -176,11 +198,42 @@ export async function runReactivationJob(opts?: {
     sent: 0,
     skipped: 0,
     failed: 0,
+    skipped_template_disabled: 0,
   };
 
   for (const lead of data as EligibleLead[]) {
     result.processed++;
     const attemptNumber = lead.attempt_count + 1;
+
+    // Trava única (opt-out / frequência / horário comercial) — compartilhada
+    // com follow-up. Bloqueado aqui não consome tentativa: sem claim
+    // inserido, a RPC devolve o mesmo lead no próximo cron elegível.
+    const eligibility = canSendMarketingMessage(
+      { marketing_opt_out: false, last_marketing_sent_at: lead.last_marketing_sent_at },
+      { business_hours_start: lead.business_hours_start, business_hours_end: lead.business_hours_end },
+      now
+    );
+    if (!eligibility.allowed) {
+      console.log(
+        `[reactivation] skipped lead=${lead.lead_id} attempt=${attemptNumber} reason=${eligibility.reason}`
+      );
+      result.skipped++;
+      continue;
+    }
+
+    // M1: dentro da janela de sessão de 24h, texto livre é válido.
+    const withinSessionWindow =
+      !!lead.last_inbound_at &&
+      now.getTime() - new Date(lead.last_inbound_at).getTime() < SESSION_WINDOW_MS;
+
+    if (!withinSessionWindow && !TEMPLATE_SEND_ENABLED) {
+      console.log(
+        `[reactivation] skipped lead=${lead.lead_id} attempt=${attemptNumber} reason=template_required_not_enabled`
+      );
+      result.skipped++;
+      result.skipped_template_disabled++;
+      continue;
+    }
 
     // Texto gerado ANTES do insert para garantir consistência entre log e mensagem
     const text = buildReactivationText(attemptNumber, lead.nome, {
@@ -242,7 +295,9 @@ export async function runReactivationJob(opts?: {
       // e template enviado à Meta usam o mesmo clampAttempt/nome/veículo —
       // precisam bater, senão o vendedor vê no inbox algo diferente do que
       // o cliente recebeu.
-      if (TEMPLATE_SEND_ENABLED) {
+      if (withinSessionWindow) {
+        await sendWhatsAppMessage(lead.phone_normalized, text, phoneId);
+      } else {
         await sendWhatsAppTemplateMessage(
           lead.phone_normalized,
           reactivationTemplateName(attemptNumber, leadContext),
@@ -250,8 +305,20 @@ export async function runReactivationJob(opts?: {
           reactivationTemplateParams(lead.nome, leadContext),
           phoneId
         );
-      } else {
-        await sendWhatsAppMessage(lead.phone_normalized, text, phoneId);
+      }
+
+      // Non-fatal: envio já confirmado acima. Falha aqui nunca deve virar
+      // "failed" pro job — só perde a trava de frequência compartilhada.
+      try {
+        await supabaseAdmin
+          .from("leads")
+          .update({ last_marketing_sent_at: now.toISOString() })
+          .eq("id", lead.lead_id);
+      } catch (bookkeepingErr) {
+        console.error(
+          `[reactivation] bookkeeping update failed lead=${lead.lead_id}:`,
+          bookkeepingErr instanceof Error ? bookkeepingErr.message : bookkeepingErr
+        );
       }
 
       console.log(

@@ -59,6 +59,12 @@ const ELIGIBLE_LEAD = {
   phone_normalized: "+5511999990001",
   attempt_count: 0,
   veiculo_interesse: null as string | null,
+  // Fora da janela de sessão (força caminho de template, que é o que este
+  // arquivo testa) + fora de qualquer gate de elegibilidade.
+  last_inbound_at: null as string | null,
+  last_marketing_sent_at: null as string | null,
+  business_hours_start: "00:00",
+  business_hours_end: "23:59",
 };
 
 beforeEach(() => {

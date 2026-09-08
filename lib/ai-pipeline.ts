@@ -20,6 +20,8 @@ import { sendWhatsAppMessage, WhatsAppSendError, PERMANENT_CATEGORIES, type Send
 import { getStoreWhatsAppPhoneId } from "@/lib/whatsapp-credentials";
 import { calculateLeadScore, type ScoreSource } from "@/lib/lead-scoring";
 import { markReactivationResponded } from "@/lib/reactivation";
+import { markFollowUpCompletedIfInterrupted } from "@/lib/follow-up";
+import { applyOptOutIfDetected, OPT_OUT_CONFIRMATION_TEXT } from "@/lib/opt-out";
 import { maskPhone } from "@/lib/pii";
 import { applyCollectionUpdate } from "@/lib/collection";
 import { sleep } from "@/lib/timing";
@@ -34,6 +36,7 @@ export type AgentStatus =
   | "ok_send_failed"
   | "ok_send_failed_permanent"
   | "skipped_handoff"
+  | "skipped_opt_out"
   | "skipped_duplicate"
   | "timeout"
   | "parse_error"
@@ -243,6 +246,57 @@ export async function runAiPipeline(params: {
         .select("id", { count: "exact", head: true })
         .eq("lead_id", params.leadId),
     ]);
+
+    // Opt-out (BL-0040/DL-0021) — prioridade máxima, roda antes de qualquer
+    // guardrail/handoff. Determinístico: turno de opt-out nunca gera resposta
+    // livre da LLM, sempre a mesma confirmação fixa. Achado em validação real
+    // (2026-08-26): sem isso, a IA respondia com despedida simpática de
+    // atendimento pra quem tinha acabado de pedir pra parar de receber
+    // mensagem — regra sensível não pode ficar na mão do modelo probabilístico.
+    const optedOut = await applyOptOutIfDetected({
+      storeId: params.storeId,
+      leadId: params.leadId,
+      text: params.incomingText,
+    });
+
+    if (optedOut) {
+      const { data: savedMsg } = await supabaseAdmin
+        .from("messages")
+        .insert({
+          store_id: params.storeId,
+          conversation_id: params.conversationId,
+          lead_id: params.leadId,
+          direcao: "saida",
+          autor: "sistema",
+          mensagem: OPT_OUT_CONFIRMATION_TEXT,
+          received_at: new Date().toISOString(),
+        })
+        .select("id")
+        .single();
+
+      try {
+        const phoneId = await getStoreWhatsAppPhoneId(params.storeId);
+        await sendWhatsAppMessage(ctx.lead.phone_normalized, OPT_OUT_CONFIRMATION_TEXT, phoneId);
+      } catch (sendErr) {
+        // Non-fatal: confirmação já salva no banco — mesmo padrão de
+        // sendAiDisclosureIfNeeded (mensagem de sistema, não crítica pro
+        // fluxo comercial, sem integração com o job de retry).
+        console.error("[opt-out] falha ao enviar confirmação:", sendErr);
+        Sentry.captureException(sendErr, { tags: { pipeline_stage: "opt_out_confirmation_send" } });
+      }
+
+      await logAi({
+        storeId: params.storeId,
+        conversationId: params.conversationId,
+        leadId: params.leadId,
+        status: "skipped_opt_out",
+        latencyMs: Date.now() - start,
+        model,
+        messageIds: savedMsg?.id ? [savedMsg.id] : null,
+      });
+
+      return { agent_status: "skipped_opt_out" };
+    }
 
     const now = new Date();
     const parsedStart = parseInt(process.env.BUSINESS_HOURS_START ?? "8", 10);
@@ -490,6 +544,12 @@ export async function runAiPipeline(params: {
     // Marcar reativação como respondida se aplicável — non-fatal
     markReactivationResponded(params.leadId).catch((e) =>
       Sentry.captureException(e, { tags: { pipeline_stage: "reactivation_mark_responded" } })
+    );
+
+    // M6 (BL-0040/DL-0021): lead respondeu — se havia follow-up em curso pra
+    // esta conversa, marca fim da sequência (gatilho da reativação). Non-fatal.
+    markFollowUpCompletedIfInterrupted(params.leadId, params.conversationId).catch((e) =>
+      Sentry.captureException(e, { tags: { pipeline_stage: "follow_up_mark_completed" } })
     );
 
     const finalStatus: AgentStatus = !sendFailed

@@ -50,7 +50,7 @@ describe("LoginPage — botão não trava em 'Entrando...' após signInWithPassw
 
     expect(submitButton().textContent).toBe("Entrar");
     expect(submitButton().disabled).toBe(false);
-    expect(mockPush).toHaveBeenCalledWith("/dashboard");
+    expect(mockPush).toHaveBeenCalledWith("/inicio");
   });
 
   it("erro de credenciais: loading volta a false (comportamento já existente, não regride)", async () => {

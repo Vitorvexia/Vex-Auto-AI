@@ -640,7 +640,7 @@ a { color: inherit; text-decoration: none; }
 .conv-time { font-size: 11.5px; color: var(--muted); }
 .inbox-waiting-count { color: #FB923C; font-weight: 700; margin-left: 10px; }
 
-/* ─── Ops strip (telemetria — substitui o kpi-grid genérico em /dashboard;
+/* ─── Ops strip (telemetria — substitui o kpi-grid genérico em /inicio;
    mesmo idioma visual do kanban: faixa de cor no topo por status, ver
    .kanban-col[data-status] border-top-color) ────────────────────── */
 .ops-strip {
@@ -705,6 +705,11 @@ a { color: inherit; text-decoration: none; }
 @media (max-width: 960px) { .dash-grid { grid-template-columns: 1fr; } }
 .dash-col { display: flex; flex-direction: column; gap: 14px; }
 
+.chart-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 16px; align-items: start;
+}
+@media (max-width: 960px) { .chart-grid { grid-template-columns: 1fr; } }
+
 /* ─── Section card ───────────────────────────── */
 .section-card {
   background: var(--panel); border: 1px solid var(--border); border-radius: 10px;
@@ -730,7 +735,7 @@ a { color: inherit; text-decoration: none; }
 .activity-text { font-size: 12.5px; color: var(--text); flex: 1; }
 .activity-time  { font-size: 11px; color: var(--muted); flex-shrink: 0; white-space: nowrap; }
 
-/* ─── Alert rail (full-width, ação primeiro — ver /dashboard) ───────── */
+/* ─── Alert rail (full-width, ação primeiro — ver /inicio) ───────── */
 .alert-rail { margin-bottom: 16px; }
 .alert-rail-body { display: flex; flex-direction: column; gap: 0; }
 @media (min-width: 720px) {
@@ -1016,6 +1021,8 @@ a { color: inherit; text-decoration: none; }
 .vendor-filter-dropdown-list a:hover { background: var(--panel-2); }
 .vendor-filter-dropdown-list a.active { color: var(--accent); background: rgba(0,91,254,.08); }
 .vendor-filter-clear { border-color: rgba(239,68,68,.45) !important; background: rgba(239,68,68,.1) !important; color: #F87171 !important; }
+
+.leads-status-chart { margin-top: 18px; }
 
 /* ─── Funil de Temperatura (leads page) ──────────── */
 .leads-funnel { padding: 14px 16px; }

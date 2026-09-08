@@ -15,11 +15,12 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 // vi.hoisted()
 // ---------------------------------------------------------------------------
 
-const { mockFrom, mockRpc, mockSend, mockGetPhoneId } = vi.hoisted(() => ({
+const { mockFrom, mockRpc, mockSend, mockGetPhoneId, mockCaptureException } = vi.hoisted(() => ({
   mockFrom: vi.fn(),
   mockRpc: vi.fn(),
   mockSend: vi.fn(),
   mockGetPhoneId: vi.fn(),
+  mockCaptureException: vi.fn(),
 }));
 
 // ---------------------------------------------------------------------------
@@ -28,6 +29,10 @@ const { mockFrom, mockRpc, mockSend, mockGetPhoneId } = vi.hoisted(() => ({
 
 vi.mock("@/lib/supabase", () => ({
   supabaseAdmin: { from: mockFrom, rpc: mockRpc },
+}));
+
+vi.mock("@sentry/nextjs", () => ({
+  captureException: mockCaptureException,
 }));
 
 vi.mock("@/lib/whatsapp-send", () => ({
@@ -94,6 +99,13 @@ const ELIGIBLE_LEAD = {
   phone_normalized: "+5511999990001",
   attempt_count: 0,
   veiculo_interesse: null,
+  // Dentro da janela de sessão (texto livre) + fora de qualquer gate de
+  // elegibilidade — testes deste arquivo cobrem o caminho de envio em si,
+  // não canSendMarketingMessage nem a janela de 24h.
+  last_inbound_at: new Date().toISOString(),
+  last_marketing_sent_at: null,
+  business_hours_start: "00:00",
+  business_hours_end: "23:59",
 };
 
 // ---------------------------------------------------------------------------
@@ -410,13 +422,25 @@ describe("runReactivationJob — sem leads elegíveis", () => {
   it("retorna zeros quando RPC retorna vazio", async () => {
     mockRpc.mockResolvedValueOnce({ data: [], error: null });
     const result = await runReactivationJob();
-    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0 });
+    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0, skipped_template_disabled: 0 });
   });
 
   it("retorna zeros quando RPC retorna erro", async () => {
     mockRpc.mockResolvedValueOnce({ data: null, error: { message: "RPC error" } });
     const result = await runReactivationJob();
-    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0 });
+    expect(result).toEqual({ processed: 0, sent: 0, skipped: 0, failed: 0, skipped_template_disabled: 0 });
+  });
+
+  it("erro de RPC vai pro Sentry — não fica silencioso", async () => {
+    const rpcError = { message: "RPC error" };
+    mockRpc.mockResolvedValueOnce({ data: null, error: rpcError });
+
+    await runReactivationJob();
+
+    expect(mockCaptureException).toHaveBeenCalledWith(
+      rpcError,
+      { tags: { job: "reactivation_rpc_error" } }
+    );
   });
 
   it("passa storeId e limit ao RPC", async () => {

@@ -4,15 +4,9 @@ import { withSentryConfig } from "@sentry/nextjs";
 const nextConfig = {
   // Next 14.2 ainda não estabilizou instrumentation.ts sem essa flag.
   experimental: { instrumentationHook: true },
-  // /analytics foi consolidada em /dashboard (era /inicio) — preserva link
-  // salvo/bookmark antigo. /inicio também redireciona direto pra /dashboard
-  // (rota renomeada, BL-0037/DL-0019) — os dois apontam pro mesmo destino
-  // final, sem encadear um redirect no outro.
+  // /analytics foi consolidada em /inicio — preserva link salvo/bookmark antigo.
   async redirects() {
-    return [
-      { source: "/analytics", destination: "/dashboard", permanent: true },
-      { source: "/inicio", destination: "/dashboard", permanent: true },
-    ];
+    return [{ source: "/analytics", destination: "/inicio", permanent: true }];
   },
 };
 

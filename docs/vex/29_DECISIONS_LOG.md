@@ -9,7 +9,7 @@ Status: Living Document
 
 Owner: Engineering Leadership
 
-Last Updated: 2026-08-03
+Last Updated: 2026-08-26
 
 ---
 
@@ -252,6 +252,198 @@ Active
 ---
 
 # REAL DECISIONS
+
+Date
+
+2026-08-31
+
+Decision ID
+
+DL-0022
+
+Title
+
+Follow-up/reativação bloqueados silenciosamente por `WHATSAPP_TEMPLATE_SEND_ENABLED` ausente em produção — causa raiz, correção de doc e 2 fixes de observabilidade
+
+Category
+
+Engineering / Incident
+
+Context
+
+Camada 2 de validação de `BL-0040`/`DL-0021` (checkpoints 2026-09-02/09-09) partia de um cron `daily-run` confirmado rodando com sucesso (2XX, ~11 chamadas Supabase por execução) e de uma RPC (`get_followup_eligible_conversations`) que, chamada manualmente, sempre devolvia o lead de teste do founder (`68067c0a-da0a-452a-83c7-1e6bb38fbb53`) como elegível. Mesmo assim, 5 dias corridos (2026-08-26 a 2026-08-31) sem nenhum registro em `follow_up_logs` pra esse lead.
+
+Investigação em 5 etapas, cada uma read-only, fechando uma hipótese por vez: (1) fetch de lojas ativas (`stores.active=true`) confirmado incluindo a Speed Motos; (2) loop do job confirmado chamando `runFollowUpJob`/`runReactivationJob` por loja, sem early exit; (3) RPC filtrada por `store_id` explícito devolvendo o mesmo resultado da chamada sem filtro (sem bug de filtro); (4) trace gate-a-gate de `runFollowUpJob` (novo script, `scripts/diag-followup-trace.ts`) reproduzindo `canSendMarketingMessage` real + cálculo de janela de sessão real contra o estado real do lead.
+
+O trace (etapa 4) encontrou o ponto exato: `withinSessionWindow=false` (119h desde `last_inbound_at`, limite é 24h) **e** `TEMPLATE_SEND_ENABLED=false` — `lib/follow-up.ts`/`lib/reactivation.ts` pulam o envio nesse caso (`reason=template_required_not_enabled`, só `console.log`, `continue` antes de qualquer insert em `follow_up_logs`). `vercel env ls production` confirmou: `WHATSAPP_TEMPLATE_SEND_ENABLED` **não aparece** na lista de 15 env vars de produção.
+
+Isso contradiz diretamente `27_PROJECT_STATUS.md` B006 (`29_DECISIONS_LOG.md` original, `27_PROJECT_STATUS.md`), que desde 2026-07-29 dizia "Resolved... `WHATSAPP_TEMPLATE_SEND_ENABLED` now `true` in production... All 9 templates approved... real send confirmed". Esse fechamento nunca tinha sido verificado contra `vercel env ls production` — foi inferido de um teste manual (`scripts/test-template-send.ts`) que chama `sendWhatsAppTemplateMessage` **direto**, sem passar pela RPC/gate/job real, e portanto prova que o envio por template funciona quando chamado explicitamente, não que o job de produção estava configurado pra usá-lo. Erro de doc de ~33 dias (07-29 a 08-31), não incidente de código isolado.
+
+Mecanismo estrutural, não caso isolado: follow-up por definição dispara depois do lead ficar quieto (20h/3d/7d) — está, por construção, quase sempre fora da janela de sessão de 24h. Com o flag ausente, **todo** follow-up/reativação do sistema, pra qualquer lead, sempre batia nesse gate. Não é bug intermitente, é bloqueio permanente desde que o motor BL-0040 subiu (2026-08-26).
+
+Decision
+
+1. Founder confirmou (verbalmente, não verificável por esta sessão via CLI — `vercel env pull` mascara a variável como `[SENSITIVE]` mesmo no arquivo baixado) o flag ligado em produção em 2026-08-31. Simulação com o flag forçado `true` via env override local (sem tocar `.env.local`) confirmou que o lead de teste passaria por todos os gates e chegaria no insert/envio (`follow_up_1` via template) no próximo disparo do cron.
+2. `Sentry.captureException` adicionado no ponto onde `get_followup_eligible_conversations`/`get_reactivation_eligible_leads` retornam erro (`lib/follow-up.ts`/`lib/reactivation.ts`) — antes só `console.error`, job retornava `{processed:0,...}` como sucesso, sem nenhum rastro em Sentry. Mesmo padrão de `daily_run_stores_fetch_failed` já existente na rota.
+3. Contador `skipped_template_disabled` novo em `FollowUpJobResult`/`ReactivationJobResult` — soma dentro de `skipped` existente (não muda comportamento de skip/retry), aparece no corpo de resposta do cron. Se o flag cair de novo, aparece em minutos na resposta do próprio job, não em mais uma investigação de 5 dias.
+4. `scripts/diag-followup-trace.ts` promovido a ferramenta permanente (era temporário) — trace de gates pra 1 lead, read-only, sem insert/envio real.
+5. `27_PROJECT_STATUS.md` B006 corrigido (não reescrito por cima — nota de correção anexada, mesma prática de outras correções neste documento) + checkpoints de Camada 2 (09-02/09-09) marcados como invalidados, a redefinir a partir de 2026-08-31.
+
+Reasoning
+
+O fechamento original de B006 misturou "a função de envio funciona quando chamada direto" com "o job de produção está configurado pra chamá-la" — são fatos diferentes, e só o segundo importa pra saber se o cron real envia algo. A lição de processo (não só de código) é: fechar um blocker de configuração de produção exige verificar a configuração de produção diretamente (`vercel env ls`/equivalente), nunca inferir do comportamento de um teste que não passa pelo caminho real.
+
+Os dois fixes de observabilidade (Sentry na RPC, contador no resumo do job) não resolvem o bloqueio em si — só garantem que a próxima vez que algo do gênero acontecer, apareça em minutos, não exija reconstruir a investigação do zero.
+
+Alternatives Considered
+
+Só ligar o flag e seguir, sem documentar a causa raiz nem corrigir a doc — rejeitada: deixaria B006 mentindo sobre o estado real por mais tempo, e o próximo engenheiro/sessão de IA confiaria na doc errada de novo (mesma classe de risco do incidente de `audit_logs`, `DL-0020`).
+
+Reescrever B006 do zero em vez de anexar correção — rejeitada: viola o princípio deste framework de nunca apagar conhecimento de engenharia (`30_KNOWN_ISSUES.md`, "Never erase engineering knowledge") — o erro em si é informação útil (mostra por que a verificação direta importa).
+
+Expected Impact
+
+Follow-up/reativação passam a de fato enviar mensagem em produção pela primeira vez desde o motor BL-0040 (2026-08-26) — 5 dias de silêncio estrutural corrigidos. Observabilidade do job melhora pra qualquer falha futura de RPC ou de flag, não só este caso específico.
+
+Potential Risks
+
+Flag ligado sem verificação independente desta sessão (mascarado como `[SENSITIVE]` em toda ferramenta CLI disponível) — se o founder estiver enganado sobre o estado real, a investigação reabre. Baixo risco: a fonte é o dono da conta Vercel, não uma suposição de terceiros.
+
+Novos checkpoints de Camada 2 ainda não têm data definida — precisa ser fechado com o founder antes de 2026-09-02 (data do checkpoint original, agora sem sentido).
+
+Owner
+
+Engineering (investigação + fixes) / Founder (confirmação do flag em produção)
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0040 (Camada 2 invalidada por este achado), KI-0011 (relato técnico completo)
+
+Related Runbook
+
+None
+
+Review Date
+
+Quando os novos checkpoints de Camada 2 forem definidos com o founder.
+
+Status
+
+Causa raiz confirmada e corrigida (flag ligado). Fixes de observabilidade commitados localmente, ainda sem push no momento desta entrada (ver `27_PROJECT_STATUS.md` pro estado exato da pilha de commits). Camada 2 reinicia a partir de 2026-08-31.
+
+**Fechamento 2026-09-05:** resolvido. `scripts/check-messaging-cadence.ts` no lead `68067c0a` confirma 2 mensagens reais entregues no WhatsApp de destino — `follow_up #1` (2026-09-01) e `follow_up #2` (2026-09-05), gap 96h, dentro da cadência 72h+. Valida o fix do flag ponta a ponta em produção real, não só simulação local. Follow-up Automation vira ✅ Stable em `27_PROJECT_STATUS.md`; Reativação permanece 🟡 até follow-up #3 (7d) completar. Novo checkpoint (substitui os invalidados 09-02/09-09): confirmar follow-up #3 por volta de 2026-09-08~09 e, se completar, reativação #1 uns dias depois (cadência 7/15/30 dias após `follow_up_completed_at`). Sem novo DL até esse dado chegar.
+
+---
+
+Date
+
+2026-08-26
+
+Decision ID
+
+DL-0021
+
+Title
+
+Motor único de mensagens business-initiated — follow-up e reativação passam a compartilhar trava de frequência, janela de horário e opt-out (BL-0040)
+
+Category
+
+Product / Engineering
+
+Context
+
+Pedido do founder: apertar a cadência de follow-up (2h/24h/72h → 20h/3d/7d) e reativação (14d/30d/30d → 7d/15d/30d, contados a partir do fim do follow-up em vez de independentemente). Com as cadências antigas, mais espaçadas, os dois motores nunca colidiam por acidente de calendário — apertando as duas, a colisão do dia 7 deixa de ser hipotética: os dois mandam mensagem MARKETING pro mesmo lead no mesmo dia.
+
+Teste real de 2026-08-05 (`scripts/test-template-send.ts`, ver `27_PROJECT_STATUS.md`) confirmou que a Meta retém mensagens em rajada retornando HTTP 2xx (sucesso falso) — o sistema não tem como distinguir enviado de retido. Colisão de dois motores independentes não é só ineficaz, é silenciosamente ineficaz.
+
+Auditoria do contexto atual (2026-08-26) encontrou três gaps que a mudança de cadência torna obrigatórios em vez de opcionais: ausência de janela de horário de disparo (`BUSINESS_HOURS_START/END` só existia como env var global, usada só pelo guardrail de atendimento — BL-0016), ausência de opt-out de marketing, e ausência de trava de frequência entre motores. Nenhum dos três era viável de adiar quando a cadência aperta — sem eles, o motor mais agressivo aumenta risco de denúncia (LGPD + quality rating da Meta), que é o vetor real de perda de número (DL-0009).
+
+**Achado durante a implementação, não previsto no desenho original**: o cron `daily-run` roda no máximo 1x/dia (plano Vercel Hobby) e estava agendado para `0 9 * * *` (9h UTC = 6h BRT) — sempre antes da abertura da janela comercial default (08:00 BRT). Como não existe um segundo disparo no mesmo dia, o gate de horário bloquearia follow-up/reativação permanentemente, não apenas adiaria. Corrigido junto: cron movido para `0 12 * * *` (9h BRT, dentro de 08:00–20:00) — **confirmado no diff do commit `5abd387` (`vercel.json`, branch `feature/bl-0040-messaging-engine`)**.
+
+**Achado durante a implementação, também não previsto**: trocar a âncora de elegibilidade da reativação para `follow_up_completed_at` (só preenchido quando a sequência de follow-up termina) tornaria permanentemente inelegíveis leads que nunca completam essa sequência — handoff pro vendedor antes da 3ª tentativa, ou leads existentes no deploy (que ficam com o campo nulo pra sempre, já que não estão mais ativamente em follow-up). Isso regrediria o comportamento atual, em que a reativação pega base fria independente de follow-up. Corrigido com uma âncora de fallback na RPC (`get_reactivation_eligible_leads`, migration 044): usa `ultima_mensagem_em` da conversa quando `follow_up_completed_at` é nulo E o lead não está mais ativamente em follow-up (evita as duas cadências disputarem o mesmo lead ao mesmo tempo).
+
+Decision
+
+Follow-up e reativação viram um motor sequencial: follow-up dispara primeiro (20h → 3d → 7d, âncora inalterada), reativação só começa depois que o follow-up termina (7d → 15d → 30d, contados a partir de `leads.follow_up_completed_at` — ou do fallback acima, pra leads que nunca completam a sequência). Trava de frequência de 48h (`leads.last_marketing_sent_at`), janela de horário comercial por loja (`stores.business_hours_start/end`, substitui a env var global — resolve BL-0016) e opt-out de marketing (`leads.marketing_opt_out`, detectado deterministicamente por `lib/opt-out.ts`, nunca pela LLM) são compartilhados pelos dois motores via `canSendMarketingMessage` (`lib/messaging-eligibility.ts`) — única porta de saída de qualquer envio business-initiated.
+
+Reasoning
+
+Contar a reativação a partir do fim do follow-up (em vez de créated_at/última atividade isolada, como antes) torna a colisão estruturalmente impossível, em vez de depender de lógica de exclusão mútua ad-hoc que quebraria de novo assim que qualquer cadência mudasse (o mesmo risco que BL-0029 já tinha avisado). A trava de frequência de 48h é a rede de segurança que cobre o resto: reprocessamento manual do cron no mesmo dia, ou qualquer caso não previsto pela âncora sequencial.
+
+Cadência fixa em código (20h/3d/7d e 7d/15d/30d), não parametrizada por loja — nem founder nem IA sabem se esses valores são o ótimo, mas parametrizar por loja é decisão de produto separada, registrada como BL-0041 (IDEA), não bloqueante pra esta entrega.
+
+Alternatives Considered
+
+Manter motores independentes, só ajustar datas manualmente pra não colidir — rejeitada: frágil, reintroduz o mesmo risco assim que qualquer cadência mudar de novo.
+
+Reativação contando a partir de `created_at`/última mensagem (comportamento anterior) — rejeitada: exige lógica de exclusão mútua complexa pra não colidir com follow-up; contar a partir do fim do follow-up torna a colisão estruturalmente impossível.
+
+Cadência configurável por loja desde já — adiada pra BL-0041: nem founder nem IA sabem se 20h/3d/7d é o valor certo: shippar o fixo primeiro, parametrizar depois com dado real.
+
+Expected Impact
+
+Elimina a colisão estrutural entre follow-up e reativação no mesmo lead no mesmo dia. Resolve BL-0016 (horário comercial deixa de ser env var global). Adiciona opt-out de marketing, ausente até então — reduz risco de denúncia/perda de número (DL-0009). Requer validação em produção real (Speed Motos) antes de ser considerado concluído — código + testes não é "pronto", é "implementado" (mesma disciplina de sempre, `27_PROJECT_STATUS.md`).
+
+Potential Risks
+
+Cron não roda mais de 1x/dia (Hobby) — se `business_hours_start/end` de uma loja futura excluir o horário do cron (9h BRT), essa loja nunca recebe follow-up/reativação. Não bloqueia hoje (só Speed Motos, BRT, cron dentro da janela default), mas é um limite estrutural do plano Hobby que só desaparece migrando pra Vercel Pro (cron mais frequente) ou passando a rodar reativação de mensagens fora do modelo de cron único diário.
+
+`business_hours_start/end` são `TIME` sem timezone — cálculo usa timezone fixo `America/Sao_Paulo` (`lib/messaging-eligibility.ts`), hardcoded. Só existe 1 loja hoje; multi-fuso é dívida futura, mesma classe da original BL-0016.
+
+Leads existentes no deploy ficam com `follow_up_completed_at` nulo — reprocessados pela âncora de fallback (não pela âncora primária) até completarem um novo ciclo de follow-up, se algum dia completarem. Decisão consciente (opção mais simples e segura, discutida com o founder): zerar/recontar em vez de tentar preservar posição na cadência antiga.
+
+Owner
+
+Engineering (implementação) / Founder (pedido de aperto de cadência + aprovação do ajuste de cron e da âncora de fallback)
+
+Related ADR
+
+None
+
+Related Issue
+
+BL-0040 (implementação), BL-0016 (resolvido por esta entrega), BL-0029 (premissa superada — ver nota na entrada), BL-0041/BL-0042 (desdobramentos, registrados como IDEA)
+
+Related Runbook
+
+None
+
+Review Date
+
+Revisar se volume de leads tornar a trava de 48h uma barreira real pra conversão, ou se alguma loja pedir cadência diferente do padrão (aí sim BL-0041 deixa de ser IDEA).
+
+Status
+
+Camada 1 de validação em produção **completa** (4/4 itens, com prova ao vivo contra a Speed Motos real — não só teste isolado). Camada 2 (validação por tempo decorrido) em andamento — ver datas de checkpoint no final desta entrada e em `27_PROJECT_STATUS.md`.
+
+**Atualização 2026-08-26 (Camada 1 de validação):** migration 044 aplicada em produção (`supabase db push --linked`). Efeito colateral necessário, não planejado: o comando bloqueou no resíduo órfão `20260615193022` (já documentado em `DL-0020`/`KI-0009` — duplicata inofensiva de migration 020, registrada via SQL Editor em 2026-06-15 sob timestamp em vez de `020`). Removido via `supabase migration repair --status reverted`, sugerido pelo próprio CLI. Investigado e verificado antes e depois de agir — **relato completo, não resumido, em `30_KNOWN_ISSUES.md` KI-0009** (não é incidente novo, é o mesmo item do DL-0020 finalmente resolvido). `canSendMarketingMessage` e M1 confirmados contra dado real (Speed Motos, RPCs reais); opt-out e cron (produção) seguem pendentes.
+
+**Atualização 2026-08-26 (teste real de opt-out via WhatsApp — 2 achados, extensão do mesmo escopo):**
+
+1. **Deploy nunca tinha acontecido.** `feature/bl-0040-messaging-engine` só estava commitada/pushada, nunca mergeada em `main`/deployada — confirmado por 2 evidências independentes (deployment de produção mais recente na Vercel tinha 7 dias; branch nunca teve PR aberta). O teste real de "para" bateu no pipeline antigo (pré-BL-0040), que não sabe nem que opt-out existe — daí a IA ter respondido normal ("Beleza, Vitor!... Boa sorte!") em vez de confirmar opt-out. Não é bug de lógica (a chamada direta via código já tinha confirmado a gravação certa em `leads`/`audit_logs`) — é passo de sequência que faltou. Resolve com merge + deploy (próximo passo desta entrega).
+
+2. **Gap de design real, achado durante a mesma investigação**: a spec original (seção 5.4) nunca definiu o que a IA deveria responder quando opt-out dispara **dentro da conversa**. `applyOptOutIfDetected` só grava o flag — não influenciava em nada a geração de resposta da IA (caminhos desconectados). Sem correção, a IA responderia normal/simpática pra quem acabou de pedir pra parar de receber mensagem, mesmo depois do deploy. **Corrigido nesta mesma entrega**: `lib/ai-pipeline.ts` agora chama `applyOptOutIfDetected` como primeira coisa em `runAiPipeline` (prioridade sobre qualquer guardrail, inclusive handoff humano) — se detectado, suprime a chamada à LLM neste turno e envia `OPT_OUT_CONFIRMATION_TEXT` (`lib/opt-out.ts`, texto fixo: "Combinado, não vamos mais te enviar mensagens promocionais por aqui."), novo `agent_status = "skipped_opt_out"`. Mesma filosofia do guardrail de margem/idade: regra sensível nunca fica na mão do modelo probabilístico. Opt-out continua sendo só de marketing — turnos seguintes de atendimento normal não são bloqueados.
+
+Achado lateral, registrado como nota de processo (não bug de produto): consulta manual de debugging encontrou 2 leads com o mesmo telefone em stores diferentes — comportamento esperado (mesma pessoa pode ser lead em 2 revendas), mas a query inicial não filtrou por `store_id` e quase levou a uma conclusão errada. Ver `KI-0010`.
+
+**Atualização 2026-08-26 (merge, deploy e reteste — fechamento da Camada 1):**
+
+PR #34 aberta e squash-mergeada em `main` (`66f81a4`). Deploy automático confirmado por 2 fontes cruzadas, não assumido: GitHub API (`commits/66f81a4.../status`) mostra `context: "Vercel"`, `state: "success"`, apontando pro deployment `dpl_4UwaBtEba3GFipn44xtEjXAXkWqw` — o mesmo ID que `vercel inspect` mostra como `Ready`, aliasado nos domínios reais (`vexauto.com.br`, `speed-motos.vexauto.com.br`). Cron confirmado ativo (`vercel crons ls`: `/api/internal/daily-run` = `0 12 * * *`).
+
+Reteste real do "para" pós-deploy: ✔ confirmado, texto salvo em `messages` bate char a char com `OPT_OUT_CONFIRMATION_TEXT` (68 chars), `marketing_opt_out_at` com timestamp novo, 2ª linha em `audit_logs`. Camada 1 fechada.
+
+**Achado lateral #3 (arquitetural, durante preparo da Camada 2)**: `follow_up_logs`/`reactivation_logs` contam tentativas de forma vitalícia — sem reset por ciclo, um lead que completa 3 follow-ups nunca mais recebe follow-up, mesmo esfriando de novo meses depois. Descoberto ao tentar resetar o lead de teste do founder pra observação de Camada 2: zerar só `leads.follow_up_completed_at`/`last_marketing_sent_at`/`marketing_opt_out` não bastou — 3 `follow_up_logs`/1 `reactivation_logs` de ciclo já completo (ago/2026) continuavam bloqueando elegibilidade. Apagados (aprovado explicitamente antes de agir) pra simular reentrada limpa. Registrado como `BL-0044` (reset de cadência não tem rota própria no produto, só via script manual).
+
+**Camada 2 iniciada**: lead `68067c0a-da0a-452a-83c7-1e6bb38fbb53` (Speed Motos, founder) resetado, `ultima_saida_em` = 2026-08-26T20:09:29Z é o ponto zero. Checkpoints: **2026-09-02** (`follow_up_completed_at` deveria estar gravado), **2026-09-09** (reativação #1 deveria disparar sem colidir com follow-up e respeitando os 48h — teste decisivo que prova que a colisão do dia 7, motivo original desta entrega, foi eliminada). Script `scripts/check-messaging-cadence.ts` (novo, `main`) automatiza a checagem.
+
+**Atualização 2026-08-31 — Camada 2 invalidada, causa raiz encontrada:** os checkpoints acima nunca teriam dado positivo — `WHATSAPP_TEMPLATE_SEND_ENABLED` estava ausente em produção (não `true`, como `27_PROJECT_STATUS.md` B006 dizia desde 07-29), então todo follow-up fora da janela de 24h era pulado silenciosamente antes mesmo do insert em `follow_up_logs`. Relato completo, achado e fix em `DL-0022`.
+
+---
 
 Date
 
