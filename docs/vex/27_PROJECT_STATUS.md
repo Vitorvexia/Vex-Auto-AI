@@ -183,13 +183,13 @@ Follow-up Automation
 
 Status
 
-🟡 Waiting Production Validation
+✅ Stable
 
 Camada 2 (validação por tempo decorrido) **invalidada e reiniciada em 2026-08-31** — os checkpoints originais (2026-09-02/09-09) mediam uma cadência que estava estruturalmente bloqueada: `WHATSAPP_TEMPLATE_SEND_ENABLED` ausente em produção fazia todo follow-up fora da janela de sessão de 24h ser pulado silenciamente (`reason=template_required_not_enabled`, só `console.log`, nunca inseria em `follow_up_logs`). Achado e corrigido 2026-08-31 (ver `DL-0022`, `KI-0011`). Flag ligado em produção no mesmo dia pelo founder.
 
-**Próximo checkpoint real: 2026-09-01, ~09h BRT** (próximo disparo do cron `daily-run`, simulado com sucesso em `DL-0022` — lead `68067c0a` passaria por todos os gates). Decide entre 2 cenários, sem exigir outra atualização de doc depois:
-- **Se a mensagem chegar no celular do founder**: vira ✅ Stable — o bloqueio era mesmo só o flag, motor confirmado funcionando ponta a ponta em produção real. Novos checkpoints de Camada 2 (agora sim medindo cadência real) a definir a partir de 2026-09-01.
-- **Se não chegar**: continua 🟡, mas com causa nova — flag ligado deixa de ser suspeito, abre investigação de entrega (Meta/WhatsApp — ver `BL-0029`) com o mesmo rigor aplicado em `DL-0022`.
+**Confirmado 2026-09-05** — `scripts/check-messaging-cadence.ts` no lead `68067c0a` mostra 2 envios reais confirmados recebidos no WhatsApp de destino (não só gravados no banco): `follow_up #1` em 2026-09-01, `follow_up #2` em 2026-09-05, gap de 96h — dentro da cadência esperada (72h+). Bloqueio era mesmo só o flag, motor confirmado funcionando ponta a ponta em produção real.
+
+**Novo checkpoint (substitui os invalidados 09-02/09-09): confirmar follow-up #3 (7d) por volta de 2026-09-08~09** — rodar `check-messaging-cadence.ts` de novo no mesmo lead.
 
 ---
 
@@ -199,7 +199,9 @@ Status
 
 🟡 Waiting Production Validation
 
-Mesma invalidação da Camada 2 acima — reativação depende de `follow_up_completed_at`, que nunca gravava porque nenhum follow-up chegava a ser inserido/enviado. Ver `DL-0022`/`KI-0011`. Mesmo checkpoint decisivo de Follow-up Automation acima (2026-09-01, ~09h BRT) — reativação só sai do 🟡 depois que follow-up confirmar entrega real, já que depende dele por construção (`follow_up_completed_at`).
+Depende de `follow_up_completed_at`, que só grava quando os 3 follow-ups completam. Follow-up Automation confirmado ✅ acima (2 de 3 envios reais validados) — reativação permanece 🟡 até follow-up #3 completar. Ver `DL-0022`/`KI-0011`.
+
+**Checkpoint: mesmo do Follow-up Automation acima (~2026-09-08~09 pro follow-up #3) + alguns dias depois pra reativação #1**, conforme cadência 7/15/30 dias após `follow_up_completed_at`.
 
 ---
 

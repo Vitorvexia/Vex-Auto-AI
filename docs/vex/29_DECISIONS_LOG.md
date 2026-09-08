@@ -335,6 +335,8 @@ Status
 
 Causa raiz confirmada e corrigida (flag ligado). Fixes de observabilidade commitados localmente, ainda sem push no momento desta entrada (ver `27_PROJECT_STATUS.md` pro estado exato da pilha de commits). Camada 2 reinicia a partir de 2026-08-31.
 
+**Fechamento 2026-09-05:** resolvido. `scripts/check-messaging-cadence.ts` no lead `68067c0a` confirma 2 mensagens reais entregues no WhatsApp de destino — `follow_up #1` (2026-09-01) e `follow_up #2` (2026-09-05), gap 96h, dentro da cadência 72h+. Valida o fix do flag ponta a ponta em produção real, não só simulação local. Follow-up Automation vira ✅ Stable em `27_PROJECT_STATUS.md`; Reativação permanece 🟡 até follow-up #3 (7d) completar. Novo checkpoint (substitui os invalidados 09-02/09-09): confirmar follow-up #3 por volta de 2026-09-08~09 e, se completar, reativação #1 uns dias depois (cadência 7/15/30 dias após `follow_up_completed_at`). Sem novo DL até esse dado chegar.
+
 ---
 
 Date
